@@ -71,14 +71,28 @@ async function fetchAPI(endpoint, options = {}) {
 
     // Handle HTTP errors
     if (!response.ok) {
+      // Enhanced error logging for troubleshooting
       console.error(`[API:${requestId}] HTTP Error:`, {
         status: response.status,
         statusText: response.statusText,
-        errorData: data,
+        errorType: data?.error,
+        errorMessage: data?.message,
+        correlationId: data?.correlationId,
+        debug: data?.debug,
+        fullErrorData: data,
       });
-      const error = new Error(data?.error?.message || `HTTP ${response.status}`);
+
+      // Log debug info if present (from development mode backend)
+      if (data?.debug) {
+        console.error(`[API:${requestId}] Debug info from server:`, data.debug);
+      }
+
+      // Create error with all available info
+      const errorMessage = data?.message || data?.error?.message || `HTTP ${response.status}`;
+      const error = new Error(errorMessage);
       error.status = response.status;
       error.data = data;
+      error.correlationId = data?.correlationId;
       throw error;
     }
 

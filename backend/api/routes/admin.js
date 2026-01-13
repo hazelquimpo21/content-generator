@@ -127,15 +127,19 @@ router.get('/costs', async (req, res, next) => {
       byStage[stage].cost += log.cost_usd || 0;
     }
 
-    // Daily breakdown
+    // Daily breakdown (using 'timestamp' column from api_usage_log table)
     const byDay = {};
     for (const log of usageLogs) {
-      const day = log.created_at.split('T')[0];
-      if (!byDay[day]) {
-        byDay[day] = { cost: 0, calls: 0 };
+      // Handle both 'timestamp' (correct) and 'created_at' (legacy) columns
+      const timestampField = log.timestamp || log.created_at;
+      if (timestampField) {
+        const day = timestampField.split('T')[0];
+        if (!byDay[day]) {
+          byDay[day] = { cost: 0, calls: 0 };
+        }
+        byDay[day].cost += log.cost_usd || 0;
+        byDay[day].calls++;
       }
-      byDay[day].cost += log.cost_usd || 0;
-      byDay[day].calls++;
     }
 
     logger.info('📤 GET /api/admin/costs - Success', {
@@ -167,6 +171,12 @@ router.get('/costs', async (req, res, next) => {
     logger.error('❌ GET /api/admin/costs - Failed', {
       errorName: error.name,
       errorMessage: error.message,
+      errorCode: error.code,
+      errorDetails: error.details,
+      errorHint: error.hint,
+      operation: error.operation,
+      period: req.query.period,
+      correlationId: req.correlationId,
       stack: error.stack,
     });
     next(error);
@@ -281,6 +291,12 @@ router.get('/performance', async (req, res, next) => {
     logger.error('❌ GET /api/admin/performance - Failed', {
       errorName: error.name,
       errorMessage: error.message,
+      errorCode: error.code,
+      errorDetails: error.details,
+      errorHint: error.hint,
+      operation: error.operation,
+      limit: req.query.limit,
+      correlationId: req.correlationId,
       stack: error.stack,
     });
     next(error);
@@ -363,6 +379,12 @@ router.get('/errors', async (req, res, next) => {
     logger.error('❌ GET /api/admin/errors - Failed', {
       errorName: error.name,
       errorMessage: error.message,
+      errorCode: error.code,
+      errorDetails: error.details,
+      errorHint: error.hint,
+      operation: error.operation,
+      limit: req.query.limit,
+      correlationId: req.correlationId,
       stack: error.stack,
     });
     next(error);
@@ -446,6 +468,11 @@ router.get('/usage', async (req, res, next) => {
     logger.error('❌ GET /api/admin/usage - Failed', {
       errorName: error.name,
       errorMessage: error.message,
+      errorCode: error.code,
+      errorDetails: error.details,
+      errorHint: error.hint,
+      operation: error.operation,
+      correlationId: req.correlationId,
       stack: error.stack,
     });
     next(error);

@@ -20,8 +20,9 @@ import { Button, Card, ProgressBar, Spinner } from '@components/shared';
 import api from '@utils/api-client';
 import styles from './ProcessingScreen.module.css';
 
-// Stage definitions
+// Stage definitions (10 stages: 0-9)
 const STAGES = [
+  { number: 0, name: 'Transcript Preprocessing', description: 'Analyzing long transcripts with AI' },
   { number: 1, name: 'Transcript Analysis', description: 'Extracting themes and structure' },
   { number: 2, name: 'Quote Extraction', description: 'Finding key quotes and insights' },
   { number: 3, name: 'Title Generation', description: 'Creating compelling titles' },
@@ -32,6 +33,8 @@ const STAGES = [
   { number: 8, name: 'Social Content', description: 'Creating social media posts' },
   { number: 9, name: 'Email Campaign', description: 'Writing email content' },
 ];
+
+const TOTAL_STAGES = 10;
 
 /**
  * ProcessingScreen page component
@@ -105,7 +108,7 @@ function ProcessingScreen() {
 
   // Calculate progress
   const completedStages = stages.filter((s) => s.status === 'completed').length;
-  const progress = Math.round((completedStages / 9) * 100);
+  const progress = Math.round((completedStages / TOTAL_STAGES) * 100);
 
   if (loading) {
     return <Spinner centered text="Loading processing status..." />;
@@ -142,11 +145,11 @@ function ProcessingScreen() {
       <Card className={styles.progressCard}>
         <ProgressBar
           value={completedStages}
-          max={9}
+          max={TOTAL_STAGES}
           label={
             episode.status === 'completed'
               ? 'All stages completed'
-              : `Stage ${episode.current_stage || 1} of 9`
+              : `Stage ${episode.current_stage ?? 0} of ${TOTAL_STAGES - 1}`
           }
           showPercentage
           animated={episode.status === 'processing'}
@@ -220,7 +223,7 @@ function ProcessingScreen() {
               onClick={async () => {
                 try {
                   await api.episodes.process(episodeId, {
-                    startFromStage: episode.current_stage || 1,
+                    startFromStage: episode.current_stage ?? 0,
                   });
                   fetchStatus();
                 } catch (err) {

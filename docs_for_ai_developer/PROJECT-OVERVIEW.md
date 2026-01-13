@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-A single-user SaaS application for a therapist with a podcast to transform episode transcripts into polished blog posts, social media content, and email campaigns through a sophisticated 9-stage AI pipeline.
+A single-user SaaS application for a therapist with a podcast to transform episode transcripts into polished blog posts, social media content, and email campaigns through a sophisticated 10-stage AI pipeline (Stage 0-9).
 
 ## Core Value Proposition
 
@@ -21,7 +21,8 @@ Transform raw podcast transcripts into publication-ready content across multiple
 - **Runtime**: Node.js 18+
 - **Framework**: Express.js (lightweight REST API)
 - **Database**: Supabase (PostgreSQL + real-time subscriptions)
-- **AI Providers**: 
+- **AI Providers**:
+  - Anthropic Claude 3.5 Haiku (Stage 0: preprocessing long transcripts)
   - OpenAI GPT-5 mini (Stages 1-6: analysis, outlining, drafting)
   - Anthropic Claude Sonnet 4 (Stages 7-9: refinement, social, email)
 
@@ -52,7 +53,12 @@ Transform raw podcast transcripts into publication-ready content across multiple
 
 ## Pipeline Overview
 
-### The 9 Stages
+### The 10 Stages (0-9)
+
+0. **Transcript Preprocessing** (Claude Haiku)
+   - Compress long transcripts for downstream processing
+   - Extract key quotes, themes, speaker info
+   - *Automatically skipped for short transcripts (<8000 tokens)*
 
 1. **Transcript Analysis** (GPT-5 mini)
    - Extract episode metadata, guest info, main topics
@@ -84,11 +90,13 @@ Transform raw podcast transcripts into publication-ready content across multiple
 ### Data Flow
 
 ```
-Transcript → Stage 1 → Stage 2 → Stage 3 → Stage 4 → Stage 5 → Stage 6 → Stage 7 → Stage 8 → Stage 9
-              ↓         ↓         ↓         ↓         ↓         ↓         ↓         ↓         ↓
-            [Save]    [Save]    [Save]    [Save]    [Save]    [Save]    [Save]    [Save]    [Save]
-                                                                                              ↓
-                                                                                    [Complete Episode]
+Transcript → Stage 0 → Stage 1 → Stage 2 → ... → Stage 8 → Stage 9
+              ↓         ↓         ↓                ↓         ↓
+            [Save]    [Save]    [Save]           [Save]    [Save]
+                                                             ↓
+                                                   [Complete Episode]
+
+Note: Stage 0 (preprocessing) is skipped for short transcripts.
 ```
 
 Each stage:
@@ -103,7 +111,7 @@ Each stage:
 
 ### MVP Success Criteria
 - ✅ User can upload transcript and process to completion
-- ✅ All 9 stages complete successfully with real API calls
+- ✅ All 10 stages (0-9) complete successfully with real API calls
 - ✅ User can view, edit, and export final content
 - ✅ Cost and timing tracking visible in admin dashboard
 - ✅ Processing completes in <5 minutes for typical episode

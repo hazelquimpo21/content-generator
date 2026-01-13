@@ -3,7 +3,7 @@
  * NEW EPISODE PAGE
  * ============================================================================
  * Upload a podcast transcript and configure episode context.
- * Starts the 9-stage AI processing pipeline.
+ * Starts the 10-stage AI processing pipeline (Stage 0-9).
  * ============================================================================
  */
 
@@ -244,7 +244,7 @@ function NewEpisode() {
           </Button>
 
           <p className={styles.actionsHint}>
-            This will process your transcript through 9 AI stages
+            This will process your transcript through our AI pipeline
           </p>
         </div>
       </form>

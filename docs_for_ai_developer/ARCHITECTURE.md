@@ -16,7 +16,8 @@ When a file approaches 400 lines:
 
 ```
 backend/
-├── analyzers/                    # AI analysis modules (one per stage)
+├── analyzers/                    # AI analysis modules (one per stage, 0-9)
+│   ├── stage-00-preprocess-transcript.js    (~300 lines - Claude Haiku)
 │   ├── stage-01-analyze-transcript.js       (~300 lines)
 │   ├── stage-02-extract-quotes.js           (~300 lines)
 │   ├── stage-03-outline-high-level.js       (~300 lines)
@@ -159,7 +160,8 @@ frontend/
 │                    Orchestrator                              │
 │  episode-processor.js                                        │
 │  → Loads context (transcript + evergreen)                    │
-│  → For stage 1-9:                                            │
+│  → For stage 0-9:                                            │
+│    ├─ Stage 0: Preprocess (Claude Haiku, skipped for short)  │
 │    ├─ Update status to "processing"                          │
 │    ├─ Call stage analyzer                                    │
 │    ├─ Parse & validate response                              │

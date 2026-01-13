@@ -19,7 +19,7 @@
  * ============================================================================
  */
 
-import { callClaude } from '../lib/api-client-anthropic.js';
+import { callClaude, callClaudeStructured } from '../lib/api-client-anthropic.js';
 import { loadStagePrompt } from '../lib/prompt-loader.js';
 import logger from '../lib/logger.js';
 import { ValidationError } from '../lib/errors.js';
@@ -37,37 +37,100 @@ const PREPROCESSING_MODEL = 'claude-3-5-haiku-20241022';
 const PREPROCESSING_THRESHOLD_TOKENS = 8000;
 
 // ============================================================================
-// JSON SCHEMA FOR STRUCTURED OUTPUT
+// JSON SCHEMA FOR TOOL_USE STRUCTURED OUTPUT
+// ============================================================================
+// This schema is used with Claude's tool_use feature for guaranteed structured output.
+// Tool_use eliminates JSON parsing issues and ensures type-safe responses.
 // ============================================================================
 
-const PREPROCESSING_SCHEMA = {
-  comprehensive_summary: {
-    type: 'string',
-    description: 'Detailed 800-1500 word summary preserving all key information',
-  },
-  verbatim_quotes: {
-    type: 'array',
-    description: '10-15 exact verbatim quotes from the transcript',
-    items: {
-      quote: 'string - exact verbatim text',
-      speaker: 'string - who said it',
-      position: 'string - early/middle/late in episode',
-      potential_use: 'string - headline/pullquote/social/key_point',
+const PREPROCESSING_TOOL_SCHEMA = {
+  type: 'object',
+  description: 'Preprocessed transcript data with summary, quotes, and metadata',
+  properties: {
+    comprehensive_summary: {
+      type: 'string',
+      description: 'Detailed 800-1500 word summary preserving all key information, including specific examples, advice, and the logical flow of the conversation',
+    },
+    verbatim_quotes: {
+      type: 'array',
+      description: 'Exact verbatim quotes from the transcript (aim for 5-15 quotes)',
+      items: {
+        type: 'object',
+        properties: {
+          quote: {
+            type: 'string',
+            description: 'Exact verbatim text from transcript (15-50 words)',
+          },
+          speaker: {
+            type: 'string',
+            description: 'Name of the person who said this quote',
+          },
+          position: {
+            type: 'string',
+            enum: ['early', 'middle', 'late'],
+            description: 'Approximate position in the episode',
+          },
+          potential_use: {
+            type: 'string',
+            enum: ['headline', 'pullquote', 'social', 'key_point'],
+            description: 'Best potential use for this quote',
+          },
+        },
+        required: ['quote', 'speaker', 'position', 'potential_use'],
+      },
+    },
+    key_topics: {
+      type: 'array',
+      description: '5-8 specific topics discussed (not generic categories)',
+      items: {
+        type: 'string',
+      },
+    },
+    speakers: {
+      type: 'object',
+      description: 'Information about the speakers in the episode',
+      properties: {
+        host: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', description: 'Host name' },
+            role: { type: 'string', description: 'Host role or title' },
+          },
+          required: ['name', 'role'],
+        },
+        guest: {
+          type: 'object',
+          description: 'Guest information (null properties if no guest)',
+          properties: {
+            name: { type: ['string', 'null'], description: 'Guest name or null' },
+            credentials: { type: ['string', 'null'], description: 'Guest credentials or null' },
+            expertise: { type: ['string', 'null'], description: 'Guest area of expertise or null' },
+          },
+        },
+      },
+      required: ['host'],
+    },
+    episode_metadata: {
+      type: 'object',
+      description: 'Inferred metadata about the episode',
+      properties: {
+        inferred_title: {
+          type: 'string',
+          description: 'A compelling, SEO-friendly title for this episode',
+        },
+        core_message: {
+          type: 'string',
+          description: '1-2 sentence summary of the core takeaway',
+        },
+        estimated_duration: {
+          type: 'string',
+          description: 'Estimated episode duration based on content density',
+        },
+      },
+      required: ['inferred_title', 'core_message'],
     },
   },
-  key_topics: {
-    type: 'array',
-    description: '5-8 specific topics discussed',
-  },
-  speakers: {
-    host: { name: 'string', role: 'string' },
-    guest: { name: 'string|null', credentials: 'string|null', expertise: 'string|null' },
-  },
-  episode_metadata: {
-    inferred_title: 'string',
-    core_message: 'string',
-    estimated_duration: 'string',
-  },
+  required: ['comprehensive_summary', 'verbatim_quotes', 'key_topics', 'speakers', 'episode_metadata'],
 };
 
 // ============================================================================
@@ -78,14 +141,17 @@ const PREPROCESSING_SCHEMA = {
  * Validates the preprocessing output to ensure all required fields
  * are present and properly formatted.
  *
- * Validation is strict to ensure downstream stages receive quality data:
+ * Validation requirements:
  * - comprehensive_summary: Must be at least 500 characters
- * - verbatim_quotes: Need at least 5 quotes with proper structure
+ * - verbatim_quotes: Need at least 3 quotes (5+ preferred, warns if fewer)
  * - key_topics: Need at least 3 topics
  * - speakers: Must have host information
  * - episode_metadata: Required for downstream processing
  *
- * @param {Object} data - Parsed output data from Claude
+ * Note: Quote requirements are relaxed because some transcripts naturally
+ * have fewer quotable moments, and we don't want to fail the entire pipeline.
+ *
+ * @param {Object} data - Structured output from Claude's tool_use response
  * @throws {ValidationError} If validation fails with detailed reason
  * @returns {boolean} True if validation passes
  */
@@ -137,12 +203,21 @@ function validateOutput(data) {
     throw new ValidationError('verbatim_quotes', 'Missing or invalid quotes array');
   }
 
-  if (data.verbatim_quotes.length < 5) {
+  // Relaxed minimum: 3 quotes is acceptable (AI may not always find many good quotes)
+  // Log a warning if we have fewer than 5, but only fail if we have fewer than 3
+  if (data.verbatim_quotes.length < 3) {
     logger.error('❌ Validation failed: not enough verbatim_quotes', {
       count: data.verbatim_quotes.length,
-      minimum: 5,
+      minimum: 3,
     });
-    throw new ValidationError('verbatim_quotes', `Need at least 5 quotes, got ${data.verbatim_quotes.length}`);
+    throw new ValidationError('verbatim_quotes', `Need at least 3 quotes, got ${data.verbatim_quotes.length}`);
+  }
+
+  if (data.verbatim_quotes.length < 5) {
+    logger.warn('⚠️ Fewer quotes than ideal extracted', {
+      count: data.verbatim_quotes.length,
+      recommended: 5,
+    });
   }
 
   // Validate each quote's structure
@@ -659,7 +734,7 @@ export async function preprocessTranscript(context) {
     };
   }
 
-  logger.info('🔄 Preprocessing required - using Claude Haiku (200K context)', {
+  logger.info('🔄 Preprocessing required - using Claude Haiku with tool_use', {
     episodeId,
     transcriptTokens,
     model: PREPROCESSING_MODEL,
@@ -672,57 +747,42 @@ export async function preprocessTranscript(context) {
     previousStages: {},
   });
 
-  // Build the system prompt for structured output
-  const systemPrompt = `You are an expert content analyst. Your task is to process a podcast transcript and return a structured JSON response.
+  // Build the system prompt for structured output via tool_use
+  const systemPrompt = `You are an expert content analyst specializing in podcast transcript processing.
+Your task is to analyze the provided transcript and extract structured information using the provided tool.
 
-IMPORTANT: Return ONLY valid JSON matching this schema:
-{
-  "comprehensive_summary": "800-1500 word detailed summary preserving all key information",
-  "verbatim_quotes": [
-    {
-      "quote": "exact verbatim text from transcript",
-      "speaker": "speaker name",
-      "position": "early|middle|late",
-      "potential_use": "headline|pullquote|social|key_point"
-    }
-  ],
-  "key_topics": ["specific topic 1", "specific topic 2", ...],
-  "speakers": {
-    "host": {"name": "host name", "role": "host role"},
-    "guest": {"name": "guest name or null", "credentials": "credentials or null", "expertise": "expertise or null"}
-  },
-  "episode_metadata": {
-    "inferred_title": "compelling episode title",
-    "core_message": "1-2 sentence core takeaway",
-    "estimated_duration": "estimated duration"
-  }
-}
-
-Return ONLY the JSON object. No additional text, explanations, or markdown formatting.`;
+IMPORTANT GUIDELINES:
+- The comprehensive_summary should be 800-1500 words and preserve ALL key information
+- Verbatim quotes must be EXACT text from the transcript (aim for 5-15 quotes)
+- Key topics should be specific (not generic like "anxiety" but "managing anxiety during job transitions")
+- Quotes should represent different themes and be suitable for headlines, social media, or pull quotes`;
 
   // -------------------------------------------------------------------------
-  // Call Claude Haiku API
-  // Using low temperature (0.3) for consistent, factual extraction
-  // Max tokens set to 8192 to allow for comprehensive summaries
+  // Call Claude Haiku API with tool_use for guaranteed structured output
+  // This eliminates JSON parsing issues by using Claude's native function calling
   // -------------------------------------------------------------------------
-  logger.info('📤 Sending request to Claude Haiku API', {
+  logger.info('📤 Sending request to Claude Haiku API (tool_use)', {
     episodeId,
     model: PREPROCESSING_MODEL,
     promptLength: prompt.length,
-    systemPromptLength: systemPrompt.length,
-    temperature: 0.3,
-    maxTokens: 8192,
+    toolName: 'extract_transcript_data',
   });
 
   let response;
   try {
-    response = await callClaude(prompt, {
+    // Use callClaudeStructured for guaranteed structured output via tool_use
+    // This eliminates all JSON parsing issues since the response is already structured
+    response = await callClaudeStructured(prompt, {
       model: PREPROCESSING_MODEL,
       system: systemPrompt,
       episodeId,
       stageNumber: 0,
       temperature: 0.3, // Low temperature for consistent extraction
       maxTokens: 8192, // Allow generous output for comprehensive summary
+      // Tool definition for structured output
+      toolName: 'extract_transcript_data',
+      toolDescription: 'Extract and structure key information from a podcast transcript including summary, quotes, topics, speakers, and metadata',
+      inputSchema: PREPROCESSING_TOOL_SCHEMA,
     });
   } catch (apiError) {
     logger.error('❌ Claude API call failed during preprocessing', {
@@ -735,50 +795,26 @@ Return ONLY the JSON object. No additional text, explanations, or markdown forma
     throw apiError;
   }
 
-  logger.info('📥 Received preprocessing response from Claude', {
+  logger.info('📥 Received preprocessing response from Claude (tool_use)', {
     episodeId,
-    responseLength: response.content.length,
+    toolName: response.toolName,
     inputTokens: response.inputTokens,
     outputTokens: response.outputTokens,
     durationMs: response.durationMs,
     cost: response.cost,
   });
 
-  // Log first 100 chars of response for debugging (truncated to avoid PII)
-  logger.debug('📄 Response content preview', {
-    episodeId,
-    preview: response.content.substring(0, 100) + '...',
-    endsWithBrace: response.content.trim().endsWith('}'),
-    startsWithBrace: response.content.trim().startsWith('{'),
-  });
+  // With tool_use, the structured data is directly available - no JSON parsing needed!
+  // This is the key advantage of using function calling over text-based JSON
+  const outputData = response.toolInput;
 
-  // -------------------------------------------------------------------------
-  // Parse JSON from response
-  // Claude may return JSON with control characters that need sanitization
-  // -------------------------------------------------------------------------
-  let outputData;
-  try {
-    logger.info('🔄 Parsing JSON from Claude response', { episodeId });
-    outputData = extractJSON(response.content);
-    logger.info('✅ Successfully parsed JSON from response', {
-      episodeId,
-      parsedKeys: Object.keys(outputData),
-    });
-  } catch (parseError) {
-    // Log detailed error info to help debug JSON parsing issues
-    logger.error('❌ Failed to parse preprocessing response as JSON', {
-      episodeId,
-      errorName: parseError.name,
-      errorMessage: parseError.message,
-      responseLength: response.content.length,
-      responsePreview: response.content.substring(0, 500),
-      responseEnd: response.content.substring(response.content.length - 200),
-      containsCodeBlock: response.content.includes('```'),
-      inputTokens: response.inputTokens,
-      outputTokens: response.outputTokens,
-    });
-    throw parseError;
-  }
+  logger.info('✅ Received structured output via tool_use', {
+    episodeId,
+    outputKeys: Object.keys(outputData),
+    quotesCount: outputData.verbatim_quotes?.length || 0,
+    topicsCount: outputData.key_topics?.length || 0,
+    summaryLength: outputData.comprehensive_summary?.length || 0,
+  });
 
   // Mark as preprocessed
   outputData.preprocessed = true;

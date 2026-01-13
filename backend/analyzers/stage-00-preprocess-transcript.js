@@ -251,6 +251,13 @@ function validateOutput(data) {
  * - Unescaped tabs (\t) within string values
  * - Unescaped carriage returns (\r) within string values
  * - Other control characters (0x00-0x1F)
+ * - Backslash followed by actual control character (not escape sequence)
+ *
+ * Edge cases handled:
+ * - `\"` -> keeps as valid escaped quote
+ * - `\\` -> keeps as valid escaped backslash
+ * - `\` + actual newline char -> converts to proper `\n` escape sequence
+ * - Raw control characters in strings -> escapes them properly
  *
  * @param {string} jsonStr - Raw JSON string potentially containing control characters
  * @returns {string} Sanitized JSON string with properly escaped control characters
@@ -264,32 +271,87 @@ function sanitizeJSONString(jsonStr) {
   let result = '';
   let inString = false;
   let escapeNext = false;
+  let controlCharsEscaped = 0;
 
   for (let i = 0; i < jsonStr.length; i++) {
     const char = jsonStr[i];
     const charCode = char.charCodeAt(0);
 
+    // -------------------------------------------------------------------------
+    // HANDLE ESCAPED CHARACTERS
+    // When escapeNext is true, the previous character was a backslash.
+    // We need to check if this character is:
+    // 1. A valid escape char (", \, /, b, f, n, r, t, u) -> keep as-is
+    // 2. A control character -> convert to proper escape sequence
+    // 3. Something else -> keep as-is (might be invalid but let JSON.parse handle it)
+    // -------------------------------------------------------------------------
     if (escapeNext) {
-      // Previous char was backslash, this char is escaped - keep as is
-      result += char;
+      // Check if this is a control character that needs special handling
+      // This handles the edge case where AI outputs backslash + actual newline
+      // instead of backslash + letter 'n'
+      if (charCode >= 0 && charCode <= 31) {
+        // Control character after backslash - the AI likely meant to escape it
+        // but used an actual control char instead of the escape letter
+        // Convert to proper JSON escape sequence (we already have the backslash)
+        logger.debug('🔧 Found control char after backslash, converting to escape', {
+          charCode,
+          position: i,
+        });
+        switch (charCode) {
+          case 9: // Tab -> \t
+            result += 't';
+            break;
+          case 10: // Newline (LF) -> \n
+            result += 'n';
+            break;
+          case 13: // Carriage return (CR) -> \r
+            result += 'r';
+            break;
+          case 8: // Backspace -> \b
+            result += 'b';
+            break;
+          case 12: // Form feed -> \f
+            result += 'f';
+            break;
+          default:
+            // For other control chars, use unicode escape
+            // Need to remove the backslash we added and use full \uXXXX
+            result = result.slice(0, -1); // Remove the backslash
+            result += '\\u' + charCode.toString(16).padStart(4, '0');
+        }
+        controlCharsEscaped++;
+      } else {
+        // Normal escaped character (valid escape sequence) - keep as is
+        result += char;
+      }
       escapeNext = false;
       continue;
     }
 
+    // -------------------------------------------------------------------------
+    // HANDLE BACKSLASH IN STRING
+    // Mark the next character as escaped
+    // -------------------------------------------------------------------------
     if (char === '\\' && inString) {
-      // Backslash inside string - next char is escaped
       result += char;
       escapeNext = true;
       continue;
     }
 
-    if (char === '"' && !escapeNext) {
-      // Toggle string state
+    // -------------------------------------------------------------------------
+    // HANDLE QUOTES
+    // Toggle string state on unescaped quotes
+    // -------------------------------------------------------------------------
+    if (char === '"') {
       inString = !inString;
       result += char;
       continue;
     }
 
+    // -------------------------------------------------------------------------
+    // HANDLE CONTROL CHARACTERS IN STRINGS
+    // Any control character (0x00-0x1F) inside a string must be escaped
+    // -------------------------------------------------------------------------
     if (inString && charCode >= 0 && charCode <= 31) {
       // Control character inside string - must be escaped
       // Map common control characters to their escape sequences
@@ -313,6 +375,7 @@ function sanitizeJSONString(jsonStr) {
           // Other control chars - use unicode escape
           result += '\\u' + charCode.toString(16).padStart(4, '0');
       }
+      controlCharsEscaped++;
       logger.debug('🔧 Escaped control character in JSON string', {
         charCode,
         position: i,
@@ -323,12 +386,67 @@ function sanitizeJSONString(jsonStr) {
     }
   }
 
-  if (result !== jsonStr) {
-    logger.info('✅ JSON string sanitized - control characters escaped', {
+  // Log sanitization summary if changes were made
+  if (controlCharsEscaped > 0 || result !== jsonStr) {
+    logger.info('✅ JSON string sanitized', {
       originalLength: jsonStr.length,
       sanitizedLength: result.length,
-      changesMade: result.length - jsonStr.length,
+      controlCharsEscaped,
+      lengthDifference: result.length - jsonStr.length,
     });
+  }
+
+  return result;
+}
+
+/**
+ * Finds the position and context of a JSON parse error
+ * Helps identify exactly where and what control character caused the issue
+ *
+ * @param {string} content - The JSON string that failed to parse
+ * @param {Error} error - The JSON parse error
+ * @returns {Object} Details about the error location and context
+ */
+function analyzeJsonParseError(content, error) {
+  const result = {
+    errorMessage: error.message,
+    position: null,
+    context: null,
+    problematicChar: null,
+    controlCharsFound: [],
+  };
+
+  // Try to extract position from error message (e.g., "at position 1234")
+  const positionMatch = error.message.match(/position\s+(\d+)/i);
+  if (positionMatch) {
+    result.position = parseInt(positionMatch[1], 10);
+    // Get context around the error position
+    const start = Math.max(0, result.position - 30);
+    const end = Math.min(content.length, result.position + 30);
+    result.context = content.substring(start, end);
+
+    // Identify the problematic character at that position
+    if (result.position < content.length) {
+      const char = content[result.position];
+      result.problematicChar = {
+        char: char,
+        charCode: char.charCodeAt(0),
+        isControlChar: char.charCodeAt(0) >= 0 && char.charCodeAt(0) <= 31,
+        displayCode: `0x${char.charCodeAt(0).toString(16).padStart(2, '0')}`,
+      };
+    }
+  }
+
+  // Scan for all control characters in the content
+  for (let i = 0; i < Math.min(content.length, 5000); i++) {
+    const charCode = content.charCodeAt(i);
+    if (charCode >= 0 && charCode <= 31 && charCode !== 10 && charCode !== 13 && charCode !== 9) {
+      result.controlCharsFound.push({
+        position: i,
+        charCode,
+        displayCode: `0x${charCode.toString(16).padStart(2, '0')}`,
+      });
+    }
   }
 
   return result;
@@ -339,9 +457,17 @@ function sanitizeJSONString(jsonStr) {
  * Includes robust error handling and sanitization for AI-generated JSON
  * that may contain unescaped control characters.
  *
- * @param {string} content - Raw response content
+ * Parsing strategy (in order):
+ * 1. Direct JSON.parse on raw content
+ * 2. JSON.parse on sanitized content (escapes control chars)
+ * 3. Extract from ```json code block and parse
+ * 4. Extract from ```json code block, sanitize, and parse
+ * 5. Extract object pattern ({...}) and parse
+ * 6. Extract object pattern, sanitize, and parse
+ *
+ * @param {string} content - Raw response content from AI
  * @returns {Object} Parsed JSON object
- * @throws {ValidationError} If no valid JSON can be extracted
+ * @throws {ValidationError} If no valid JSON can be extracted after all attempts
  */
 function extractJSON(content) {
   logger.debug('🔍 Attempting to extract JSON from response', {
@@ -349,92 +475,123 @@ function extractJSON(content) {
     contentPreview: content.substring(0, 100) + '...',
   });
 
-  // Try to parse directly first (raw content)
+  // -------------------------------------------------------------------------
+  // STRATEGY 1: Direct parse on raw content
+  // -------------------------------------------------------------------------
   try {
-    logger.debug('📋 Trying direct JSON.parse on raw content');
+    logger.debug('📋 Strategy 1: Direct JSON.parse on raw content');
     return JSON.parse(content);
   } catch (directError) {
-    logger.debug('⚠️ Direct parse failed, trying with sanitization', {
+    const errorAnalysis = analyzeJsonParseError(content, directError);
+    logger.debug('⚠️ Strategy 1 failed: Direct parse', {
       error: directError.message,
+      position: errorAnalysis.position,
+      problematicChar: errorAnalysis.problematicChar,
+      controlCharsInFirst5k: errorAnalysis.controlCharsFound.length,
     });
   }
 
-  // Try with sanitization (escapes control characters in strings)
+  // -------------------------------------------------------------------------
+  // STRATEGY 2: Parse sanitized content
+  // -------------------------------------------------------------------------
   try {
+    logger.debug('📋 Strategy 2: JSON.parse on sanitized content');
     const sanitized = sanitizeJSONString(content);
-    logger.debug('📋 Trying JSON.parse on sanitized content');
     return JSON.parse(sanitized);
   } catch (sanitizedError) {
-    logger.debug('⚠️ Sanitized parse failed, trying code block extraction', {
+    logger.debug('⚠️ Strategy 2 failed: Sanitized parse', {
       error: sanitizedError.message,
     });
   }
 
-  // Try to extract from ```json ... ``` block
+  // -------------------------------------------------------------------------
+  // STRATEGY 3 & 4: Extract from code block
+  // -------------------------------------------------------------------------
   const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (jsonMatch) {
     const codeBlockContent = jsonMatch[1].trim();
-    logger.debug('📋 Found code block, attempting to parse', {
+    logger.debug('📋 Strategy 3: Found code block, attempting direct parse', {
       codeBlockLength: codeBlockContent.length,
     });
 
+    // Strategy 3: Direct parse of code block
     try {
       return JSON.parse(codeBlockContent);
     } catch (codeBlockError) {
-      logger.debug('⚠️ Code block parse failed, trying with sanitization', {
+      logger.debug('⚠️ Strategy 3 failed: Code block direct parse', {
         error: codeBlockError.message,
       });
 
-      // Try sanitized code block content
+      // Strategy 4: Sanitized code block
       try {
+        logger.debug('📋 Strategy 4: Sanitized code block parse');
         const sanitizedCodeBlock = sanitizeJSONString(codeBlockContent);
         return JSON.parse(sanitizedCodeBlock);
       } catch (sanitizedCodeBlockError) {
-        logger.warn('❌ Failed to parse JSON from code block even after sanitization', {
+        const errorAnalysis = analyzeJsonParseError(codeBlockContent, sanitizedCodeBlockError);
+        logger.warn('⚠️ Strategy 4 failed: Sanitized code block parse', {
           error: sanitizedCodeBlockError.message,
+          position: errorAnalysis.position,
+          context: errorAnalysis.context,
+          problematicChar: errorAnalysis.problematicChar,
           codeBlockPreview: codeBlockContent.substring(0, 200),
         });
       }
     }
   }
 
-  // Try to find JSON object pattern (last resort)
+  // -------------------------------------------------------------------------
+  // STRATEGY 5 & 6: Extract JSON object pattern
+  // -------------------------------------------------------------------------
   const objectMatch = content.match(/\{[\s\S]*\}/);
   if (objectMatch) {
     const objectContent = objectMatch[0];
-    logger.debug('📋 Found object pattern, attempting to parse', {
+    logger.debug('📋 Strategy 5: Found object pattern, attempting direct parse', {
       objectLength: objectContent.length,
     });
 
+    // Strategy 5: Direct parse of object pattern
     try {
       return JSON.parse(objectContent);
     } catch (objectError) {
-      logger.debug('⚠️ Object pattern parse failed, trying with sanitization', {
+      logger.debug('⚠️ Strategy 5 failed: Object pattern direct parse', {
         error: objectError.message,
       });
 
-      // Try sanitized object content
+      // Strategy 6: Sanitized object pattern
       try {
+        logger.debug('📋 Strategy 6: Sanitized object pattern parse');
         const sanitizedObject = sanitizeJSONString(objectContent);
         return JSON.parse(sanitizedObject);
       } catch (sanitizedObjectError) {
-        logger.error('❌ Failed to parse JSON from object match even after sanitization', {
+        const errorAnalysis = analyzeJsonParseError(objectContent, sanitizedObjectError);
+        logger.error('❌ Strategy 6 failed: All parsing strategies exhausted', {
           error: sanitizedObjectError.message,
-          objectPreview: objectContent.substring(0, 200),
+          position: errorAnalysis.position,
+          context: errorAnalysis.context,
+          problematicChar: errorAnalysis.problematicChar,
+          controlCharsFound: errorAnalysis.controlCharsFound.slice(0, 5), // First 5 control chars
+          objectPreview: objectContent.substring(0, 300),
         });
       }
     }
   }
 
-  // All parsing attempts failed - log detailed error info for debugging
-  logger.error('❌ All JSON extraction attempts failed', {
+  // -------------------------------------------------------------------------
+  // ALL STRATEGIES FAILED
+  // Log comprehensive diagnostic information
+  // -------------------------------------------------------------------------
+  logger.error('❌ All JSON extraction strategies failed', {
     contentLength: content.length,
     contentPreview: content.substring(0, 500),
+    contentEnd: content.substring(Math.max(0, content.length - 200)),
     hasCodeBlock: !!jsonMatch,
     hasObjectPattern: !!objectMatch,
+    startsWithBrace: content.trim().startsWith('{'),
+    endsWithBrace: content.trim().endsWith('}'),
   });
 
-  throw new ValidationError('response', 'Could not extract valid JSON from response - all parsing strategies failed');
+  throw new ValidationError('response', 'Could not extract valid JSON from response - all 6 parsing strategies failed');
 }
 
 // ============================================================================

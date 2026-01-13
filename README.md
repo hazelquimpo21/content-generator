@@ -1,6 +1,6 @@
 # Podcast-to-Content Pipeline
 
-Transform podcast transcripts into polished blog posts, social media content, and email campaigns using a 9-stage AI pipeline.
+Transform podcast transcripts into polished blog posts, social media content, and email campaigns using a 10-stage AI pipeline.
 
 ```
    ╔═══════════════════════════════════════════════════════════════╗
@@ -12,8 +12,8 @@ Transform podcast transcripts into polished blog posts, social media content, an
 
 ## Features
 
-- **9-Stage AI Pipeline**: Systematic content generation from transcript analysis to final outputs
-- **Multiple AI Models**: OpenAI GPT-5 mini (stages 1-6) + Anthropic Claude (stages 7-9)
+- **10-Stage AI Pipeline**: Systematic content generation from transcript preprocessing to final outputs
+- **Multiple AI Models**: Claude Haiku (stage 0 preprocessing) + GPT-5 mini (stages 1-6) + Claude Sonnet (stages 7-9)
 - **Real-time Progress**: Watch processing happen stage-by-stage
 - **Content Review Hub**: View, edit, and copy all generated content
 - **Cost Tracking**: Monitor API usage and costs per episode
@@ -134,10 +134,10 @@ Visit `http://localhost:5173` to see the app.
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        ORCHESTRATOR                                 │
 │  ┌─────────────────────────────────────────────────────────────┐   │
-│  │              Episode Processor (9 Stages)                    │   │
+│  │              Episode Processor (10 Stages: 0-9)              │   │
 │  │                                                              │   │
-│  │  Stage 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9                   │   │
-│  │  (GPT-5 mini)─────────────────►│(Claude Sonnet)────────────►│   │
+│  │  Stage 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9               │   │
+│  │  (Haiku)│(GPT-5 mini)─────────────►│(Claude Sonnet)────────►│   │
 │  └─────────────────────────────────────────────────────────────┘   │
 └───────┬─────────────────────────────────────────────────────────────┘
         │
@@ -150,10 +150,11 @@ Visit `http://localhost:5173` to see the app.
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### The 9-Stage Pipeline
+### The 10-Stage Pipeline (0-9)
 
 | Stage | Name | Model | Output |
 |-------|------|-------|--------|
+| 0 | Transcript Preprocessing | Claude Haiku | Compressed summary + quotes (for long transcripts) |
 | 1 | Transcript Analysis | GPT-5 mini | Themes, structure, audiences |
 | 2 | Quote Extraction | GPT-5 mini | Key quotes with context |
 | 3 | Title Generation | GPT-5 mini | SEO-optimized titles |
@@ -163,6 +164,8 @@ Visit `http://localhost:5173` to see the app.
 | 7 | Blog Post Editing | Claude Sonnet | Polished final version |
 | 8 | Social Content | Claude Sonnet | Platform-specific posts |
 | 9 | Email Campaign | Claude Sonnet | Newsletter content |
+
+> **Note:** Stage 0 is automatically skipped for short transcripts (< 8000 tokens).
 
 ### Data Flow
 
@@ -177,9 +180,10 @@ Visit `http://localhost:5173` to see the app.
      ┌──────────────────────────────────────────────────┐
      │                 STAGE PIPELINE                   │
      │                                                  │
-     │  [1] Analyze ──► [2] Quotes ──► [3] Titles ──►  │
-     │  [4] Summary ──► [5] Outline ──► [6] Draft ──►  │
-     │  [7] Edit ──► [8] Social ──► [9] Email          │
+     │  [0] Preprocess ──► [1] Analyze ──► [2] Quotes  │
+     │  ──► [3] Titles ──► [4] Summary ──► [5] Outline │
+     │  ──► [6] Draft ──► [7] Edit ──► [8] Social     │
+     │  ──► [9] Email                                  │
      │                                                  │
      └──────────────────────────────────────────────────┘
                     │
@@ -209,7 +213,8 @@ content-generator/
 │   │   │   └── admin.js         # Analytics
 │   │   └── server.js            # Express app
 │   │
-│   ├── analyzers/               # 9 stage analyzer modules
+│   ├── analyzers/               # 10 stage analyzer modules (0-9)
+│   │   ├── stage-00-preprocess-transcript.js
 │   │   ├── stage-01-analyze-transcript.js
 │   │   ├── stage-02-extract-quotes.js
 │   │   └── ... (stages 3-9)
@@ -295,7 +300,7 @@ Primary table for podcast episodes.
 | transcript | TEXT | Full transcript |
 | episode_context | JSONB | Title, guest info, etc. |
 | status | TEXT | pending/processing/completed/error |
-| current_stage | INTEGER | Current processing stage (1-9) |
+| current_stage | INTEGER | Current processing stage (0-9) |
 | total_cost_usd | DECIMAL | Total API cost |
 | error_message | TEXT | Error details if failed |
 
@@ -306,7 +311,7 @@ Output from each pipeline stage.
 |--------|------|-------------|
 | id | UUID | Primary key |
 | episode_id | UUID | Foreign key to episodes |
-| stage_number | INTEGER | Stage number (1-9) |
+| stage_number | INTEGER | Stage number (0-9) |
 | stage_name | TEXT | Human-readable name |
 | status | TEXT | pending/processing/completed/failed |
 | output_text | TEXT | Text output (blog posts) |
@@ -398,7 +403,7 @@ Cost tracking for all API calls.
        Stage    │        ▼         │ Stage
        Failed   │   ┌──────────┐   │ Complete
                 │   │  Stage N │   │
-                └───┤ 1→2→...→9├───┘
+                └───┤ 0→1→...→9├───┘
                     └────┬─────┘
                          │ All stages done
                          ▼
@@ -496,9 +501,12 @@ Typical costs per episode (based on ~10,000 word transcript):
 
 | Stage | Model | Est. Cost |
 |-------|-------|-----------|
+| 0 | Claude Haiku | ~$0.02-0.05 (only for long transcripts) |
 | 1-6 | GPT-5 mini | ~$0.03-0.08 |
 | 7-9 | Claude Sonnet | ~$0.03-0.08 |
-| **Total** | | **~$0.05-0.13** |
+| **Total** | | **~$0.05-0.18** |
+
+> **Note:** Stage 0 (preprocessing) is skipped for short transcripts, keeping costs low.
 
 ---
 

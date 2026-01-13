@@ -25,7 +25,8 @@ import { DatabaseError, NotFoundError } from './errors.js';
 // ============================================================================
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+// Accept SUPABASE_SERVICE_KEY or SUPABASE_KEY as fallback
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
 
 // Validate required environment variables
 if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
@@ -33,7 +34,7 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     hasUrl: !!SUPABASE_URL,
     hasKey: !!SUPABASE_SERVICE_KEY,
   });
-  throw new Error('SUPABASE_URL and SUPABASE_SERVICE_KEY must be set in environment');
+  throw new Error('SUPABASE_URL and SUPABASE_SERVICE_KEY (or SUPABASE_KEY) must be set in environment');
 }
 
 // ============================================================================

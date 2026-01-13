@@ -32,9 +32,18 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Flag to track if Supabase is properly configured
+const IS_SUPABASE_CONFIGURED = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+
 // Validate configuration
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.error('AuthContext: Missing Supabase configuration. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in environment.');
+if (!IS_SUPABASE_CONFIGURED) {
+  console.error(
+    'AuthContext: Missing Supabase configuration.\n' +
+    'To fix this, create a frontend/.env file with:\n' +
+    '  VITE_SUPABASE_URL=https://your-project.supabase.co\n' +
+    '  VITE_SUPABASE_ANON_KEY=your-anon-key-here\n' +
+    'Get these values from: https://app.supabase.com/project/YOUR_PROJECT/settings/api'
+  );
 }
 
 // ============================================================================
@@ -44,19 +53,24 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 /**
  * Supabase client for frontend authentication.
  * Uses the anon key which respects RLS policies.
+ * Only created if configuration is present.
  */
-const supabase = createClient(SUPABASE_URL || '', SUPABASE_ANON_KEY || '', {
-  auth: {
-    // Store session in localStorage
-    storage: localStorage,
-    // Auto-refresh tokens before expiry
-    autoRefreshToken: true,
-    // Persist session across page reloads
-    persistSession: true,
-    // Detect session from URL (for magic link callback)
-    detectSessionInUrl: true,
-  },
-});
+let supabase = null;
+
+if (IS_SUPABASE_CONFIGURED) {
+  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      // Store session in localStorage
+      storage: localStorage,
+      // Auto-refresh tokens before expiry
+      autoRefreshToken: true,
+      // Persist session across page reloads
+      persistSession: true,
+      // Detect session from URL (for magic link callback)
+      detectSessionInUrl: true,
+    },
+  });
+}
 
 // ============================================================================
 // AUTH CONTEXT
@@ -93,8 +107,11 @@ export function AuthProvider({ children }) {
   // State
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(!IS_SUPABASE_CONFIGURED ? false : true);
+  const [error, setError] = useState(
+    IS_SUPABASE_CONFIGURED ? null : 'Supabase not configured. Please add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to frontend/.env'
+  );
+  const [configError, setConfigError] = useState(!IS_SUPABASE_CONFIGURED);
 
   // ========================================================================
   // FETCH USER PROFILE FROM BACKEND
@@ -150,6 +167,12 @@ export function AuthProvider({ children }) {
      * Checks for existing session and sets up auth state listener.
      */
     const initAuth = async () => {
+      // Skip initialization if Supabase is not configured
+      if (!IS_SUPABASE_CONFIGURED || !supabase) {
+        console.warn('AuthContext: Skipping initialization - Supabase not configured');
+        return;
+      }
+
       try {
         console.log('AuthContext: Initializing authentication');
 
@@ -196,6 +219,11 @@ export function AuthProvider({ children }) {
     };
 
     initAuth();
+
+    // Skip setting up listener if Supabase is not configured
+    if (!IS_SUPABASE_CONFIGURED || !supabase) {
+      return;
+    }
 
     // ======================================================================
     // AUTH STATE CHANGE LISTENER
@@ -274,6 +302,13 @@ export function AuthProvider({ children }) {
    * @returns {Promise<{success: boolean, error?: string}>}
    */
   const signIn = async (email) => {
+    // Check if Supabase is configured
+    if (!IS_SUPABASE_CONFIGURED || !supabase) {
+      const errorMsg = 'Authentication not available. Please configure Supabase environment variables.';
+      console.error('AuthContext:', errorMsg);
+      return { success: false, error: errorMsg };
+    }
+
     try {
       console.log('AuthContext: Sending magic link to', email);
       setError(null);
@@ -307,6 +342,13 @@ export function AuthProvider({ children }) {
    * @returns {Promise<void>}
    */
   const signOut = async () => {
+    // If Supabase is not configured, just clear local state
+    if (!IS_SUPABASE_CONFIGURED || !supabase) {
+      setSession(null);
+      setUser(null);
+      return;
+    }
+
     try {
       console.log('AuthContext: Signing out');
       setError(null);
@@ -379,6 +421,7 @@ export function AuthProvider({ children }) {
     session,
     loading,
     error,
+    configError, // True if Supabase is not configured
 
     // Auth functions
     signIn,

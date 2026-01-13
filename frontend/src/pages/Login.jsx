@@ -21,7 +21,7 @@ function Login() {
   const [emailSent, setEmailSent] = useState(false);
   const [error, setError] = useState(null);
 
-  const { user, signIn, loading } = useAuth();
+  const { user, signIn, loading, configError, error: authError } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -75,6 +75,65 @@ function Login() {
           <div className={styles.loading}>
             <div className={styles.spinner} />
             <p>Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show configuration error if Supabase is not set up
+  if (configError) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.card}>
+          <div className={styles.header}>
+            <h1>Configuration Required</h1>
+            <p>Supabase authentication is not configured</p>
+          </div>
+          <div className={styles.error}>
+            <svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span>Missing environment variables</span>
+          </div>
+          <div className={styles.footer}>
+            <p style={{ textAlign: 'left', fontSize: '0.9rem' }}>
+              To fix this, create a <code>frontend/.env</code> file with:
+            </p>
+            <pre style={{
+              background: '#f5f5f5',
+              padding: '1rem',
+              borderRadius: '4px',
+              fontSize: '0.8rem',
+              textAlign: 'left',
+              overflow: 'auto'
+            }}>
+{`VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key-here`}
+            </pre>
+            <p style={{ textAlign: 'left', fontSize: '0.85rem', marginTop: '1rem' }}>
+              Get these values from your{' '}
+              <a
+                href="https://app.supabase.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#C4704D' }}
+              >
+                Supabase dashboard
+              </a>
+              {' '}→ Project Settings → API
+            </p>
           </div>
         </div>
       </div>

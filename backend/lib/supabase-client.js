@@ -78,22 +78,32 @@ export const episodeRepo = {
    * @param {Object} data - Episode data
    * @param {string} data.transcript - Full podcast transcript
    * @param {Object} [data.episode_context] - Optional context/hints
+   * @param {string} [data.user_id] - Owner user ID for multi-user support
    * @returns {Promise<Object>} Created episode
    */
   async create(data) {
     logger.dbQuery('insert', 'episodes', {
       transcriptLength: data.transcript?.length,
       hasContext: !!data.episode_context && Object.keys(data.episode_context).length > 0,
+      hasUserId: !!data.user_id,
     });
+
+    // Build insert object - only include user_id if provided
+    const insertData = {
+      transcript: data.transcript,
+      episode_context: data.episode_context || {},
+      status: 'draft',
+      current_stage: 0,
+    };
+
+    // Add user_id for multi-user support (optional for backwards compatibility)
+    if (data.user_id) {
+      insertData.user_id = data.user_id;
+    }
 
     const { data: episode, error } = await db
       .from('episodes')
-      .insert({
-        transcript: data.transcript,
-        episode_context: data.episode_context || {},
-        status: 'draft',
-        current_stage: 0,
-      })
+      .insert(insertData)
       .select()
       .single();
 
@@ -102,8 +112,14 @@ export const episodeRepo = {
       throw new DatabaseError('insert', `Failed to create episode: ${error.message}`);
     }
 
-    logger.dbResult('insert', 'episodes', { episodeId: episode.id });
-    logger.info('Episode created', { episodeId: episode.id });
+    logger.dbResult('insert', 'episodes', {
+      episodeId: episode.id,
+      userId: episode.user_id,
+    });
+    logger.info('Episode created', {
+      episodeId: episode.id,
+      userId: episode.user_id,
+    });
     return episode;
   },
 
@@ -176,27 +192,52 @@ export const episodeRepo = {
    * Lists episodes with optional filtering
    * @param {Object} options - Query options
    * @param {string} [options.status] - Filter by status
+   * @param {string} [options.userId] - Filter by owner user ID (for multi-user support)
    * @param {number} [options.limit=50] - Max results
    * @param {number} [options.offset=0] - Pagination offset
    * @returns {Promise<{episodes: Array, total: number}>}
    */
-  async list({ status, limit = 50, offset = 0 } = {}) {
+  async list({ status, userId, limit = 50, offset = 0 } = {}) {
+    logger.dbQuery('select', 'episodes', {
+      status,
+      userId,
+      limit,
+      offset,
+    });
+
     let query = db
       .from('episodes')
       .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 
+    // Filter by status if provided
     if (status) {
       query = query.eq('status', status);
+    }
+
+    // Filter by user_id for multi-user support
+    // This allows users to see only their own episodes
+    if (userId) {
+      query = query.eq('user_id', userId);
     }
 
     const { data: episodes, error, count } = await query;
 
     if (error) {
-      logger.error('Failed to list episodes', { error: error.message });
+      logger.error('Failed to list episodes', {
+        error: error.message,
+        userId,
+        status,
+      });
       throw new DatabaseError('select', `Failed to list episodes: ${error.message}`);
     }
+
+    logger.dbResult('select', 'episodes', {
+      count: episodes?.length || 0,
+      total: count || 0,
+      userId,
+    });
 
     return { episodes: episodes || [], total: count || 0 };
   },

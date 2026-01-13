@@ -2,7 +2,7 @@
 
 ## Overview
 
-This application uses Supabase (PostgreSQL) with four main tables plus RLS policies for security.
+This application uses Supabase (PostgreSQL) with six main tables plus RLS policies for security. The database supports multi-user authentication with user-scoped data isolation.
 
 ## Tables
 
@@ -80,6 +80,94 @@ CREATE TRIGGER episodes_updated_at
 - `error_message`: If status='error', description of failure
 - `processing_started_at`: When processing began
 - `processing_completed_at`: When all 9 stages finished
+- `user_id`: Foreign key to user_profiles (links episode to creating user)
+
+---
+
+### `user_profiles`
+
+Stores user profile information linked to Supabase auth.users.
+
+```sql
+CREATE TABLE user_profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  display_name TEXT,
+  role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'superadmin')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  last_login_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Indexes
+CREATE INDEX idx_user_profiles_role ON user_profiles(role);
+CREATE INDEX idx_user_profiles_email ON user_profiles(email);
+```
+
+**Field Descriptions:**
+
+- `id`: UUID matching Supabase auth.users.id
+- `email`: User's email address (denormalized from auth.users)
+- `display_name`: User's display name (optional)
+- `role`: Either 'user' (default) or 'superadmin'
+- `created_at`: When profile was created
+- `updated_at`: Last update timestamp
+- `last_login_at`: Most recent login timestamp
+
+**Auto-Creation Trigger:**
+
+A trigger automatically creates a user_profile when a new user signs up via Supabase Auth. The superadmin role is assigned if email matches `hazel@theclever.io`.
+
+---
+
+### `user_settings`
+
+Stores per-user settings (therapist profile, podcast info, etc.) for content generation.
+
+```sql
+CREATE TABLE user_settings (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+  therapist_profile JSONB NOT NULL DEFAULT '{}'::jsonb,
+  podcast_info JSONB NOT NULL DEFAULT '{}'::jsonb,
+  voice_guidelines JSONB NOT NULL DEFAULT '{}'::jsonb,
+  seo_defaults JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(user_id)
+);
+
+-- Index
+CREATE INDEX idx_user_settings_user_id ON user_settings(user_id);
+```
+
+**Field Descriptions:**
+
+- `id`: Unique identifier (UUID v4)
+- `user_id`: Foreign key to user_profiles
+- `therapist_profile`: JSON containing therapist/creator profile info
+  ```json
+  {
+    "name": "Dr. Jane Smith",
+    "credentials": "PhD, LMFT",
+    "bio": "Licensed therapist...",
+    "website": "drjanesmith.com"
+  }
+  ```
+- `podcast_info`: JSON containing podcast details
+  ```json
+  {
+    "name": "The Mindful Therapist",
+    "tagline": "Real conversations about mental health",
+    "target_audience": "Adults seeking mental health insights"
+  }
+  ```
+- `voice_guidelines`: JSON containing writing style preferences
+- `seo_defaults`: JSON containing SEO/marketing settings
+
+**Auto-Creation Trigger:**
+
+A trigger automatically creates user_settings when a new user_profile is created, optionally copying defaults from evergreen_content.
 
 ---
 
@@ -327,52 +415,125 @@ CREATE INDEX idx_api_usage_date ON api_usage_log(DATE(timestamp));
 ## Relationships
 
 ```
-episodes (1) ─────< (many) stage_outputs
-                     │
-                     │ (logs each stage)
-                     │
-                     └─────< (many) api_usage_log
+auth.users (1) ─────< (1) user_profiles
+                           │
+                           ├───< (1) user_settings
+                           │
+                           └───< (many) episodes (1) ─────< (many) stage_outputs
+                                                              │
+                                                              │ (logs each stage)
+                                                              │
+                                                              └─────< (many) api_usage_log
 
-evergreen_content (singleton) ──> (used by all episodes)
+evergreen_content (singleton) ──> (system defaults, used as seed for user_settings)
 ```
+
+### User Data Isolation
+
+- Each user can only see and modify their own episodes
+- User settings are scoped to individual users
+- Superadmin (hazel@theclever.io) can view all users' episodes
+- The `user_id` column on episodes enforces data ownership
 
 ---
 
 ## Row-Level Security (RLS)
 
-Since this is a single-user app, RLS is simplified. If deploying to Supabase, enable RLS but allow all operations for authenticated users.
+RLS policies enforce multi-user data isolation at the database level. Users can only access their own data, while superadmins can view all data.
+
+### Helper Functions
 
 ```sql
--- Enable RLS on all tables
-ALTER TABLE episodes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE stage_outputs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE evergreen_content ENABLE ROW LEVEL SECURITY;
-ALTER TABLE api_usage_log ENABLE ROW LEVEL SECURITY;
+-- Check if current user is superadmin
+CREATE OR REPLACE FUNCTION is_superadmin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM user_profiles
+    WHERE id = auth.uid()
+    AND role = 'superadmin'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Allow all operations for authenticated users
-CREATE POLICY "Allow all for authenticated users" ON episodes
-  FOR ALL USING (auth.role() = 'authenticated');
+-- Get current user's ID
+CREATE OR REPLACE FUNCTION get_user_id()
+RETURNS UUID AS $$
+BEGIN
+  RETURN auth.uid();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
 
-CREATE POLICY "Allow all for authenticated users" ON stage_outputs
-  FOR ALL USING (auth.role() = 'authenticated');
+### User Profiles Policies
 
-CREATE POLICY "Allow all for authenticated users" ON evergreen_content
-  FOR ALL USING (auth.role() = 'authenticated');
+```sql
+-- Users can view their own profile
+CREATE POLICY "Users can view own profile" ON user_profiles
+  FOR SELECT USING (auth.uid() = id);
 
-CREATE POLICY "Allow all for authenticated users" ON api_usage_log
-  FOR ALL USING (auth.role() = 'authenticated');
+-- Users can update their own profile (except role)
+CREATE POLICY "Users can update own profile" ON user_profiles
+  FOR UPDATE USING (auth.uid() = id);
 
--- Allow service role to bypass RLS (for backend operations)
+-- Superadmin can view all profiles
+CREATE POLICY "Superadmin can view all profiles" ON user_profiles
+  FOR SELECT USING (is_superadmin());
+```
+
+### User Settings Policies
+
+```sql
+-- Users can view their own settings
+CREATE POLICY "Users can view own settings" ON user_settings
+  FOR SELECT USING (auth.uid() = user_id);
+
+-- Users can update their own settings
+CREATE POLICY "Users can update own settings" ON user_settings
+  FOR UPDATE USING (auth.uid() = user_id);
+```
+
+### Episodes Policies
+
+```sql
+-- Users can view their own episodes (superadmin can view all)
+CREATE POLICY "Users can view own episodes" ON episodes
+  FOR SELECT USING (auth.uid() = user_id OR is_superadmin());
+
+-- Users can insert their own episodes
+CREATE POLICY "Users can insert own episodes" ON episodes
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- Users can update their own episodes
+CREATE POLICY "Users can update own episodes" ON episodes
+  FOR UPDATE USING (auth.uid() = user_id);
+
+-- Users can delete their own episodes
+CREATE POLICY "Users can delete own episodes" ON episodes
+  FOR DELETE USING (auth.uid() = user_id);
+```
+
+### Stage Outputs Policies
+
+```sql
+-- Users can view stages for their own episodes
+CREATE POLICY "Users can view own stage outputs" ON stage_outputs
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM episodes
+      WHERE episodes.id = stage_outputs.episode_id
+      AND (episodes.user_id = auth.uid() OR is_superadmin())
+    )
+  );
+```
+
+### Service Role Bypass
+
+The backend uses a service role key that bypasses RLS for administrative operations:
+
+```sql
+-- Service role bypasses all RLS policies
 CREATE POLICY "Allow all for service role" ON episodes
-  FOR ALL USING (auth.role() = 'service_role');
-
-CREATE POLICY "Allow all for service role" ON stage_outputs
-  FOR ALL USING (auth.role() = 'service_role');
-
-CREATE POLICY "Allow all for service role" ON evergreen_content
-  FOR ALL USING (auth.role() = 'service_role');
-
-CREATE POLICY "Allow all for service role" ON api_usage_log
   FOR ALL USING (auth.role() = 'service_role');
 ```
 

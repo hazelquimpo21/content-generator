@@ -11,10 +11,13 @@
  * - DatabaseError: Supabase/PostgreSQL failures
  * - TimeoutError: Operation took too long
  * - ProcessingError: Pipeline processing failures
+ * - AuthenticationError: Missing or invalid authentication
+ * - AuthorizationError: Insufficient permissions
  *
  * Usage:
- *   import { APIError, ValidationError } from './lib/errors.js';
+ *   import { APIError, ValidationError, AuthenticationError } from './lib/errors.js';
  *   throw new APIError('openai', 429, 'Rate limit exceeded');
+ *   throw new AuthenticationError('Invalid token');
  * ============================================================================
  */
 
@@ -247,6 +250,81 @@ export class ProcessingError extends BaseError {
 }
 
 // ============================================================================
+// AUTHENTICATION ERROR
+// ============================================================================
+
+/**
+ * Error thrown when authentication fails or is missing.
+ * Used when a user's identity cannot be verified.
+ *
+ * @example
+ * throw new AuthenticationError('No authentication token provided');
+ * throw new AuthenticationError('Invalid or expired token');
+ * throw new AuthenticationError('User session has expired');
+ */
+export class AuthenticationError extends BaseError {
+  /**
+   * @param {string} reason - Why authentication failed
+   * @param {Object} [details] - Additional details (avoid including sensitive data)
+   */
+  constructor(reason, details = null) {
+    super(`Authentication failed: ${reason}`);
+    this.reason = reason;
+    this.details = details;
+
+    // Authentication errors should NOT be retried with same credentials
+    this.retryable = false;
+  }
+
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      reason: this.reason,
+      // Only include details if they're safe to expose
+      details: this.details,
+    };
+  }
+}
+
+// ============================================================================
+// AUTHORIZATION ERROR
+// ============================================================================
+
+/**
+ * Error thrown when a user lacks permission to perform an action.
+ * Used when authentication succeeds but access is denied.
+ *
+ * @example
+ * throw new AuthorizationError('admin', 'Only superadmins can access this resource');
+ * throw new AuthorizationError('episode', 'You do not have permission to view this episode');
+ */
+export class AuthorizationError extends BaseError {
+  /**
+   * @param {string} resource - Resource or action that was denied
+   * @param {string} reason - Why authorization failed
+   * @param {string} [requiredRole] - Role required for access (optional)
+   */
+  constructor(resource, reason, requiredRole = null) {
+    super(`Authorization denied for '${resource}': ${reason}`);
+    this.resource = resource;
+    this.reason = reason;
+    this.requiredRole = requiredRole;
+
+    // Authorization errors should NOT be retried with same credentials
+    this.retryable = false;
+  }
+
+  toJSON() {
+    return {
+      ...super.toJSON(),
+      resource: this.resource,
+      reason: this.reason,
+      requiredRole: this.requiredRole,
+    };
+  }
+}
+
+// ============================================================================
 // NOT FOUND ERROR
 // ============================================================================
 
@@ -327,6 +405,8 @@ export default {
   DatabaseError,
   TimeoutError,
   ProcessingError,
+  AuthenticationError,
+  AuthorizationError,
   NotFoundError,
   wrapError,
   isRetryable,

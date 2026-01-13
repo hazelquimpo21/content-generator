@@ -3,55 +3,105 @@
  * APP COMPONENT
  * ============================================================================
  * Root application component with routing configuration.
- * Sets up the main layout structure and page routes.
+ * Sets up authentication, main layout structure, and page routes.
+ *
+ * Route Types:
+ * - Public routes: /login, /auth/callback (no auth required)
+ * - Protected routes: /, /settings, /episodes/* (auth required)
+ * - Admin routes: /admin (auth + superadmin role required)
  * ============================================================================
  */
 
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
+
+// Authentication
+import { AuthProvider } from './contexts/AuthContext';
+import ProtectedRoute from './components/auth/ProtectedRoute';
 
 // Layout
 import Layout from './components/layout/Layout';
+import AdminBar from './components/layout/AdminBar';
 
-// Pages
+// Public Pages
+import Login from './pages/Login';
+import AuthCallback from './pages/AuthCallback';
+
+// Protected Pages
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import NewEpisode from './pages/NewEpisode';
 import ProcessingScreen from './pages/ProcessingScreen';
 import ReviewHub from './pages/ReviewHub';
+
+// Admin Pages (superadmin only)
 import AdminDashboard from './pages/AdminDashboard';
+
+// Error Pages
 import NotFound from './pages/NotFound';
 
 /**
  * Main App component
- * Defines the application routes and layout structure
+ * Wraps application in AuthProvider and defines routes
  */
 function App() {
   return (
-    <Routes>
-      {/* Main layout wrapper for all pages */}
-      <Route path="/" element={<Layout />}>
-        {/* Dashboard - default landing page */}
-        <Route index element={<Dashboard />} />
+    <AuthProvider>
+      {/* Admin bar - only visible to superadmins */}
+      <AdminBar />
 
-        {/* Settings - configure evergreen content */}
-        <Route path="settings" element={<Settings />} />
+      <Routes>
+        {/* ================================================================== */}
+        {/* PUBLIC ROUTES - No authentication required */}
+        {/* ================================================================== */}
 
-        {/* New Episode - upload and configure new episode */}
-        <Route path="episodes/new" element={<NewEpisode />} />
+        {/* Login page */}
+        <Route path="/login" element={<Login />} />
 
-        {/* Processing - watch episode being processed */}
-        <Route path="episodes/:id/processing" element={<ProcessingScreen />} />
+        {/* Magic link callback handler */}
+        <Route path="/auth/callback" element={<AuthCallback />} />
 
-        {/* Review Hub - view and edit generated content */}
-        <Route path="episodes/:id/review" element={<ReviewHub />} />
+        {/* ================================================================== */}
+        {/* PROTECTED ROUTES - Authentication required */}
+        {/* ================================================================== */}
 
-        {/* Admin Dashboard - analytics and monitoring */}
-        <Route path="admin" element={<AdminDashboard />} />
+        <Route element={<ProtectedRoute />}>
+          {/* Main layout wrapper for authenticated pages */}
+          <Route path="/" element={<Layout />}>
+            {/* Dashboard - default landing page */}
+            <Route index element={<Dashboard />} />
 
-        {/* 404 Page */}
+            {/* Settings - configure user settings and preferences */}
+            <Route path="settings" element={<Settings />} />
+
+            {/* New Episode - upload and configure new episode */}
+            <Route path="episodes/new" element={<NewEpisode />} />
+
+            {/* Processing - watch episode being processed */}
+            <Route path="episodes/:id/processing" element={<ProcessingScreen />} />
+
+            {/* Review Hub - view and edit generated content */}
+            <Route path="episodes/:id/review" element={<ReviewHub />} />
+          </Route>
+        </Route>
+
+        {/* ================================================================== */}
+        {/* ADMIN ROUTES - Superadmin role required */}
+        {/* ================================================================== */}
+
+        <Route element={<ProtectedRoute requireSuperadmin />}>
+          <Route path="/" element={<Layout />}>
+            {/* Admin Dashboard - analytics and monitoring */}
+            <Route path="admin" element={<AdminDashboard />} />
+          </Route>
+        </Route>
+
+        {/* ================================================================== */}
+        {/* CATCH-ALL - 404 Page */}
+        {/* ================================================================== */}
+
         <Route path="*" element={<NotFound />} />
-      </Route>
-    </Routes>
+      </Routes>
+    </AuthProvider>
   );
 }
 

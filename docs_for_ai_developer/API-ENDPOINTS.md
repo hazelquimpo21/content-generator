@@ -9,14 +9,208 @@ Development: http://localhost:3000/api
 
 ## Authentication
 
-For MVP (single user), use Supabase service key in backend only.
+All protected routes require a valid JWT token from Supabase in the Authorization header:
 
-```javascript
-// Backend only
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+```
+Authorization: Bearer <access_token>
+```
+
+The token is obtained after successful magic link authentication via Supabase.
+
+---
+
+## Auth Endpoints
+
+### POST `/api/auth/magic-link`
+
+Send a magic link email to the provided email address.
+
+**Request Body:**
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Magic link sent! Check your email.",
+  "email": "user@example.com"
+}
+```
+
+**Error Response (400 Bad Request):**
+```json
+{
+  "error": "Validation error",
+  "message": "Invalid email format",
+  "field": "email"
+}
+```
+
+---
+
+### GET `/api/auth/me`
+
+Get current authenticated user's information. **Requires authentication.**
+
+**Response (200 OK):**
+```json
+{
+  "user": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "displayName": "John",
+    "role": "user",
+    "isSuperadmin": false,
+    "createdAt": "2025-01-12T14:30:00Z",
+    "hasCompletedProfile": true,
+    "episodeCount": 5
+  }
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "error": "Authentication required",
+  "message": "Missing authorization token"
+}
+```
+
+---
+
+### POST `/api/auth/logout`
+
+Sign out the current user. **Requires authentication.**
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Logged out successfully"
+}
+```
+
+---
+
+### PUT `/api/auth/profile`
+
+Update the current user's profile. **Requires authentication.**
+
+**Request Body:**
+```json
+{
+  "displayName": "New Display Name"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "profile": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "displayName": "New Display Name",
+    "role": "user"
+  }
+}
+```
+
+---
+
+### GET `/api/auth/users`
+
+List all users. **Requires superadmin role.**
+
+**Query Parameters:**
+- `limit` (optional): Number of results (default: 50)
+- `offset` (optional): Pagination offset (default: 0)
+
+**Response (200 OK):**
+```json
+{
+  "users": [
+    {
+      "id": "uuid",
+      "email": "user@example.com",
+      "display_name": "John",
+      "role": "user",
+      "created_at": "2025-01-12T14:30:00Z",
+      "last_login_at": "2025-01-13T10:00:00Z"
+    }
+  ],
+  "total": 5,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+---
+
+## User Settings
+
+### GET `/api/settings`
+
+Get current user's settings. **Requires authentication.**
+
+**Response (200 OK):**
+```json
+{
+  "settings": {
+    "id": "uuid",
+    "user_id": "uuid",
+    "therapist_profile": {
+      "name": "Dr. Jane Smith",
+      "credentials": "PhD, LMFT"
+    },
+    "podcast_info": {
+      "name": "My Podcast",
+      "tagline": "Great conversations"
+    },
+    "voice_guidelines": {},
+    "seo_defaults": {},
+    "created_at": "2025-01-12T14:30:00Z",
+    "updated_at": "2025-01-13T10:00:00Z"
+  }
+}
+```
+
+---
+
+### PUT `/api/settings`
+
+Update current user's settings. **Requires authentication.**
+
+**Request Body:**
+```json
+{
+  "therapist_profile": {
+    "name": "Dr. Jane Smith",
+    "credentials": "PhD, LMFT",
+    "bio": "Licensed therapist..."
+  },
+  "podcast_info": {
+    "name": "The Mindful Therapist",
+    "tagline": "Real conversations about mental health"
+  }
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "settings": {
+    "id": "uuid",
+    "therapist_profile": {...},
+    "podcast_info": {...},
+    "updated_at": "2025-01-13T15:00:00Z"
+  }
+}
 ```
 
 ---

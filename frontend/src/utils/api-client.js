@@ -3,7 +3,11 @@
  * API CLIENT
  * ============================================================================
  * Centralized API client for all backend requests.
- * Handles errors, loading states, and provides typed endpoints.
+ * Handles authentication, errors, and provides typed endpoints.
+ *
+ * Authentication:
+ * - Automatically includes auth token from Supabase session
+ * - Handles 401 errors by redirecting to login
  *
  * Usage:
  *   import api from '@utils/api-client';
@@ -15,11 +19,68 @@
 const BASE_URL = '/api';
 
 // ============================================================================
+// AUTH TOKEN HELPERS
+// ============================================================================
+
+/**
+ * Gets the current auth token from Supabase session in localStorage.
+ * Supabase stores session data in localStorage with a key pattern.
+ *
+ * @returns {string|null} Access token or null if not authenticated
+ */
+function getAuthToken() {
+  try {
+    // Supabase stores the session in localStorage
+    // The key format is: sb-{project-ref}-auth-token
+    const keys = Object.keys(localStorage);
+    const authKey = keys.find(key => key.startsWith('sb-') && key.endsWith('-auth-token'));
+
+    if (!authKey) {
+      // No Supabase auth key found
+      return null;
+    }
+
+    const sessionData = localStorage.getItem(authKey);
+    if (!sessionData) {
+      return null;
+    }
+
+    const session = JSON.parse(sessionData);
+    return session?.access_token || null;
+  } catch (error) {
+    console.warn('api-client: Error reading auth token from storage', error);
+    return null;
+  }
+}
+
+/**
+ * Handles authentication errors by redirecting to login.
+ *
+ * @param {number} status - HTTP status code
+ */
+function handleAuthError(status) {
+  if (status === 401) {
+    console.warn('api-client: Authentication required, redirecting to login');
+    // Clear any stale session data
+    const keys = Object.keys(localStorage);
+    keys.forEach(key => {
+      if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+        localStorage.removeItem(key);
+      }
+    });
+    // Redirect to login
+    window.location.href = '/login';
+  }
+}
+
+// ============================================================================
 // HTTP HELPERS
 // ============================================================================
 
 /**
- * Makes a fetch request with standard configuration
+ * Makes a fetch request with standard configuration.
+ * Automatically includes auth token if available.
+ *
  * @param {string} endpoint - API endpoint
  * @param {Object} options - Fetch options
  * @returns {Promise<any>} Response data
@@ -28,11 +89,20 @@ async function fetchAPI(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
   const requestId = Math.random().toString(36).substring(7);
 
+  // Build headers with auth token
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+
+  // Add auth token if available
+  const token = getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const config = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers,
     ...options,
   };
 
@@ -41,9 +111,9 @@ async function fetchAPI(endpoint, options = {}) {
     delete config.headers['Content-Type'];
   }
 
-  // Log outgoing request
+  // Log outgoing request (hide token in logs)
   console.log(`[API:${requestId}] ${options.method || 'GET'} ${url}`, {
-    headers: config.headers,
+    authenticated: !!token,
     bodySize: config.body ? config.body.length : 0,
   });
 
@@ -86,6 +156,9 @@ async function fetchAPI(endpoint, options = {}) {
       if (data?.debug) {
         console.error(`[API:${requestId}] Debug info from server:`, data.debug);
       }
+
+      // Handle auth errors
+      handleAuthError(response.status);
 
       // Create error with all available info
       const errorMessage = data?.message || data?.error?.message || `HTTP ${response.status}`;
@@ -173,12 +246,49 @@ function del(endpoint) {
 // ============================================================================
 
 /**
+ * Auth API - for authentication-related endpoints
+ */
+const auth = {
+  /**
+   * Get current user info
+   */
+  me: () => get('/auth/me'),
+
+  /**
+   * Update user profile
+   * @param {Object} data - Profile data to update
+   */
+  updateProfile: (data) => put('/auth/profile', data),
+
+  /**
+   * Logout (server-side session invalidation)
+   */
+  logout: () => post('/auth/logout'),
+};
+
+/**
+ * Settings API - for user-specific settings
+ */
+const settings = {
+  /**
+   * Get current user's settings
+   */
+  get: () => get('/settings'),
+
+  /**
+   * Update current user's settings
+   * @param {Object} data - Settings sections to update
+   */
+  update: (data) => put('/settings', data),
+};
+
+/**
  * Episodes API
  */
 const episodes = {
   /**
-   * List all episodes
-   * @param {Object} params - Query params (status, limit, offset)
+   * List user's episodes
+   * @param {Object} params - Query params (status, limit, offset, all)
    */
   list: (params = {}) => get('/episodes', params),
 
@@ -263,23 +373,23 @@ const stages = {
 };
 
 /**
- * Evergreen Content API
+ * Evergreen Content API (system defaults - superadmin only for updates)
  */
 const evergreen = {
   /**
-   * Get all evergreen content
+   * Get all evergreen content (system defaults)
    */
   get: () => get('/evergreen'),
 
   /**
-   * Update evergreen content
+   * Update evergreen content (superadmin only)
    * @param {Object} data - Content sections to update
    */
   update: (data) => put('/evergreen', data),
 };
 
 /**
- * Admin API
+ * Admin API (superadmin only)
  */
 const admin = {
   /**
@@ -304,6 +414,12 @@ const admin = {
    * Get overall usage statistics
    */
   usage: () => get('/admin/usage'),
+
+  /**
+   * List all users (superadmin only)
+   * @param {Object} params - Query params (limit, offset)
+   */
+  users: (params = {}) => get('/auth/users', params),
 };
 
 // ============================================================================
@@ -311,6 +427,8 @@ const admin = {
 // ============================================================================
 
 const api = {
+  auth,
+  settings,
   episodes,
   stages,
   evergreen,

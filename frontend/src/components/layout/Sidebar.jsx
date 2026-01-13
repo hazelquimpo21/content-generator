@@ -3,7 +3,8 @@
  * SIDEBAR COMPONENT
  * ============================================================================
  * Navigation sidebar with links to main application pages.
- * Highlights active route and provides quick access to key functions.
+ * Shows different navigation items based on user role.
+ * Includes user profile info and logout functionality.
  * ============================================================================
  */
 
@@ -14,11 +15,14 @@ import {
   PlusCircle,
   BarChart3,
   Mic,
+  LogOut,
+  User,
 } from 'lucide-react';
 import clsx from 'clsx';
+import { useAuth } from '../../contexts/AuthContext';
 import styles from './Sidebar.module.css';
 
-// Navigation items
+// Navigation items (non-admin)
 const NAV_ITEMS = [
   {
     path: '/',
@@ -35,17 +39,31 @@ const NAV_ITEMS = [
     label: 'Settings',
     icon: Settings,
   },
-  {
-    path: '/admin',
-    label: 'Analytics',
-    icon: BarChart3,
-  },
 ];
+
+// Admin-only navigation item
+const ADMIN_NAV_ITEM = {
+  path: '/admin',
+  label: 'Analytics',
+  icon: BarChart3,
+};
 
 /**
  * Sidebar navigation component
+ * Shows different navigation items based on user role.
  */
 function Sidebar() {
+  const { user, isSuperadmin, signOut } = useAuth();
+
+  // Build navigation items based on role
+  const navItems = isSuperadmin()
+    ? [...NAV_ITEMS, ADMIN_NAV_ITEM]
+    : NAV_ITEMS;
+
+  // Get display name
+  const displayName = user?.display_name || user?.email?.split('@')[0] || 'User';
+  const userEmail = user?.email || '';
+
   return (
     <aside className={styles.sidebar}>
       {/* Logo/Brand */}
@@ -62,7 +80,7 @@ function Sidebar() {
       {/* Navigation */}
       <nav className={styles.nav}>
         <ul className={styles.navList}>
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <li key={item.path}>
               <NavLink
                 to={item.path}
@@ -78,6 +96,27 @@ function Sidebar() {
           ))}
         </ul>
       </nav>
+
+      {/* User Profile Section */}
+      <div className={styles.userSection}>
+        <div className={styles.userInfo}>
+          <div className={styles.userAvatar}>
+            <User size={18} />
+          </div>
+          <div className={styles.userDetails}>
+            <span className={styles.userName}>{displayName}</span>
+            <span className={styles.userEmail}>{userEmail}</span>
+          </div>
+        </div>
+        <button
+          type="button"
+          className={styles.logoutButton}
+          onClick={signOut}
+          title="Sign out"
+        >
+          <LogOut size={18} />
+        </button>
+      </div>
 
       {/* Footer */}
       <div className={styles.footer}>

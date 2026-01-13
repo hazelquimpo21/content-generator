@@ -13,7 +13,7 @@
  */
 
 import { Router } from 'express';
-import { apiUsageRepo, episodeRepo, stageRepo } from '../../lib/supabase-client.js';
+import { apiLogRepo, episodeRepo, stageRepo } from '../../lib/supabase-client.js';
 import logger from '../../lib/logger.js';
 
 const router = Router();
@@ -58,7 +58,7 @@ router.get('/costs', async (req, res, next) => {
     }
 
     // Get usage logs for the period
-    const usageLogs = await apiUsageRepo.getByDateRange(start.toISOString(), end.toISOString());
+    const usageLogs = await apiLogRepo.getByDateRange(start.toISOString(), end.toISOString());
 
     // Calculate totals
     const totalCost = usageLogs.reduce((sum, log) => sum + (log.cost_usd || 0), 0);
@@ -329,7 +329,7 @@ router.get('/usage', async (req, res, next) => {
 
     // Get total API usage
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const usageLogs = await apiUsageRepo.getByDateRange(
+    const usageLogs = await apiLogRepo.getByDateRange(
       thirtyDaysAgo.toISOString(),
       new Date().toISOString()
     );

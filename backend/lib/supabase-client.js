@@ -257,6 +257,16 @@ export const episodeRepo = {
       total_duration_seconds: newDuration,
     });
   },
+
+  /**
+   * Alias for list() - finds all episodes matching criteria
+   * @param {Object} options - Query options
+   * @returns {Promise<Array>} Array of episodes
+   */
+  async findAll(options = {}) {
+    const result = await this.list(options);
+    return result.episodes;
+  },
 };
 
 // ============================================================================
@@ -579,6 +589,27 @@ export const apiLogRepo = {
 
     if (error) {
       throw new DatabaseError('select', `Failed to get error logs: ${error.message}`);
+    }
+
+    return data || [];
+  },
+
+  /**
+   * Gets API usage logs for a date range
+   * @param {string} startDate - ISO date string
+   * @param {string} endDate - ISO date string
+   * @returns {Promise<Array>} Usage log entries
+   */
+  async getByDateRange(startDate, endDate) {
+    const { data, error } = await db
+      .from('api_usage_log')
+      .select('*')
+      .gte('created_at', startDate)
+      .lte('created_at', endDate)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw new DatabaseError('select', `Failed to get usage logs: ${error.message}`);
     }
 
     return data || [];

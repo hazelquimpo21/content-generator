@@ -343,31 +343,61 @@ export const episodeRepo = {
 export const stageRepo = {
   /**
    * Creates stage output records for all 10 stages (0-9, pending status)
-   * Stage 0: Preprocessing (Claude Haiku for long transcripts)
-   * Stages 1-6: Analysis and drafting (GPT-5 mini)
-   * Stages 7-9: Refinement and content (Claude Sonnet)
+   *
+   * Pipeline Architecture:
+   * ----------------------
+   * - Stage 0: Transcript Preprocessing (Claude Haiku, 200K context)
+   *            Automatically skipped for short transcripts (<8000 tokens)
+   * - Stages 1-6: Analysis and Drafting (GPT-5 mini)
+   *            Core content analysis and blog post drafting
+   * - Stages 7-9: Refinement and Distribution (Claude Sonnet)
+   *            Polish, social content, and email campaign generation
+   *
+   * Database Requirements:
+   * ----------------------
+   * IMPORTANT: The stage_outputs table must have the constraint:
+   *   CHECK (stage_number >= 0 AND stage_number <= 9)
+   *
+   * If you see errors like "new row for relation 'stage_outputs' violates check
+   * constraint", the database constraint needs to be updated to allow stage 0.
+   * Run migration: 003_fix_stage_outputs_constraint.sql
    *
    * @param {string} episodeId - Episode UUID
-   * @returns {Promise<Array>} Created stage records
+   * @returns {Promise<Array>} Created stage records (10 stages)
+   * @throws {DatabaseError} If insert fails (check constraint, foreign key, etc.)
+   *
+   * @example
+   * const stages = await stageRepo.createAllStages('episode-uuid');
+   * // stages = [{stage_number: 0, status: 'pending', ...}, ...]
    */
   async createAllStages(episodeId) {
-    logger.dbQuery('insert', 'stage_outputs (batch)', { episodeId, stageCount: 10 });
+    // Log the batch insert operation with full context for debugging
+    logger.dbQuery('insert', 'stage_outputs (batch)', {
+      episodeId,
+      stageCount: 10,
+      stageRange: '0-9',
+      operation: 'createAllStages',
+    });
 
     const stages = [];
 
-    // Stage 0-9
+    // Build stage records for all 10 stages (0-9)
     for (let stageNum = 0; stageNum <= 9; stageNum++) {
       let model, provider;
+
       if (stageNum === 0) {
-        // Stage 0: Preprocessing uses Claude Haiku (200K context)
+        // Stage 0: Preprocessing uses Claude Haiku (200K context window)
+        // This stage compresses long transcripts for downstream processing
         model = 'claude-3-5-haiku-20241022';
         provider = 'anthropic';
       } else if (stageNum <= 6) {
-        // Stages 1-6: GPT-5 mini
+        // Stages 1-6: GPT-5 mini for analysis and drafting
+        // These stages extract insights and generate the blog post draft
         model = 'gpt-5-mini';
         provider = 'openai';
       } else {
-        // Stages 7-9: Claude Sonnet
+        // Stages 7-9: Claude Sonnet for refinement and distribution
+        // These stages polish content and generate social/email outputs
         model = 'claude-sonnet-4-20250514';
         provider = 'anthropic';
       }
@@ -382,28 +412,89 @@ export const stageRepo = {
       });
     }
 
+    // Log the stages we're about to insert for debugging constraint issues
+    logger.debug('Preparing to insert stage records', {
+      episodeId,
+      stageNumbers: stages.map(s => s.stage_number),
+      stageNames: stages.map(s => s.stage_name),
+    });
+
     const { data, error } = await db
       .from('stage_outputs')
       .insert(stages)
       .select();
 
     if (error) {
-      logger.dbError('insert', 'stage_outputs', error, { episodeId });
+      // Provide detailed error logging for debugging
+      // Common errors:
+      // - CHECK constraint violation: stage_number out of allowed range (0-9)
+      // - Foreign key violation: episode_id doesn't exist
+      // - Unique constraint violation: stages already exist for this episode
+      logger.dbError('insert', 'stage_outputs', error, {
+        episodeId,
+        stageCount: stages.length,
+        stageRange: '0-9',
+        errorCode: error.code,
+        errorMessage: error.message,
+        errorDetails: error.details,
+        errorHint: error.hint,
+      });
+
+      // Check for specific constraint violation error and provide helpful message
+      if (error.message?.includes('violates check constraint') ||
+          error.message?.includes('violates c') ||
+          error.code === '23514') {
+        logger.error('CHECK constraint violation detected', {
+          episodeId,
+          hint: 'The stage_outputs table constraint may only allow stage_number 1-9. ' +
+                'Run migration 003_fix_stage_outputs_constraint.sql to allow stage 0.',
+          stageNumbers: stages.map(s => s.stage_number),
+        });
+        throw new DatabaseError(
+          'insert',
+          `Failed to create stages: Database constraint violation. ` +
+          `The stage_outputs table may not allow stage 0. ` +
+          `Run migration 003_fix_stage_outputs_constraint.sql to fix. ` +
+          `Original error: ${error.message}`
+        );
+      }
+
       throw new DatabaseError('insert', `Failed to create stages: ${error.message}`);
     }
 
-    logger.dbResult('insert', 'stage_outputs', { episodeId, count: data.length });
-    logger.info('📋 Created all 10 stage records (0-9)', { episodeId });
+    // Log successful creation with metrics
+    logger.dbResult('insert', 'stage_outputs', {
+      episodeId,
+      count: data.length,
+      stagesCreated: data.map(s => s.stage_number),
+    });
+    logger.info('📋 Created all 10 stage records (0-9)', {
+      episodeId,
+      stageCount: data.length,
+    });
+
     return data;
   },
 
   /**
-   * Finds a specific stage output
+   * Finds a specific stage output by episode ID and stage number
+   *
    * @param {string} episodeId - Episode UUID
-   * @param {number} stageNumber - Stage number (1-9)
-   * @returns {Promise<Object>} Stage record
+   * @param {number} stageNumber - Stage number (0-9)
+   * @returns {Promise<Object>} Stage record with all fields
+   * @throws {NotFoundError} If stage record doesn't exist for the given episode/stage
+   *
+   * @example
+   * const stage = await stageRepo.findByEpisodeAndStage('uuid', 0);
+   * // stage = { id, episode_id, stage_number: 0, stage_name: 'Transcript Preprocessing', ... }
    */
   async findByEpisodeAndStage(episodeId, stageNumber) {
+    logger.debug('Finding stage output', {
+      episodeId,
+      stageNumber,
+      stageName: STAGE_NAMES[stageNumber],
+    });
+
     const { data: stage, error } = await db
       .from('stage_outputs')
       .select('*')
@@ -412,6 +503,12 @@ export const stageRepo = {
       .single();
 
     if (error || !stage) {
+      logger.debug('Stage output not found', {
+        episodeId,
+        stageNumber,
+        stageName: STAGE_NAMES[stageNumber],
+        error: error?.message,
+      });
       throw new NotFoundError('stage_output', `${episodeId}:${stageNumber}`);
     }
 

@@ -57,6 +57,7 @@ export const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
 // ============================================================================
 
 const STAGE_NAMES = {
+  0: 'Transcript Preprocessing',  // Uses Claude Haiku (200K context) for long transcripts
   1: 'Transcript Analysis',
   2: 'Quote Extraction',
   3: 'Blog Outline - High Level',
@@ -341,23 +342,43 @@ export const episodeRepo = {
 
 export const stageRepo = {
   /**
-   * Creates stage output records for all 9 stages (pending status)
+   * Creates stage output records for all 10 stages (0-9, pending status)
+   * Stage 0: Preprocessing (Claude Haiku for long transcripts)
+   * Stages 1-6: Analysis and drafting (GPT-5 mini)
+   * Stages 7-9: Refinement and content (Claude Sonnet)
+   *
    * @param {string} episodeId - Episode UUID
    * @returns {Promise<Array>} Created stage records
    */
   async createAllStages(episodeId) {
-    logger.dbQuery('insert', 'stage_outputs (batch)', { episodeId, stageCount: 9 });
+    logger.dbQuery('insert', 'stage_outputs (batch)', { episodeId, stageCount: 10 });
 
     const stages = [];
 
-    for (let stageNum = 1; stageNum <= 9; stageNum++) {
+    // Stage 0-9
+    for (let stageNum = 0; stageNum <= 9; stageNum++) {
+      let model, provider;
+      if (stageNum === 0) {
+        // Stage 0: Preprocessing uses Claude Haiku (200K context)
+        model = 'claude-3-5-haiku-20241022';
+        provider = 'anthropic';
+      } else if (stageNum <= 6) {
+        // Stages 1-6: GPT-5 mini
+        model = 'gpt-5-mini';
+        provider = 'openai';
+      } else {
+        // Stages 7-9: Claude Sonnet
+        model = 'claude-sonnet-4-20250514';
+        provider = 'anthropic';
+      }
+
       stages.push({
         episode_id: episodeId,
         stage_number: stageNum,
         stage_name: STAGE_NAMES[stageNum],
         status: 'pending',
-        model_used: stageNum <= 6 ? 'gpt-5-mini' : 'claude-sonnet-4-20250514',
-        provider: stageNum <= 6 ? 'openai' : 'anthropic',
+        model_used: model,
+        provider: provider,
       });
     }
 
@@ -372,7 +393,7 @@ export const stageRepo = {
     }
 
     logger.dbResult('insert', 'stage_outputs', { episodeId, count: data.length });
-    logger.info('📋 Created all 9 stage records', { episodeId });
+    logger.info('📋 Created all 10 stage records (0-9)', { episodeId });
     return data;
   },
 

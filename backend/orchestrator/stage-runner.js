@@ -15,6 +15,7 @@ import logger from '../lib/logger.js';
 import { ProcessingError } from '../lib/errors.js';
 
 // Import all analyzers
+import { preprocessTranscript } from '../analyzers/stage-00-preprocess-transcript.js';
 import { analyzeTranscript } from '../analyzers/stage-01-analyze-transcript.js';
 import { extractQuotes } from '../analyzers/stage-02-extract-quotes.js';
 import { outlineHighLevel } from '../analyzers/stage-03-outline-high-level.js';
@@ -31,8 +32,11 @@ import { generateEmail } from '../analyzers/stage-09-generate-email.js';
 
 /**
  * Maps stage numbers to their analyzer functions
+ * Stage 0: Transcript preprocessing (for long transcripts)
+ * Stages 1-9: Main content pipeline
  */
 const STAGE_ANALYZERS = {
+  0: preprocessTranscript,
   1: analyzeTranscript,
   2: extractQuotes,
   3: outlineHighLevel,
@@ -48,6 +52,7 @@ const STAGE_ANALYZERS = {
  * Human-readable names for each stage
  */
 export const STAGE_NAMES = {
+  0: 'Transcript Preprocessing',
   1: 'Transcript Analysis',
   2: 'Quote Extraction',
   3: 'Blog Outline - High Level',
@@ -63,6 +68,7 @@ export const STAGE_NAMES = {
  * AI provider for each stage
  */
 export const STAGE_PROVIDERS = {
+  0: 'anthropic',  // Claude Haiku for preprocessing (200K context)
   1: 'openai',
   2: 'openai',
   3: 'openai',
@@ -78,6 +84,7 @@ export const STAGE_PROVIDERS = {
  * Model used for each stage
  */
 export const STAGE_MODELS = {
+  0: 'claude-3-5-haiku-20241022',  // Haiku for preprocessing (200K context, cheap)
   1: 'gpt-5-mini',
   2: 'gpt-5-mini',
   3: 'gpt-5-mini',

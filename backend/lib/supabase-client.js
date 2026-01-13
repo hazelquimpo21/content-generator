@@ -441,12 +441,26 @@ export const stageRepo = {
 
   /**
    * Updates stage by episode ID and stage number
+   *
    * @param {string} episodeId - Episode UUID
-   * @param {number} stageNumber - Stage number (1-9)
+   * @param {number} stageNumber - Stage number (0-9)
    * @param {Object} updates - Fields to update
    * @returns {Promise<Object>} Updated stage
+   * @throws {DatabaseError} If update fails or stage record doesn't exist
+   *
+   * Common failure scenarios:
+   * - Stage record doesn't exist (stages weren't created before processing)
+   * - Multiple rows match (data integrity issue)
+   * - Database connection error
    */
   async updateByEpisodeAndStage(episodeId, stageNumber, updates) {
+    logger.debug('Updating stage by episode and stage number', {
+      episodeId,
+      stageNumber,
+      stageName: STAGE_NAMES[stageNumber],
+      updateFields: Object.keys(updates),
+    });
+
     const { data: stage, error } = await db
       .from('stage_outputs')
       .update(updates)
@@ -456,43 +470,116 @@ export const stageRepo = {
       .single();
 
     if (error) {
+      // Provide detailed error logging for debugging
+      logger.error('Failed to update stage record', {
+        episodeId,
+        stageNumber,
+        stageName: STAGE_NAMES[stageNumber],
+        updateFields: Object.keys(updates),
+        errorCode: error.code,
+        errorMessage: error.message,
+        errorDetails: error.details,
+        errorHint: error.hint,
+      });
+
+      // Check for specific error conditions and provide helpful messages
+      if (error.code === 'PGRST116' || error.message.includes('single row')) {
+        throw new DatabaseError(
+          'update',
+          `Failed to update stage ${stageNumber} (${STAGE_NAMES[stageNumber]}): ` +
+          `Stage record not found. Ensure stage records are created before processing. ` +
+          `This usually happens when start_from_stage > 0 on a fresh episode.`
+        );
+      }
+
       throw new DatabaseError('update', `Failed to update stage: ${error.message}`);
     }
+
+    if (!stage) {
+      logger.error('Stage update returned no data', {
+        episodeId,
+        stageNumber,
+        stageName: STAGE_NAMES[stageNumber],
+      });
+      throw new DatabaseError(
+        'update',
+        `Stage ${stageNumber} (${STAGE_NAMES[stageNumber]}) not found for episode ${episodeId}`
+      );
+    }
+
+    logger.debug('Stage updated successfully', {
+      episodeId,
+      stageNumber,
+      stageName: STAGE_NAMES[stageNumber],
+      newStatus: stage.status,
+    });
 
     return stage;
   },
 
   /**
-   * Marks a stage as processing
+   * Marks a stage as processing (state transition: pending -> processing)
+   *
    * @param {string} episodeId - Episode UUID
-   * @param {number} stageNumber - Stage number (1-9)
+   * @param {number} stageNumber - Stage number (0-9)
+   * @returns {Promise<Object>} Updated stage record
+   * @throws {DatabaseError} If stage record doesn't exist or update fails
+   *
+   * Prerequisites:
+   * - Stage records must exist (created via createAllStages)
+   * - Stage should be in 'pending' status
    */
   async markProcessing(episodeId, stageNumber) {
+    // Log the state transition for debugging and monitoring
     logger.stateChange(episodeId, 'pending', 'processing', {
       stage: stageNumber,
       stageName: STAGE_NAMES[stageNumber],
     });
 
-    return this.updateByEpisodeAndStage(episodeId, stageNumber, {
-      status: 'processing',
-      started_at: new Date().toISOString(),
-    });
+    try {
+      const result = await this.updateByEpisodeAndStage(episodeId, stageNumber, {
+        status: 'processing',
+        started_at: new Date().toISOString(),
+      });
+      return result;
+    } catch (error) {
+      // Add context about which stage failed to transition
+      logger.error('Failed to mark stage as processing', {
+        episodeId,
+        stageNumber,
+        stageName: STAGE_NAMES[stageNumber],
+        error: error.message,
+      });
+      throw error;
+    }
   },
 
   /**
-   * Marks a stage as completed with results
+   * Marks a stage as completed with results (state transition: processing -> completed)
+   *
    * @param {string} episodeId - Episode UUID
-   * @param {number} stageNumber - Stage number (1-9)
-   * @param {Object} result - Stage results
+   * @param {number} stageNumber - Stage number (0-9)
+   * @param {Object} result - Stage results from the analyzer
+   * @param {Object|null} result.output_data - Structured JSON output (for stages 0-5)
+   * @param {string|null} result.output_text - Text/markdown output (for stages 6-9)
+   * @param {number} result.input_tokens - Number of input tokens used
+   * @param {number} result.output_tokens - Number of output tokens generated
+   * @param {number} result.cost_usd - API cost in USD
+   * @returns {Promise<Object>} Updated stage record
+   * @throws {DatabaseError} If stage record doesn't exist or update fails
    */
   async markCompleted(episodeId, stageNumber, result) {
     const completedAt = new Date().toISOString();
+
+    // Fetch the stage to calculate duration from started_at
     const stage = await this.findByEpisodeAndStage(episodeId, stageNumber);
 
+    // Calculate processing duration in seconds
     const durationSeconds = stage.started_at
       ? Math.floor((new Date(completedAt) - new Date(stage.started_at)) / 1000)
       : 0;
 
+    // Log the state transition with performance metrics
     logger.stateChange(episodeId, 'processing', 'completed', {
       stage: stageNumber,
       stageName: STAGE_NAMES[stageNumber],
@@ -502,41 +589,97 @@ export const stageRepo = {
       outputTokens: result.output_tokens,
     });
 
-    return this.updateByEpisodeAndStage(episodeId, stageNumber, {
-      status: 'completed',
-      completed_at: completedAt,
-      duration_seconds: durationSeconds,
-      output_data: result.output_data || null,
-      output_text: result.output_text || null,
-      input_tokens: result.input_tokens,
-      output_tokens: result.output_tokens,
-      cost_usd: result.cost_usd,
-    });
+    try {
+      const updatedStage = await this.updateByEpisodeAndStage(episodeId, stageNumber, {
+        status: 'completed',
+        completed_at: completedAt,
+        duration_seconds: durationSeconds,
+        output_data: result.output_data || null,
+        output_text: result.output_text || null,
+        input_tokens: result.input_tokens,
+        output_tokens: result.output_tokens,
+        cost_usd: result.cost_usd,
+      });
+
+      logger.debug('Stage marked as completed', {
+        episodeId,
+        stageNumber,
+        stageName: STAGE_NAMES[stageNumber],
+        durationSeconds,
+        hasOutputData: !!result.output_data,
+        hasOutputText: !!result.output_text,
+      });
+
+      return updatedStage;
+    } catch (error) {
+      logger.error('Failed to mark stage as completed', {
+        episodeId,
+        stageNumber,
+        stageName: STAGE_NAMES[stageNumber],
+        error: error.message,
+      });
+      throw error;
+    }
   },
 
   /**
-   * Marks a stage as failed with error details
+   * Marks a stage as failed with error details (state transition: processing -> failed)
+   *
    * @param {string} episodeId - Episode UUID
-   * @param {number} stageNumber - Stage number (1-9)
-   * @param {string} errorMessage - Error message
-   * @param {Object} [errorDetails] - Full error details
+   * @param {number} stageNumber - Stage number (0-9)
+   * @param {string} errorMessage - Human-readable error message
+   * @param {Object|null} [errorDetails] - Full error details for debugging (JSON)
+   * @returns {Promise<Object>} Updated stage record
+   * @throws {DatabaseError} If stage record doesn't exist or update fails
+   *
+   * Error details should include:
+   * - Error type/name
+   * - Stack trace (if available)
+   * - API response details (if applicable)
+   * - Any context that would help debugging
    */
   async markFailed(episodeId, stageNumber, errorMessage, errorDetails = null) {
+    // Fetch current stage to get retry count
     const stage = await this.findByEpisodeAndStage(episodeId, stageNumber);
+    const newRetryCount = (stage.retry_count || 0) + 1;
 
+    // Log the state transition with error context
     logger.stateChange(episodeId, 'processing', 'failed', {
       stage: stageNumber,
       stageName: STAGE_NAMES[stageNumber],
       error: errorMessage,
-      retryCount: (stage.retry_count || 0) + 1,
+      retryCount: newRetryCount,
     });
 
-    return this.updateByEpisodeAndStage(episodeId, stageNumber, {
-      status: 'failed',
-      error_message: errorMessage,
-      error_details: errorDetails,
-      retry_count: (stage.retry_count || 0) + 1,
+    // Log additional error details at error level for monitoring
+    logger.error('Stage failed', {
+      episodeId,
+      stageNumber,
+      stageName: STAGE_NAMES[stageNumber],
+      errorMessage,
+      retryCount: newRetryCount,
+      hasErrorDetails: !!errorDetails,
     });
+
+    try {
+      const updatedStage = await this.updateByEpisodeAndStage(episodeId, stageNumber, {
+        status: 'failed',
+        error_message: errorMessage,
+        error_details: errorDetails,
+        retry_count: newRetryCount,
+      });
+      return updatedStage;
+    } catch (dbError) {
+      // Log if we can't even record the failure
+      logger.error('Failed to mark stage as failed (database error)', {
+        episodeId,
+        stageNumber,
+        stageName: STAGE_NAMES[stageNumber],
+        originalError: errorMessage,
+        dbError: dbError.message,
+      });
+      throw dbError;
+    }
   },
 
   /**

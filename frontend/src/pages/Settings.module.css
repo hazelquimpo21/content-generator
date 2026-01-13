@@ -1,0 +1,99 @@
+/**
+ * ============================================================================
+ * SETTINGS PAGE STYLES
+ * ============================================================================
+ */
+
+.page {
+  animation: fadeIn var(--transition-base) ease-out;
+}
+
+/* ============================================================================
+ * HEADER
+ * ============================================================================ */
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.headerContent {
+  flex: 1;
+  min-width: 200px;
+}
+
+.title {
+  font-size: var(--text-3xl);
+  margin-bottom: var(--space-1);
+}
+
+.subtitle {
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.headerActions {
+  display: flex;
+  gap: var(--space-3);
+}
+
+/* ============================================================================
+ * STATUS MESSAGES
+ * ============================================================================ */
+
+.errorMessage {
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-error-light);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-md);
+  color: var(--color-error);
+  margin-bottom: var(--space-4);
+}
+
+.successMessage {
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-success-light);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-md);
+  color: var(--color-success);
+  margin-bottom: var(--space-4);
+}
+
+/* ============================================================================
+ * SECTIONS
+ * ============================================================================ */
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.sectionIcon {
+  width: 24px;
+  height: 24px;
+  color: var(--color-primary);
+}
+
+/* ============================================================================
+ * FORM
+ * ============================================================================ */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* ============================================================================
+ * ANIMATIONS
+ * ============================================================================ */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

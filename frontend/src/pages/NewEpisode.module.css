@@ -1,0 +1,186 @@
+/**
+ * ============================================================================
+ * NEW EPISODE PAGE STYLES
+ * ============================================================================
+ */
+
+.page {
+  max-width: 800px;
+  animation: fadeIn var(--transition-base) ease-out;
+}
+
+/* ============================================================================
+ * HEADER
+ * ============================================================================ */
+
+.header {
+  margin-bottom: var(--space-6);
+}
+
+.title {
+  font-size: var(--text-3xl);
+  margin-bottom: var(--space-1);
+}
+
+.subtitle {
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+/* ============================================================================
+ * FORM
+ * ============================================================================ */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.errorMessage {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-error-light);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-md);
+  color: var(--color-error);
+}
+
+.sectionIcon {
+  width: 24px;
+  height: 24px;
+  color: var(--color-primary);
+}
+
+/* ============================================================================
+ * TRANSCRIPT SECTION
+ * ============================================================================ */
+
+.transcriptSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.uploadArea {
+  position: relative;
+}
+
+.fileInput {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+}
+
+.uploadLabel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-8);
+  background-color: var(--color-bg-tertiary);
+  border: 2px dashed var(--color-bg-accent);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.uploadLabel:hover {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-light);
+}
+
+.fileInput:focus + .uploadLabel {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.uploadIcon {
+  width: 32px;
+  height: 32px;
+  color: var(--color-text-tertiary);
+}
+
+.uploadText {
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+}
+
+.uploadHint {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  color: var(--color-text-tertiary);
+  font-size: var(--text-sm);
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background-color: var(--color-bg-accent);
+}
+
+.wordCount {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+  text-align: right;
+  margin: 0;
+}
+
+/* ============================================================================
+ * CONTEXT GRID
+ * ============================================================================ */
+
+.contextGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+}
+
+.fullWidth {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+  .contextGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================================================
+ * ACTIONS
+ * ============================================================================ */
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: var(--space-4);
+}
+
+.actionsHint {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+  margin: 0;
+}
+
+/* ============================================================================
+ * ANIMATIONS
+ * ============================================================================ */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

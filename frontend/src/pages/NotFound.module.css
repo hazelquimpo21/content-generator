@@ -1,0 +1,48 @@
+/**
+ * ============================================================================
+ * NOT FOUND PAGE STYLES
+ * ============================================================================
+ */
+
+.page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  animation: fadeIn var(--transition-base) ease-out;
+}
+
+.content {
+  text-align: center;
+  max-width: 400px;
+}
+
+.code {
+  font-family: var(--font-heading);
+  font-size: 6rem;
+  font-weight: var(--font-bold);
+  color: var(--color-primary);
+  line-height: 1;
+  margin-bottom: var(--space-2);
+}
+
+.title {
+  font-size: var(--text-2xl);
+  margin-bottom: var(--space-3);
+}
+
+.message {
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-6);
+}
+
+.actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

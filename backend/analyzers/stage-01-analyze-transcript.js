@@ -20,19 +20,32 @@
  *
  * Output:
  * -------
- * Structured JSON via OpenAI function calling:
+ * Structured JSON via OpenAI function calling (tool_use):
  * {
  *   episode_basics: { title, date, duration_estimate, main_topics[] },
  *   guest_info: { name, credentials, expertise, website } | null,
  *   episode_crux: "2-3 sentence core insight"
  * }
  *
- * Model: GPT-5 mini (OpenAI) with function calling
+ * Model: GPT-5 mini (OpenAI) with function calling (tool_use)
  * Temperature: 0.5 (balanced for consistent extraction)
+ *
+ * API Notes:
+ * ----------
+ * - Uses OpenAI's tool_use (function calling) for guaranteed structured output
+ * - GPT-5 models require `max_completion_tokens` instead of `max_tokens`
+ * - The function schema enforces the expected JSON structure
  *
  * Dependencies:
  * - Stage 0 output (if transcript was preprocessed)
  * - Evergreen content for context
+ *
+ * Error Handling:
+ * ---------------
+ * - Validates required fields (episode_basics, episode_crux)
+ * - Checks array lengths (3-5 topics)
+ * - Verifies crux substantiveness (>50 chars)
+ * - Throws ValidationError with details on failure
  * ============================================================================
  */
 
@@ -238,16 +251,35 @@ function validateOutput(data) {
 export async function analyzeTranscript(context) {
   const { episodeId, transcript, evergreen, previousStages = {} } = context;
 
-  // Log stage start with context info
+  // ============================================================================
+  // STAGE INITIALIZATION
+  // ============================================================================
+  // Log detailed context for debugging and monitoring.
+  // This information is critical for troubleshooting failed stages.
+
   logger.stageStart(1, 'Transcript Analysis', episodeId);
-  logger.debug('Stage 1: Preparing transcript analysis', {
+
+  // Calculate transcript metrics for logging and monitoring
+  const transcriptLength = transcript?.length || 0;
+  const transcriptWordCount = transcript?.split(/\s+/).length || 0;
+  const hasStage0Output = !!previousStages[0];
+
+  logger.debug('📋 Stage 1: Context summary', {
     episodeId,
-    transcriptLength: transcript?.length,
-    transcriptWordCount: transcript?.split(/\s+/).length || 0,
+    transcriptLength,
+    transcriptWordCount,
     hasEvergreenProfile: !!evergreen?.therapist_profile,
     hasEvergreenPodcast: !!evergreen?.podcast_info,
-    hasStage0Output: !!previousStages[0],
+    hasStage0Output,
+    // If Stage 0 ran, we're using preprocessed content (shorter, with extracted quotes)
+    usingPreprocessedContent: hasStage0Output,
   });
+
+  // Validate we have a transcript to analyze
+  if (!transcript || transcriptLength === 0) {
+    logger.error('❌ Stage 1: No transcript provided', { episodeId });
+    throw new ValidationError('transcript', 'Transcript is required but was empty or missing');
+  }
 
   // Load the stage prompt template with transcript and evergreen context
   // The prompt includes instructions for extraction and voice guidelines
@@ -263,24 +295,58 @@ export async function analyzeTranscript(context) {
     promptLength: prompt?.length,
   });
 
-  // Call OpenAI with function calling for guaranteed structured output
-  // This ensures we get properly typed JSON matching our schema
-  logger.debug('Stage 1: Calling OpenAI API', {
+  // ============================================================================
+  // OPENAI API CALL WITH FUNCTION CALLING (TOOL_USE)
+  // ============================================================================
+  // We use function calling (tool_use) to ensure structured JSON output.
+  // This is more reliable than asking for JSON in the prompt because:
+  // - The schema is enforced at the API level
+  // - No JSON parsing issues from free-form text
+  // - Better type safety and validation
+
+  logger.info('📤 Stage 1: Calling OpenAI API with function calling', {
     episodeId,
     functionName: 'episode_analysis',
+    model: 'gpt-5-mini',
     temperature: 0.5,
   });
 
-  const response = await callOpenAIWithFunctions(
-    prompt,
-    [EPISODE_ANALYSIS_SCHEMA],
-    {
+  let response;
+  try {
+    response = await callOpenAIWithFunctions(
+      prompt,
+      [EPISODE_ANALYSIS_SCHEMA],
+      {
+        episodeId,
+        stageNumber: 1,
+        functionCall: 'episode_analysis', // Force the model to use our function
+        temperature: 0.5, // Lower temperature for consistent, reliable extraction
+      }
+    );
+
+    logger.debug('📥 Stage 1: Received API response', {
       episodeId,
-      stageNumber: 1,
-      functionCall: 'episode_analysis',
-      temperature: 0.5, // Lower temperature for consistent extraction
-    }
-  );
+      hasResponse: !!response,
+      hasFunctionCall: !!response?.functionCall,
+      inputTokens: response?.inputTokens,
+      outputTokens: response?.outputTokens,
+      durationMs: response?.durationMs,
+    });
+
+  } catch (apiError) {
+    // Log detailed error information for debugging API failures
+    logger.error('❌ Stage 1: OpenAI API call failed', {
+      episodeId,
+      errorMessage: apiError.message,
+      errorStatus: apiError.status || apiError.statusCode,
+      errorCode: apiError.code,
+      errorType: apiError.type,
+      isRetryable: apiError.retryable,
+    });
+
+    // Re-throw to let the orchestrator handle the error
+    throw apiError;
+  }
 
   // Extract the function call output from the response
   const outputData = response.functionCall;

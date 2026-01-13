@@ -19,14 +19,13 @@
  * ============================================================================
  */
 
+// Load environment variables FIRST (before any other imports that need them)
+import 'dotenv/config';
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import { config } from 'dotenv';
-
-// Load environment variables
-config();
 
 // Import our modules
 import logger from '../lib/logger.js';

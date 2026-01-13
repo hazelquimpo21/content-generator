@@ -81,7 +81,10 @@ export const episodeRepo = {
    * @returns {Promise<Object>} Created episode
    */
   async create(data) {
-    logger.debug('Creating episode', { transcriptLength: data.transcript?.length });
+    logger.dbQuery('insert', 'episodes', {
+      transcriptLength: data.transcript?.length,
+      hasContext: !!data.episode_context && Object.keys(data.episode_context).length > 0,
+    });
 
     const { data: episode, error } = await db
       .from('episodes')
@@ -95,10 +98,11 @@ export const episodeRepo = {
       .single();
 
     if (error) {
-      logger.error('Failed to create episode', { error: error.message });
+      logger.dbError('insert', 'episodes', error);
       throw new DatabaseError('insert', `Failed to create episode: ${error.message}`);
     }
 
+    logger.dbResult('insert', 'episodes', { episodeId: episode.id });
     logger.info('Episode created', { episodeId: episode.id });
     return episode;
   },
@@ -110,6 +114,8 @@ export const episodeRepo = {
    * @throws {NotFoundError} If episode doesn't exist
    */
   async findById(id) {
+    logger.dbQuery('select', 'episodes', { id });
+
     const { data: episode, error } = await db
       .from('episodes')
       .select('*')
@@ -117,9 +123,11 @@ export const episodeRepo = {
       .single();
 
     if (error || !episode) {
+      logger.dbError('select', 'episodes', error || 'Not found', { id });
       throw new NotFoundError('episode', id);
     }
 
+    logger.dbResult('select', 'episodes', { id, status: episode.status });
     return episode;
   },
 
@@ -129,6 +137,8 @@ export const episodeRepo = {
    * @returns {Promise<Object>} Episode with stages array
    */
   async findByIdWithStages(id) {
+    logger.dbQuery('select', 'episodes + stage_outputs', { episodeId: id });
+
     const { data: episode, error } = await db
       .from('episodes')
       .select('*')
@@ -136,14 +146,28 @@ export const episodeRepo = {
       .single();
 
     if (error || !episode) {
+      logger.dbError('select', 'episodes', error || 'Not found', { id });
       throw new NotFoundError('episode', id);
     }
 
-    const { data: stages } = await db
+    const { data: stages, error: stagesError } = await db
       .from('stage_outputs')
       .select('*')
       .eq('episode_id', id)
       .order('stage_number', { ascending: true });
+
+    if (stagesError) {
+      logger.dbError('select', 'stage_outputs', stagesError, { episodeId: id });
+    }
+
+    const stageCount = stages?.length || 0;
+    const completedCount = stages?.filter(s => s.status === 'completed').length || 0;
+    logger.dbResult('select', 'episodes + stage_outputs', {
+      episodeId: id,
+      stageCount,
+      completedCount,
+      status: episode.status,
+    });
 
     return { ...episode, stages: stages || [] };
   },
@@ -281,6 +305,8 @@ export const stageRepo = {
    * @returns {Promise<Array>} Created stage records
    */
   async createAllStages(episodeId) {
+    logger.dbQuery('insert', 'stage_outputs (batch)', { episodeId, stageCount: 9 });
+
     const stages = [];
 
     for (let stageNum = 1; stageNum <= 9; stageNum++) {
@@ -300,10 +326,12 @@ export const stageRepo = {
       .select();
 
     if (error) {
+      logger.dbError('insert', 'stage_outputs', error, { episodeId });
       throw new DatabaseError('insert', `Failed to create stages: ${error.message}`);
     }
 
-    logger.debug('Created stage records', { episodeId, count: data.length });
+    logger.dbResult('insert', 'stage_outputs', { episodeId, count: data.length });
+    logger.info('📋 Created all 9 stage records', { episodeId });
     return data;
   },
 
@@ -378,6 +406,11 @@ export const stageRepo = {
    * @param {number} stageNumber - Stage number (1-9)
    */
   async markProcessing(episodeId, stageNumber) {
+    logger.stateChange(episodeId, 'pending', 'processing', {
+      stage: stageNumber,
+      stageName: STAGE_NAMES[stageNumber],
+    });
+
     return this.updateByEpisodeAndStage(episodeId, stageNumber, {
       status: 'processing',
       started_at: new Date().toISOString(),
@@ -397,6 +430,15 @@ export const stageRepo = {
     const durationSeconds = stage.started_at
       ? Math.floor((new Date(completedAt) - new Date(stage.started_at)) / 1000)
       : 0;
+
+    logger.stateChange(episodeId, 'processing', 'completed', {
+      stage: stageNumber,
+      stageName: STAGE_NAMES[stageNumber],
+      durationSeconds,
+      costUsd: result.cost_usd,
+      inputTokens: result.input_tokens,
+      outputTokens: result.output_tokens,
+    });
 
     return this.updateByEpisodeAndStage(episodeId, stageNumber, {
       status: 'completed',
@@ -420,6 +462,13 @@ export const stageRepo = {
   async markFailed(episodeId, stageNumber, errorMessage, errorDetails = null) {
     const stage = await this.findByEpisodeAndStage(episodeId, stageNumber);
 
+    logger.stateChange(episodeId, 'processing', 'failed', {
+      stage: stageNumber,
+      stageName: STAGE_NAMES[stageNumber],
+      error: errorMessage,
+      retryCount: (stage.retry_count || 0) + 1,
+    });
+
     return this.updateByEpisodeAndStage(episodeId, stageNumber, {
       status: 'failed',
       error_message: errorMessage,
@@ -434,6 +483,8 @@ export const stageRepo = {
    * @returns {Promise<Array>} Stage records ordered by stage number
    */
   async findAllByEpisode(episodeId) {
+    logger.dbQuery('select', 'stage_outputs', { episodeId });
+
     const { data: stages, error } = await db
       .from('stage_outputs')
       .select('*')
@@ -441,9 +492,17 @@ export const stageRepo = {
       .order('stage_number', { ascending: true });
 
     if (error) {
+      logger.dbError('select', 'stage_outputs', error, { episodeId });
       throw new DatabaseError('select', `Failed to fetch stages: ${error.message}`);
     }
 
+    const stageCount = stages?.length || 0;
+    const statusSummary = stages?.reduce((acc, s) => {
+      acc[s.status] = (acc[s.status] || 0) + 1;
+      return acc;
+    }, {}) || {};
+
+    logger.dbResult('select', 'stage_outputs', { episodeId, stageCount, statusSummary });
     return stages || [];
   },
 };

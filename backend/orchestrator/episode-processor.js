@@ -42,17 +42,35 @@ const TOTAL_STAGES = 9;
  * @returns {Promise<Object>} Processing context
  */
 async function loadContext(episodeId) {
-  logger.debug('Loading processing context', { episodeId });
+  logger.debug('📦 Loading processing context', { episodeId });
 
   // Load episode
   const episode = await episodeRepo.findById(episodeId);
 
   if (!episode) {
+    logger.error('Episode not found during context loading', { episodeId });
     throw new NotFoundError('episode', episodeId);
   }
 
+  logger.debug('📄 Episode loaded', {
+    episodeId,
+    transcriptLength: episode.transcript?.length,
+    status: episode.status,
+    hasContext: !!episode.episode_context && Object.keys(episode.episode_context).length > 0,
+  });
+
   // Load evergreen content
   const evergreen = await evergreenRepo.get();
+  const hasEvergreen = evergreen && Object.keys(evergreen).some(k =>
+    evergreen[k] && Object.keys(evergreen[k]).length > 0
+  );
+
+  logger.debug('📚 Evergreen content loaded', {
+    episodeId,
+    hasTherapistProfile: !!evergreen.therapist_profile && Object.keys(evergreen.therapist_profile).length > 0,
+    hasPodcastInfo: !!evergreen.podcast_info && Object.keys(evergreen.podcast_info).length > 0,
+    hasVoiceGuidelines: !!evergreen.voice_guidelines && Object.keys(evergreen.voice_guidelines).length > 0,
+  });
 
   return {
     episodeId,
@@ -69,15 +87,28 @@ async function loadContext(episodeId) {
  * @param {number} upToStage - Load outputs up to this stage
  */
 async function loadPreviousStages(context, upToStage) {
+  logger.debug('📥 Loading previous stage outputs', {
+    episodeId: context.episodeId,
+    upToStage,
+  });
+
   const stages = await stageRepo.findAllByEpisode(context.episodeId);
+  let loadedCount = 0;
 
   for (const stage of stages) {
     if (stage.stage_number < upToStage && stage.status === 'completed') {
       context.previousStages[stage.stage_number] = stage.output_data || {
         output_text: stage.output_text,
       };
+      loadedCount++;
     }
   }
+
+  logger.debug('📥 Previous stages loaded', {
+    episodeId: context.episodeId,
+    loadedCount,
+    stagesLoaded: Object.keys(context.previousStages).map(Number),
+  });
 }
 
 // ============================================================================
@@ -102,29 +133,53 @@ async function loadPreviousStages(context, upToStage) {
 export async function processEpisode(episodeId, options = {}) {
   const { startFromStage = 1, onProgress } = options;
 
-  logger.info('🎬 Starting episode processing', { episodeId, startFromStage });
+  logger.info('🎬 Starting episode processing', {
+    episodeId,
+    startFromStage,
+    totalStages: TOTAL_STAGES,
+    isResume: startFromStage > 1,
+  });
 
   const startTime = Date.now();
   let totalCost = 0;
+  let stagesCompleted = 0;
 
   try {
     // Load context
+    logger.debug('📦 Phase 1: Loading context', { episodeId });
     const context = await loadContext(episodeId);
 
     // Update episode status to processing
+    logger.debug('📝 Phase 2: Updating episode status', { episodeId, newStatus: 'processing' });
     await episodeRepo.updateStatus(episodeId, 'processing', startFromStage);
 
     // Create stage records if starting fresh
     if (startFromStage === 1) {
+      logger.debug('📋 Phase 3: Creating stage records (fresh start)', { episodeId });
       await stageRepo.createAllStages(episodeId);
     } else {
       // Load previous stage outputs if resuming
+      logger.debug('📋 Phase 3: Loading previous stages (resume)', { episodeId, startFromStage });
       await loadPreviousStages(context, startFromStage);
     }
+
+    logger.info('🚀 Beginning stage processing loop', {
+      episodeId,
+      startStage: startFromStage,
+      endStage: TOTAL_STAGES,
+    });
 
     // Process each stage
     for (let stageNum = startFromStage; stageNum <= TOTAL_STAGES; stageNum++) {
       const stageName = STAGE_NAMES[stageNum];
+      const stageStartTime = Date.now();
+
+      logger.info(`▶️ Stage ${stageNum}/${TOTAL_STAGES}: ${stageName}`, {
+        episodeId,
+        stage: stageNum,
+        stageName,
+        previousStagesAvailable: Object.keys(context.previousStages).length,
+      });
 
       // Report progress
       if (onProgress) {
@@ -139,7 +194,10 @@ export async function processEpisode(episodeId, options = {}) {
 
       try {
         // Run the stage
+        logger.debug(`🔄 Executing stage ${stageNum} analyzer`, { episodeId, stage: stageNum });
         const result = await runStage(stageNum, context);
+
+        const stageDuration = Date.now() - stageStartTime;
 
         // Save result to database
         await stageRepo.markCompleted(episodeId, stageNum, result);
@@ -151,6 +209,19 @@ export async function processEpisode(episodeId, options = {}) {
 
         // Track total cost
         totalCost += result.cost_usd;
+        stagesCompleted++;
+
+        logger.info(`✅ Stage ${stageNum}/${TOTAL_STAGES} completed: ${stageName}`, {
+          episodeId,
+          stage: stageNum,
+          stageDurationMs: stageDuration,
+          stageCostUsd: result.cost_usd,
+          inputTokens: result.input_tokens,
+          outputTokens: result.output_tokens,
+          runningTotalCost: totalCost,
+          stagesCompleted,
+          stagesRemaining: TOTAL_STAGES - stageNum,
+        });
 
         // Report progress
         if (onProgress) {
@@ -158,6 +229,18 @@ export async function processEpisode(episodeId, options = {}) {
         }
 
       } catch (stageError) {
+        const stageDuration = Date.now() - stageStartTime;
+
+        logger.error(`❌ Stage ${stageNum} failed: ${stageName}`, {
+          episodeId,
+          stage: stageNum,
+          stageName,
+          error: stageError.message,
+          errorType: stageError.name,
+          stageDurationMs: stageDuration,
+          stagesCompletedBeforeFailure: stagesCompleted,
+        });
+
         // Mark stage as failed
         await stageRepo.markFailed(
           episodeId,
@@ -196,8 +279,11 @@ export async function processEpisode(episodeId, options = {}) {
 
     logger.info('🎉 Episode processing complete!', {
       episodeId,
-      totalCost: `$${totalCost.toFixed(4)}`,
-      duration: `${durationSeconds}s`,
+      stagesCompleted,
+      totalCostUsd: totalCost,
+      totalDurationSeconds: durationSeconds,
+      averageSecondsPerStage: Math.round(durationSeconds / stagesCompleted),
+      averageCostPerStage: (totalCost / stagesCompleted).toFixed(4),
     });
 
     return {
@@ -209,9 +295,15 @@ export async function processEpisode(episodeId, options = {}) {
     };
 
   } catch (error) {
+    const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+
     logger.error('Episode processing failed', {
       episodeId,
       error: error.message,
+      errorType: error.name,
+      stagesCompletedBeforeFailure: stagesCompleted,
+      costBeforeFailure: totalCost,
+      elapsedSecondsBeforeFailure: elapsedSeconds,
     });
 
     throw error;

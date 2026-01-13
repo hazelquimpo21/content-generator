@@ -21,8 +21,52 @@ import Anthropic from '@anthropic-ai/sdk';
 import logger from './logger.js';
 import { APIError } from './errors.js';
 import { retryWithBackoff, createAPIRetryConfig } from './retry-logic.js';
-import { calculateCost } from './cost-calculator.js';
+import { calculateCost, estimateTokens } from './cost-calculator.js';
 import { apiLogRepo } from './supabase-client.js';
+
+// ============================================================================
+// ERROR DETECTION HELPERS
+// ============================================================================
+
+/**
+ * Checks if an error is a token limit / context length error
+ * @param {Error} error - Error to check
+ * @returns {boolean} True if this is a token limit error
+ */
+function isTokenLimitError(error) {
+  const message = error.message?.toLowerCase() || '';
+  const type = error.type?.toLowerCase() || '';
+  const code = error.error?.type?.toLowerCase() || '';
+
+  return (
+    message.includes('context_length') ||
+    message.includes('too long') ||
+    message.includes('too many tokens') ||
+    message.includes('maximum') && message.includes('token') ||
+    type === 'invalid_request_error' && message.includes('token') ||
+    code === 'context_length_exceeded'
+  );
+}
+
+/**
+ * Extracts token limit details from error message
+ * @param {string} message - Error message
+ * @returns {Object|null} Token limit details if found
+ */
+function extractTokenLimitDetails(message) {
+  // Anthropic error messages patterns
+  const maxMatch = message.match(/maximum.*?(\d+)\s*tokens/i);
+  const usedMatch = message.match(/(\d+)\s*tokens/i);
+
+  if (maxMatch || usedMatch) {
+    return {
+      maxTokens: maxMatch ? parseInt(maxMatch[1], 10) : null,
+      usedTokens: usedMatch ? parseInt(usedMatch[1], 10) : null,
+    };
+  }
+
+  return null;
+}
 
 // ============================================================================
 // CONFIGURATION
@@ -106,6 +150,42 @@ export async function callClaude(messages, options = {}) {
     } catch (error) {
       // Extract status code from Anthropic error
       const status = error.status || error.statusCode || 500;
+
+      // Check for token limit errors and log detailed info
+      if (isTokenLimitError(error)) {
+        const tokenDetails = extractTokenLimitDetails(error.message);
+        const promptLength = messagesArray.reduce((acc, m) => acc + (m.content?.length || 0), 0);
+        const systemLength = system?.length || 0;
+        const estimatedPromptTokens = estimateTokens(
+          messagesArray.map(m => m.content).join(' ') + (system || '')
+        );
+
+        logger.error('Token limit exceeded in Claude call - content may be too long', {
+          model,
+          episodeId,
+          stageNumber,
+          promptCharacters: promptLength,
+          systemCharacters: systemLength,
+          estimatedPromptTokens,
+          maxTokens: tokenDetails?.maxTokens,
+          usedTokens: tokenDetails?.usedTokens,
+          suggestion: 'Consider using a shorter transcript or enabling transcript truncation',
+          errorMessage: error.message,
+        });
+
+        // Create a more descriptive error for token limits
+        throw new APIError(
+          'anthropic',
+          400,
+          `Content too long for Claude: input exceeds model context limit. The content needs to be shortened.`,
+          {
+            code: 'context_length_exceeded',
+            type: error.type,
+            tokenDetails,
+            isTokenLimit: true,
+          }
+        );
+      }
 
       throw new APIError(
         'anthropic',

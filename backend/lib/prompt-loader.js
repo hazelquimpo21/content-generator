@@ -24,6 +24,7 @@ import { readFile } from 'fs/promises';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import logger from './logger.js';
+import { prepareTranscript, calculateTranscriptBudget, estimateTranscriptTokens } from './transcript-handler.js';
 
 // ============================================================================
 // CONFIGURATION
@@ -244,21 +245,55 @@ export async function loadPrompt(stageName, variables = {}, options = {}) {
 /**
  * Loads a prompt with all stage context
  * Convenience method that gathers context from evergreen content
+ * Now includes smart transcript truncation to handle long podcasts
  *
  * @param {string} stageName - Stage template name
  * @param {Object} context - Processing context
  * @param {string} context.transcript - Episode transcript
  * @param {Object} context.evergreen - Evergreen content
  * @param {Object} [context.previousStages] - Previous stage outputs
- * @returns {Promise<string>} Processed prompt
+ * @param {string} [context.episodeId] - Episode ID for logging
+ * @returns {Promise<Object>} Object with processed prompt and metadata
  */
 export async function loadStagePrompt(stageName, context) {
-  const { transcript, evergreen, previousStages = {} } = context;
+  const { transcript, evergreen, previousStages = {}, episodeId = null } = context;
+
+  // Extract stage number from stage name (e.g., 'stage-01-transcript-analysis' -> 1)
+  const stageMatch = stageName.match(/stage-(\d+)/);
+  const stageNumber = stageMatch ? parseInt(stageMatch[1], 10) : 1;
+
+  // Determine the model being used for this stage
+  const model = stageNumber <= 6 ? 'gpt-5-mini' : 'claude-sonnet-4';
+
+  // Calculate available token budget for transcript
+  const transcriptBudget = calculateTranscriptBudget(stageNumber, model, previousStages);
+
+  // Prepare transcript with smart truncation if needed
+  const preparedTranscript = prepareTranscript(transcript, {
+    maxTokens: transcriptBudget,
+    model,
+    stageNumber,
+    episodeId,
+  });
+
+  // Log if transcript was truncated (important for debugging)
+  if (preparedTranscript.wasTruncated) {
+    logger.warn('Transcript was truncated to fit context limit', {
+      stageName,
+      stageNumber,
+      episodeId,
+      originalTokens: preparedTranscript.originalTokens,
+      truncatedTokens: preparedTranscript.truncatedTokens,
+      removedPercent: preparedTranscript.truncationDetails?.removedPercent,
+      model,
+      transcriptBudget,
+    });
+  }
 
   // Build variables from context
   const variables = {
-    // Transcript
-    TRANSCRIPT: transcript,
+    // Transcript (now potentially truncated)
+    TRANSCRIPT: preparedTranscript.text,
 
     // Therapist info
     THERAPIST_NAME: evergreen?.therapist_profile?.name || 'the therapist',
@@ -288,9 +323,25 @@ export async function loadStagePrompt(stageName, context) {
     // Episode crux (from stage 1)
     EPISODE_CRUX: previousStages[1]?.episode_crux || '',
     EPISODE_TITLE: previousStages[1]?.episode_basics?.title || 'Untitled Episode',
+
+    // Add transcript metadata for prompts that may want to reference it
+    TRANSCRIPT_TRUNCATED: preparedTranscript.wasTruncated ? 'true' : 'false',
+    TRANSCRIPT_ORIGINAL_TOKENS: String(preparedTranscript.originalTokens),
   };
 
-  return loadPrompt(stageName, variables);
+  const promptText = await loadPrompt(stageName, variables);
+
+  // Log final prompt token estimate
+  const promptTokens = estimateTranscriptTokens(promptText);
+  logger.debug('Prompt prepared', {
+    stageName,
+    stageNumber,
+    promptTokens,
+    transcriptTokens: preparedTranscript.truncatedTokens,
+    wasTruncated: preparedTranscript.wasTruncated,
+  });
+
+  return promptText;
 }
 
 // ============================================================================

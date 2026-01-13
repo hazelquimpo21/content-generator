@@ -22,8 +22,58 @@ import OpenAI from 'openai';
 import logger from './logger.js';
 import { APIError } from './errors.js';
 import { retryWithBackoff, createAPIRetryConfig } from './retry-logic.js';
-import { calculateCost } from './cost-calculator.js';
+import { calculateCost, estimateTokens } from './cost-calculator.js';
 import { apiLogRepo } from './supabase-client.js';
+
+// ============================================================================
+// ERROR DETECTION HELPERS
+// ============================================================================
+
+/**
+ * Checks if an error is a token limit / context length error
+ * @param {Error} error - Error to check
+ * @returns {boolean} True if this is a token limit error
+ */
+function isTokenLimitError(error) {
+  const message = error.message?.toLowerCase() || '';
+  const code = error.code?.toLowerCase() || '';
+
+  return (
+    message.includes('context_length_exceeded') ||
+    message.includes('maximum context length') ||
+    message.includes('token limit') ||
+    message.includes('too many tokens') ||
+    message.includes('context window') ||
+    message.includes('max_tokens') ||
+    code === 'context_length_exceeded' ||
+    code === 'invalid_request_error' && message.includes('token')
+  );
+}
+
+/**
+ * Extracts token limit details from error message
+ * @param {string} message - Error message
+ * @returns {Object|null} Token limit details if found
+ */
+function extractTokenLimitDetails(message) {
+  // OpenAI error messages often include patterns like:
+  // "This model's maximum context length is 128000 tokens. However, your messages resulted in 150000 tokens."
+  const maxMatch = message.match(/maximum.*?(\d+)\s*tokens/i);
+  const usedMatch = message.match(/resulted in\s*(\d+)\s*tokens/i) ||
+                   message.match(/you requested\s*(\d+)\s*tokens/i);
+
+  if (maxMatch || usedMatch) {
+    return {
+      maxTokens: maxMatch ? parseInt(maxMatch[1], 10) : null,
+      usedTokens: usedMatch ? parseInt(usedMatch[1], 10) : null,
+      excessTokens: (maxMatch && usedMatch)
+        ? parseInt(usedMatch[1], 10) - parseInt(maxMatch[1], 10)
+        : null,
+    };
+  }
+
+  return null;
+}
 
 // ============================================================================
 // CONFIGURATION
@@ -103,7 +153,40 @@ export async function callOpenAI(messages, options = {}) {
 
       return completion;
     } catch (error) {
-      // Convert OpenAI errors to our APIError type
+      // Check for token limit errors and log detailed info
+      if (isTokenLimitError(error)) {
+        const tokenDetails = extractTokenLimitDetails(error.message);
+        const promptLength = messagesArray.reduce((acc, m) => acc + (m.content?.length || 0), 0);
+        const estimatedPromptTokens = estimateTokens(messagesArray.map(m => m.content).join(' '));
+
+        logger.error('Token limit exceeded - transcript may be too long', {
+          model,
+          episodeId,
+          stageNumber,
+          promptCharacters: promptLength,
+          estimatedPromptTokens,
+          maxTokens: tokenDetails?.maxTokens,
+          usedTokens: tokenDetails?.usedTokens,
+          excessTokens: tokenDetails?.excessTokens,
+          suggestion: 'Consider using a shorter transcript or enabling transcript truncation',
+          errorMessage: error.message,
+        });
+
+        // Create a more descriptive error for token limits
+        throw new APIError(
+          'openai',
+          400,
+          `Transcript too long: ${tokenDetails?.excessTokens || 'unknown'} tokens over the ${tokenDetails?.maxTokens || 'model'} limit. The transcript needs to be shortened.`,
+          {
+            code: 'context_length_exceeded',
+            type: error.type,
+            tokenDetails,
+            isTokenLimit: true,
+          }
+        );
+      }
+
+      // Convert other OpenAI errors to our APIError type
       throw new APIError(
         'openai',
         error.status || 500,
@@ -203,6 +286,40 @@ export async function callOpenAIWithFunctions(messages, functions, options = {})
 
       return completion;
     } catch (error) {
+      // Check for token limit errors and log detailed info
+      if (isTokenLimitError(error)) {
+        const tokenDetails = extractTokenLimitDetails(error.message);
+        const promptLength = messagesArray.reduce((acc, m) => acc + (m.content?.length || 0), 0);
+        const estimatedPromptTokens = estimateTokens(messagesArray.map(m => m.content).join(' '));
+
+        logger.error('Token limit exceeded in function call - transcript may be too long', {
+          model,
+          episodeId,
+          stageNumber,
+          promptCharacters: promptLength,
+          estimatedPromptTokens,
+          maxTokens: tokenDetails?.maxTokens,
+          usedTokens: tokenDetails?.usedTokens,
+          excessTokens: tokenDetails?.excessTokens,
+          functionName: functionCall,
+          suggestion: 'Consider using a shorter transcript or enabling transcript truncation',
+          errorMessage: error.message,
+        });
+
+        // Create a more descriptive error for token limits
+        throw new APIError(
+          'openai',
+          400,
+          `Transcript too long: ${tokenDetails?.excessTokens || 'unknown'} tokens over the ${tokenDetails?.maxTokens || 'model'} limit. The transcript needs to be shortened.`,
+          {
+            code: 'context_length_exceeded',
+            type: error.type,
+            tokenDetails,
+            isTokenLimit: true,
+          }
+        );
+      }
+
       throw new APIError(
         'openai',
         error.status || 500,

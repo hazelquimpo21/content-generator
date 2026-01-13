@@ -135,7 +135,7 @@ router.get('/:id/stages', async (req, res, next) => {
 
     logger.debug('Fetching stages for episode', { episodeId: id });
 
-    // First verify episode exists
+    // Fetch episode with all stages
     const episode = await episodeRepo.findById(id);
 
     // Then get all stages
@@ -148,10 +148,9 @@ router.get('/:id/stages', async (req, res, next) => {
       processingCount: stages.filter(s => s.status === 'processing').length,
     });
 
+    // Return full episode object to match frontend expectations
     res.json({
-      episode_id: id,
-      status: episode.status,
-      current_stage: episode.current_stage,
+      episode,
       stages,
     });
   } catch (error) {

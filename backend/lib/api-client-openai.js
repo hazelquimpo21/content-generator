@@ -8,9 +8,14 @@
  * Features:
  * - Automatic retry with exponential backoff
  * - Token counting and cost calculation
- * - Structured function calling support
- * - Comprehensive error handling
- * - Usage logging to database
+ * - Structured function calling (tool_use) support
+ * - Comprehensive error handling and logging
+ * - Usage logging to database for cost tracking
+ *
+ * IMPORTANT API NOTES:
+ * - GPT-5 and newer models use `max_completion_tokens` instead of `max_tokens`
+ * - The legacy `max_tokens` parameter is unsupported and will cause 400 errors
+ * - Function calling uses the `tools` API (not deprecated `functions`)
  *
  * Usage:
  *   import { callOpenAI, callOpenAIWithFunctions } from './lib/api-client-openai.js';
@@ -89,21 +94,44 @@ export async function callOpenAI(messages, options = {}) {
 
   const startTime = Date.now();
 
-  // Use retry logic for resilience
+  // Use retry logic for resilience against transient API errors (429, 500, 502, 503)
   const retryConfig = createAPIRetryConfig('OpenAI');
+
+  // Log the API call attempt for debugging and monitoring
+  logger.debug('📤 Preparing OpenAI API call', {
+    episodeId,
+    stageNumber,
+    model,
+    messageCount: messagesArray.length,
+    temperature,
+    maxTokens,
+  });
 
   const response = await retryWithBackoff(async () => {
     try {
+      // IMPORTANT: GPT-5 and newer models require `max_completion_tokens` instead of `max_tokens`
+      // Using the legacy `max_tokens` parameter will result in a 400 "Unsupported parameter" error
       const completion = await openai.chat.completions.create({
         model,
         messages: messagesArray,
         temperature,
-        max_tokens: maxTokens,
+        max_completion_tokens: maxTokens, // Note: GPT-5+ uses max_completion_tokens, not max_tokens
       });
 
       return completion;
     } catch (error) {
-      // Convert OpenAI errors to our APIError type
+      // Log detailed error information for debugging
+      logger.error('❌ OpenAI API call failed', {
+        episodeId,
+        stageNumber,
+        model,
+        errorMessage: error.message,
+        errorStatus: error.status,
+        errorCode: error.code,
+        errorType: error.type,
+      });
+
+      // Convert OpenAI errors to our APIError type for consistent error handling
       throw new APIError(
         'openai',
         error.status || 500,
@@ -183,19 +211,38 @@ export async function callOpenAIWithFunctions(messages, functions, options = {})
     : messages;
 
   const startTime = Date.now();
+
+  // Use retry logic for resilience against transient API errors
   const retryConfig = createAPIRetryConfig('OpenAI');
+
+  // Log the function calling request for debugging
+  logger.debug('📤 Preparing OpenAI function call (tool_use)', {
+    episodeId,
+    stageNumber,
+    model,
+    messageCount: messagesArray.length,
+    functionNames: functions.map(fn => fn.name),
+    temperature,
+    maxTokens,
+    toolChoice: functionCall,
+  });
 
   const response = await retryWithBackoff(async () => {
     try {
+      // IMPORTANT: GPT-5 and newer models require `max_completion_tokens` instead of `max_tokens`
+      // Using the legacy `max_tokens` parameter will result in a 400 "Unsupported parameter" error
+      // Function calling uses the modern `tools` API format (not the deprecated `functions` parameter)
       const completion = await openai.chat.completions.create({
         model,
         messages: messagesArray,
         temperature,
-        max_tokens: maxTokens,
+        max_completion_tokens: maxTokens, // Note: GPT-5+ uses max_completion_tokens, not max_tokens
+        // Convert our function definitions to OpenAI's tool format
         tools: functions.map(fn => ({
           type: 'function',
           function: fn,
         })),
+        // Force specific function or allow model to choose
         tool_choice: functionCall === 'auto'
           ? 'auto'
           : { type: 'function', function: { name: functionCall } },
@@ -203,6 +250,19 @@ export async function callOpenAIWithFunctions(messages, functions, options = {})
 
       return completion;
     } catch (error) {
+      // Log detailed error information for debugging function call failures
+      logger.error('❌ OpenAI function call (tool_use) failed', {
+        episodeId,
+        stageNumber,
+        model,
+        functionNames: functions.map(fn => fn.name),
+        errorMessage: error.message,
+        errorStatus: error.status,
+        errorCode: error.code,
+        errorType: error.type,
+      });
+
+      // Convert OpenAI errors to our APIError type for consistent error handling
       throw new APIError(
         'openai',
         error.status || 500,
@@ -236,37 +296,101 @@ export async function callOpenAIWithFunctions(messages, functions, options = {})
     success: true,
   }).catch(() => {});
 
-  // Parse function call response
+  // ============================================================================
+  // PARSE FUNCTION CALL RESPONSE
+  // ============================================================================
+  // OpenAI returns function call results in the `tool_calls` array.
+  // We need to extract and parse the JSON arguments from the first tool call.
+  // Common issues: malformed JSON with trailing commas, control characters
+
   const message = response.choices[0]?.message;
   let functionCallResult = null;
 
+  // Check if the model returned a function/tool call
   if (message?.tool_calls && message.tool_calls.length > 0) {
     const toolCall = message.tool_calls[0];
+
     if (toolCall.type === 'function') {
+      logger.debug('📥 Received function call response', {
+        episodeId,
+        stageNumber,
+        functionName: toolCall.function.name,
+        argumentsLength: toolCall.function.arguments?.length,
+      });
+
       try {
+        // First attempt: parse JSON directly
         functionCallResult = {
           name: toolCall.function.name,
           arguments: JSON.parse(toolCall.function.arguments),
         };
-      } catch (parseError) {
-        logger.warn('Failed to parse function call arguments', {
-          error: parseError.message,
-          raw: toolCall.function.arguments,
+
+        logger.debug('✅ Successfully parsed function call arguments', {
+          episodeId,
+          stageNumber,
+          functionName: toolCall.function.name,
+          argumentKeys: Object.keys(functionCallResult.arguments),
         });
-        // Try to fix common JSON issues
+
+      } catch (parseError) {
+        // JSON parsing failed - log the error and attempt recovery
+        logger.warn('⚠️ Failed to parse function call arguments, attempting recovery', {
+          episodeId,
+          stageNumber,
+          functionName: toolCall.function.name,
+          parseError: parseError.message,
+          // Log first 200 chars to help debug without exposing full content
+          argumentsPreview: toolCall.function.arguments?.substring(0, 200),
+        });
+
+        // Try to fix common JSON issues from OpenAI responses:
+        // - Trailing commas before closing braces/brackets
+        // - Sometimes there are newlines or special characters
         const fixedJson = toolCall.function.arguments
-          .replace(/,\s*}/g, '}')  // Remove trailing commas
-          .replace(/,\s*]/g, ']'); // Remove trailing commas in arrays
+          .replace(/,\s*}/g, '}')  // Remove trailing commas before }
+          .replace(/,\s*]/g, ']'); // Remove trailing commas before ]
+
         try {
           functionCallResult = {
             name: toolCall.function.name,
             arguments: JSON.parse(fixedJson),
           };
-        } catch {
-          throw new APIError('openai', 500, 'Failed to parse function call response');
+
+          logger.info('✅ Successfully parsed function call after JSON fix', {
+            episodeId,
+            stageNumber,
+            functionName: toolCall.function.name,
+          });
+
+        } catch (secondParseError) {
+          // Both parsing attempts failed - this is a critical error
+          logger.error('❌ Failed to parse function call response after recovery attempt', {
+            episodeId,
+            stageNumber,
+            functionName: toolCall.function.name,
+            originalError: parseError.message,
+            secondError: secondParseError.message,
+            argumentsPreview: toolCall.function.arguments?.substring(0, 500),
+          });
+
+          throw new APIError(
+            'openai',
+            500,
+            `Failed to parse function call response: ${secondParseError.message}`,
+            { functionName: toolCall.function.name }
+          );
         }
       }
     }
+  } else {
+    // Model didn't return a function call - this might be expected or an error
+    // depending on the tool_choice setting
+    logger.debug('ℹ️ No function call in response', {
+      episodeId,
+      stageNumber,
+      hasContent: !!message?.content,
+      finishReason: response.choices[0]?.finish_reason,
+    });
   }
 
   return {
@@ -315,17 +439,50 @@ export function assistantMessage(content) {
 }
 
 /**
- * Tests the OpenAI connection with a simple call
- * @returns {Promise<boolean>} True if connection works
+ * Tests the OpenAI connection with a simple API call.
+ *
+ * This function is useful for:
+ * - Verifying API key validity
+ * - Checking network connectivity to OpenAI
+ * - Health checks and monitoring
+ *
+ * @returns {Promise<boolean>} True if connection works, false otherwise
+ *
+ * @example
+ * const isConnected = await testConnection();
+ * if (!isConnected) {
+ *   console.error('OpenAI API is not accessible');
+ * }
  */
 export async function testConnection() {
+  logger.debug('🔌 Testing OpenAI connection...');
+
   try {
-    const result = await callOpenAI('Reply with "ok"', {
+    const result = await callOpenAI('Reply with exactly the word "ok"', {
       maxTokens: 10,
+      temperature: 0, // Deterministic response for testing
     });
-    return result.content.toLowerCase().includes('ok');
+
+    const isOk = result.content.toLowerCase().includes('ok');
+
+    if (isOk) {
+      logger.info('✅ OpenAI connection test passed', {
+        model: result.model,
+        responseTime: result.durationMs,
+      });
+    } else {
+      logger.warn('⚠️ OpenAI connection test: unexpected response', {
+        response: result.content,
+      });
+    }
+
+    return isOk;
   } catch (error) {
-    logger.error('OpenAI connection test failed', { error: error.message });
+    logger.error('❌ OpenAI connection test failed', {
+      errorMessage: error.message,
+      errorStatus: error.status,
+      errorCode: error.code,
+    });
     return false;
   }
 }

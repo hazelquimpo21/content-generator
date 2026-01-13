@@ -1,0 +1,84 @@
+/**
+ * ============================================================================
+ * BADGE STYLES
+ * ============================================================================
+ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: var(--font-medium);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+/* ============================================================================
+ * SIZES
+ * ============================================================================ */
+
+.sm {
+  padding: 0.125rem var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.md {
+  padding: 0.25rem var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.lg {
+  padding: var(--space-1) var(--space-4);
+  font-size: var(--text-sm);
+}
+
+/* ============================================================================
+ * VARIANTS
+ * ============================================================================ */
+
+/* Default - neutral gray */
+.default {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+}
+
+/* Primary - terracotta */
+.primary {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-dark);
+}
+
+/* Success - green */
+.success {
+  background-color: var(--color-success-light);
+  color: var(--color-success);
+}
+
+/* Warning - gold */
+.warning {
+  background-color: var(--color-warning-light);
+  color: #8a6d0b;
+}
+
+/* Error - red */
+.error {
+  background-color: var(--color-error-light);
+  color: var(--color-error);
+}
+
+/* Info - blue */
+.info {
+  background-color: var(--color-info-light);
+  color: var(--color-info);
+}
+
+/* ============================================================================
+ * DOT INDICATOR
+ * ============================================================================ */
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background-color: currentColor;
+}

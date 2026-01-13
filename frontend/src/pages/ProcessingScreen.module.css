@@ -1,0 +1,216 @@
+/**
+ * ============================================================================
+ * PROCESSING SCREEN STYLES
+ * ============================================================================
+ */
+
+.page {
+  max-width: 700px;
+  margin: 0 auto;
+  animation: fadeIn var(--transition-base) ease-out;
+}
+
+/* ============================================================================
+ * HEADER
+ * ============================================================================ */
+
+.header {
+  text-align: center;
+  margin-bottom: var(--space-6);
+}
+
+.title {
+  font-size: var(--text-3xl);
+  margin-bottom: var(--space-2);
+}
+
+.subtitle {
+  color: var(--color-text-secondary);
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+/* ============================================================================
+ * PROGRESS CARD
+ * ============================================================================ */
+
+.progressCard {
+  margin-bottom: var(--space-6);
+}
+
+/* ============================================================================
+ * STAGES LIST
+ * ============================================================================ */
+
+.stagesList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.stageItem {
+  display: flex;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-bg-accent);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+/* Stage states */
+.stage-pending {
+  opacity: 0.6;
+}
+
+.stage-processing {
+  background-color: var(--color-warning-light);
+  border-color: var(--color-warning);
+}
+
+.stage-completed {
+  background-color: var(--color-success-light);
+  border-color: transparent;
+}
+
+.stage-failed {
+  background-color: var(--color-error-light);
+  border-color: var(--color-error);
+}
+
+/* Stage icon */
+.stageIcon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+}
+
+.iconPending {
+  color: var(--color-text-tertiary);
+}
+
+.iconProcessing {
+  color: var(--color-warning);
+  animation: spin 1s linear infinite;
+}
+
+.iconCompleted {
+  color: var(--color-success);
+}
+
+.iconFailed {
+  color: var(--color-error);
+}
+
+/* Stage content */
+.stageContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.stageHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.stageName {
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.stageDuration {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+}
+
+.stageDescription {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: var(--space-1) 0 0 0;
+}
+
+.stageError {
+  font-size: var(--text-sm);
+  color: var(--color-error);
+  margin: var(--space-2) 0 0 0;
+}
+
+/* ============================================================================
+ * ACTIONS
+ * ============================================================================ */
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-8);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--color-bg-accent);
+}
+
+.actionButtons {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.costInfo {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.errorMessage {
+  text-align: center;
+  color: var(--color-error);
+  margin: 0;
+}
+
+.errorBanner {
+  margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-error-light);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-md);
+  color: var(--color-error);
+  text-align: center;
+}
+
+/* ============================================================================
+ * ERROR CARD
+ * ============================================================================ */
+
+.errorCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-12);
+}
+
+.errorCard h2 {
+  margin: var(--space-4) 0 var(--space-2);
+}
+
+.errorCard p {
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-4);
+}
+
+/* ============================================================================
+ * ANIMATIONS
+ * ============================================================================ */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

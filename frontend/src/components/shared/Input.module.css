@@ -1,0 +1,102 @@
+/**
+ * ============================================================================
+ * INPUT STYLES
+ * ============================================================================
+ */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+/* ============================================================================
+ * LABEL
+ * ============================================================================ */
+
+.label {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+}
+
+.required {
+  color: var(--color-error);
+  margin-left: 2px;
+}
+
+/* ============================================================================
+ * INPUT FIELD
+ * ============================================================================ */
+
+.field {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-bg-accent);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.field::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.field:hover:not(:disabled) {
+  border-color: var(--color-text-tertiary);
+}
+
+.field:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+/* Textarea specific */
+textarea.field {
+  min-height: 100px;
+  resize: vertical;
+}
+
+/* ============================================================================
+ * STATES
+ * ============================================================================ */
+
+/* Error state */
+.field.error {
+  border-color: var(--color-error);
+}
+
+.field.error:focus {
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 3px var(--color-error-light);
+}
+
+/* Disabled state */
+.field.disabled {
+  background-color: var(--color-bg-tertiary);
+  color: var(--color-text-tertiary);
+  cursor: not-allowed;
+}
+
+/* ============================================================================
+ * HELPER TEXT
+ * ============================================================================ */
+
+.errorText {
+  font-size: var(--text-sm);
+  color: var(--color-error);
+}
+
+.helperText {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+}

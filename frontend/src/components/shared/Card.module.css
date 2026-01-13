@@ -1,0 +1,117 @@
+/**
+ * ============================================================================
+ * CARD STYLES
+ * ============================================================================
+ */
+
+.card {
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-bg-accent);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-fast);
+}
+
+/* Padding variants */
+.padding-none {
+  padding: 0;
+}
+
+.padding-sm {
+  padding: var(--space-3);
+}
+
+.padding-md {
+  padding: var(--space-4);
+}
+
+.padding-lg {
+  padding: var(--space-6);
+}
+
+/* ============================================================================
+ * MODIFIERS
+ * ============================================================================ */
+
+.hoverable:hover {
+  border-color: var(--color-text-tertiary);
+  box-shadow: var(--shadow-sm);
+}
+
+.clickable {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+  font: inherit;
+}
+
+.clickable:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ============================================================================
+ * HEADER
+ * ============================================================================ */
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.headerContent {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  margin: 0;
+  line-height: var(--leading-snug);
+}
+
+.subtitle {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: var(--space-1) 0 0 0;
+}
+
+.headerAction {
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+ * BODY & FOOTER
+ * ============================================================================ */
+
+.body {
+  /* Body inherits card padding */
+}
+
+.footer {
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-bg-accent);
+}
+
+/* ============================================================================
+ * SECTION
+ * ============================================================================ */
+
+.section {
+  padding-top: var(--space-4);
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--color-bg-accent);
+}
+
+.section:first-child {
+  padding-top: 0;
+  margin-top: 0;
+  border-top: none;
+}

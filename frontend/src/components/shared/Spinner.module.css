@@ -1,0 +1,66 @@
+/**
+ * ============================================================================
+ * SPINNER STYLES
+ * ============================================================================
+ */
+
+.container {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.centered {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  padding: var(--space-8) 0;
+}
+
+/* ============================================================================
+ * SPINNER ICON
+ * ============================================================================ */
+
+.spinner {
+  color: var(--color-primary);
+  animation: spin 1s linear infinite;
+}
+
+/* Sizes */
+.sm {
+  width: 16px;
+  height: 16px;
+}
+
+.md {
+  width: 24px;
+  height: 24px;
+}
+
+.lg {
+  width: 32px;
+  height: 32px;
+}
+
+.xl {
+  width: 48px;
+  height: 48px;
+}
+
+/* ============================================================================
+ * TEXT
+ * ============================================================================ */
+
+.text {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* ============================================================================
+ * ANIMATION
+ * ============================================================================ */
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

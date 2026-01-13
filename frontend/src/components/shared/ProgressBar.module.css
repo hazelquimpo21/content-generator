@@ -1,0 +1,150 @@
+/**
+ * ============================================================================
+ * PROGRESS BAR STYLES
+ * ============================================================================
+ */
+
+.container {
+  width: 100%;
+}
+
+/* ============================================================================
+ * LABEL ROW
+ * ============================================================================ */
+
+.labelRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+}
+
+.percentage {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-secondary);
+}
+
+/* ============================================================================
+ * TRACK
+ * ============================================================================ */
+
+.track {
+  width: 100%;
+  background-color: var(--color-bg-tertiary);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+/* Size variants */
+.sm {
+  height: 4px;
+}
+
+.md {
+  height: 8px;
+}
+
+.lg {
+  height: 12px;
+}
+
+/* ============================================================================
+ * FILL (CONTINUOUS MODE)
+ * ============================================================================ */
+
+.fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width var(--transition-slow);
+}
+
+/* Variants */
+.fill.primary {
+  background-color: var(--color-primary);
+}
+
+.fill.success {
+  background-color: var(--color-success);
+}
+
+.fill.warning {
+  background-color: var(--color-warning);
+}
+
+.fill.error {
+  background-color: var(--color-error);
+}
+
+/* ============================================================================
+ * SEGMENTS MODE
+ * ============================================================================ */
+
+.segments {
+  display: flex;
+  gap: 2px;
+  height: 100%;
+}
+
+.segment {
+  flex: 1;
+  background-color: var(--color-bg-accent);
+  border-radius: 1px;
+  transition: background-color var(--transition-base);
+}
+
+.segment:first-child {
+  border-radius: var(--radius-full) 1px 1px var(--radius-full);
+}
+
+.segment:last-child {
+  border-radius: 1px var(--radius-full) var(--radius-full) 1px;
+}
+
+.segmentComplete {
+  background-color: var(--color-success);
+}
+
+.segmentActive {
+  background-color: var(--color-warning);
+}
+
+/* ============================================================================
+ * ANIMATION
+ * ============================================================================ */
+
+.animated {
+  position: relative;
+  overflow: hidden;
+}
+
+.animated::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}

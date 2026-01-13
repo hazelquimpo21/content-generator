@@ -1935,51 +1935,51 @@ VITE_SUPABASE_ANON_KEY=your-anon-key
 
 ### Database (Priority 1)
 
-- [ ] Create migration file `002_user_auth.sql`
-- [ ] Create `user_profiles` table
-- [ ] Create `user_settings` table
-- [ ] Add `user_id` column to `episodes` table
-- [ ] Create trigger for auto-creating user profile on signup
-- [ ] Create trigger for auto-creating user settings on profile creation
-- [ ] Create helper function `is_superadmin()`
-- [ ] Create RLS policies for all tables
+- [x] Create migration file `002_user_auth.sql`
+- [x] Create `user_profiles` table
+- [x] Create `user_settings` table
+- [x] Add `user_id` column to `episodes` table
+- [x] Create trigger for auto-creating user profile on signup
+- [x] Create trigger for auto-creating user settings on profile creation
+- [x] Create helper function `is_superadmin()`
+- [x] Create RLS policies for all tables
 - [ ] Test RLS policies work correctly
 - [ ] Run migration on Supabase
 
 ### Backend (Priority 2)
 
-- [ ] Add `AuthenticationError` and `AuthorizationError` to errors.js
-- [ ] Create `auth-middleware.js` with `requireAuth` and `requireSuperadmin`
-- [ ] Create `auth.js` routes (magic-link, me, logout, profile)
-- [ ] Create `settings.js` routes (user-scoped settings)
-- [ ] Update `server.js` to wire up auth middleware and routes
-- [ ] Update `episodes.js` routes for user scoping
-- [ ] Update `stages.js` routes for user scoping
-- [ ] Update `admin.js` routes to require superadmin
-- [ ] Add comprehensive logging throughout
+- [x] Add `AuthenticationError` and `AuthorizationError` to errors.js
+- [x] Create `auth-middleware.js` with `requireAuth` and `requireSuperadmin`
+- [x] Create `auth.js` routes (magic-link, me, logout, profile)
+- [x] Create `settings.js` routes (user-scoped settings)
+- [x] Update `server.js` to wire up auth middleware and routes
+- [x] Update `episodes.js` routes for user scoping
+- [x] Update `stages.js` routes for user scoping
+- [x] Update `admin.js` routes to require superadmin
+- [x] Add comprehensive logging throughout
 - [ ] Test all endpoints with authenticated requests
 
 ### Frontend (Priority 3)
 
-- [ ] Create `AuthContext.jsx` with Supabase integration
-- [ ] Create `ProtectedRoute.jsx` component
-- [ ] Create `Login.jsx` page
-- [ ] Create `AuthCallback.jsx` page
-- [ ] Create `AdminBar.jsx` component
-- [ ] Update `App.jsx` with auth routing
-- [ ] Update `api-client.js` to include auth token
-- [ ] Update `Settings.jsx` to use user settings
-- [ ] Update `Sidebar.jsx` to show/hide admin link based on role
-- [ ] Add logout button to UI
+- [x] Create `AuthContext.jsx` with Supabase integration
+- [x] Create `ProtectedRoute.jsx` component
+- [x] Create `Login.jsx` page
+- [x] Create `AuthCallback.jsx` page
+- [x] Create `AdminBar.jsx` component
+- [x] Update `App.jsx` with auth routing
+- [x] Update `api-client.js` to include auth token
+- [x] Update `Settings.jsx` to use user settings
+- [x] Update `Sidebar.jsx` to show/hide admin link based on role
+- [x] Add logout button to UI
 - [ ] Test complete auth flow
 
 ### Documentation (Priority 4)
 
-- [ ] Update PROJECT-OVERVIEW.md with multi-user support
-- [ ] Update DATABASE-SCHEMA.md with new tables
-- [ ] Update API-ENDPOINTS.md with auth endpoints
-- [ ] Update PAGE-SPECIFICATIONS.md with login page
-- [ ] Update IMPLEMENTATION-GUIDE.md with auth phase
+- [x] Update PROJECT-OVERVIEW.md with multi-user support
+- [x] Update DATABASE-SCHEMA.md with new tables
+- [x] Update API-ENDPOINTS.md with auth endpoints
+- [x] Update PAGE-SPECIFICATIONS.md with login page
+- [x] Update IMPLEMENTATION-GUIDE.md with auth phase
 - [ ] Update README.md with auth setup instructions
 
 ### Testing (Priority 5)

@@ -3,20 +3,34 @@
  * ADMIN ROUTES
  * ============================================================================
  * API endpoints for admin dashboard, analytics, and system monitoring.
+ * IMPORTANT: All routes require superadmin role (hazel@theclever.io).
  *
  * Routes:
- * GET /api/admin/costs - Get cost analytics
+ * GET /api/admin/costs       - Get cost analytics
  * GET /api/admin/performance - Get performance metrics
- * GET /api/admin/errors - Get recent errors
- * GET /api/admin/usage - Get API usage statistics
+ * GET /api/admin/errors      - Get recent errors
+ * GET /api/admin/usage       - Get API usage statistics
+ *
+ * Authorization:
+ * - All routes require authentication
+ * - All routes require superadmin role
+ * - Non-superadmins will receive 403 Forbidden
  * ============================================================================
  */
 
 import { Router } from 'express';
 import { apiLogRepo, episodeRepo, stageRepo } from '../../lib/supabase-client.js';
+import { requireAuth, requireSuperadmin } from '../middleware/auth-middleware.js';
 import logger from '../../lib/logger.js';
 
 const router = Router();
+
+// ============================================================================
+// MIDDLEWARE: Apply superadmin check to ALL admin routes
+// ============================================================================
+
+// All routes in this file require authentication AND superadmin role
+router.use(requireAuth, requireSuperadmin);
 
 // ============================================================================
 // COST ANALYTICS

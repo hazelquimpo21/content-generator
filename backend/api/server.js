@@ -33,6 +33,8 @@ import { requestLogger, correlationId } from './middleware/logger-middleware.js'
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 
 // Import routes
+import authRouter from './routes/auth.js';
+import settingsRouter from './routes/settings.js';
 import episodesRouter from './routes/episodes.js';
 import stagesRouter from './routes/stages.js';
 import evergreenRouter from './routes/evergreen.js';
@@ -107,6 +109,8 @@ app.get('/', (req, res) => {
     description: 'Transform podcast transcripts into polished content',
     endpoints: {
       health: '/health',
+      auth: '/api/auth',
+      settings: '/api/settings',
       episodes: '/api/episodes',
       stages: '/api/stages',
       evergreen: '/api/evergreen',
@@ -121,9 +125,20 @@ app.get('/', (req, res) => {
 // ============================================================================
 
 // Mount route handlers
+// Auth routes (no authentication required for magic link)
+app.use('/api/auth', authRouter);
+
+// User-scoped settings (requires authentication)
+app.use('/api/settings', settingsRouter);
+
+// Episode and content routes
 app.use('/api/episodes', episodesRouter);
 app.use('/api/stages', stagesRouter);
+
+// Legacy evergreen content (system defaults, superadmin only for updates)
 app.use('/api/evergreen', evergreenRouter);
+
+// Admin routes (superadmin only)
 app.use('/api/admin', adminRouter);
 
 // ============================================================================
@@ -186,6 +201,8 @@ async function startServer() {
     logger.info('📍 Available endpoints:', {
       health: `http://localhost:${PORT}/health`,
       api: `http://localhost:${PORT}/api`,
+      auth: `http://localhost:${PORT}/api/auth`,
+      settings: `http://localhost:${PORT}/api/settings`,
       episodes: `http://localhost:${PORT}/api/episodes`,
       stages: `http://localhost:${PORT}/api/stages`,
       evergreen: `http://localhost:${PORT}/api/evergreen`,

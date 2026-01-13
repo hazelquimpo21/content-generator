@@ -109,18 +109,55 @@ export async function callOpenAI(messages, options = {}) {
 
   const response = await retryWithBackoff(async () => {
     try {
-      // IMPORTANT: GPT-5 and newer models require `max_completion_tokens` instead of `max_tokens`
-      // Using the legacy `max_tokens` parameter will result in a 400 "Unsupported parameter" error
-      const completion = await openai.chat.completions.create({
+      // ============================================================================
+      // BUILD THE API REQUEST PARAMETERS
+      // ============================================================================
+      // IMPORTANT GPT-5 API COMPATIBILITY NOTES:
+      // 1. GPT-5 and newer models require `max_completion_tokens` instead of `max_tokens`
+      //    Using the legacy `max_tokens` parameter will result in a 400 error
+      // 2. For regular chat completions (non-tool_use), GPT-5 models typically support
+      //    temperature, but we still check for safety
+      // ============================================================================
+
+      // Determine if we're using a GPT-5 model
+      const isGPT5Model = model.startsWith('gpt-5');
+
+      // Build base request parameters
+      const requestParams = {
         model,
         messages: messagesArray,
-        temperature,
         max_completion_tokens: maxTokens, // Note: GPT-5+ uses max_completion_tokens, not max_tokens
+      };
+
+      // For regular completions (non-tool_use), temperature is generally supported
+      // but we still log it for debugging purposes
+      requestParams.temperature = temperature;
+
+      logger.debug('📤 OpenAI API request parameters', {
+        episodeId,
+        stageNumber,
+        model,
+        isGPT5Model,
+        temperature,
+        maxTokens,
+        messageCount: messagesArray.length,
       });
+
+      const completion = await openai.chat.completions.create(requestParams);
 
       return completion;
     } catch (error) {
-      // Log detailed error information for debugging
+      // ============================================================================
+      // ENHANCED ERROR LOGGING
+      // ============================================================================
+      // Log comprehensive error details to help diagnose API failures.
+      // Common issues include:
+      // - 400: Invalid parameters (e.g., unsupported temperature, wrong token param)
+      // - 401: Invalid API key
+      // - 429: Rate limit exceeded
+      // - 500-503: OpenAI service issues
+      // ============================================================================
+
       logger.error('❌ OpenAI API call failed', {
         episodeId,
         stageNumber,
@@ -129,6 +166,12 @@ export async function callOpenAI(messages, options = {}) {
         errorStatus: error.status,
         errorCode: error.code,
         errorType: error.type,
+        // Include request context for debugging
+        requestContext: {
+          temperature,
+          maxTokens,
+          messageCount: messagesArray.length,
+        },
       });
 
       // Convert OpenAI errors to our APIError type for consistent error handling
@@ -229,13 +272,25 @@ export async function callOpenAIWithFunctions(messages, functions, options = {})
 
   const response = await retryWithBackoff(async () => {
     try {
-      // IMPORTANT: GPT-5 and newer models require `max_completion_tokens` instead of `max_tokens`
-      // Using the legacy `max_tokens` parameter will result in a 400 "Unsupported parameter" error
-      // Function calling uses the modern `tools` API format (not the deprecated `functions` parameter)
-      const completion = await openai.chat.completions.create({
+      // ============================================================================
+      // BUILD THE API REQUEST PARAMETERS
+      // ============================================================================
+      // IMPORTANT GPT-5 API COMPATIBILITY NOTES:
+      // 1. GPT-5 and newer models require `max_completion_tokens` instead of `max_tokens`
+      //    Using the legacy `max_tokens` parameter will result in a 400 error
+      // 2. GPT-5 models do NOT support the `temperature` parameter when using tool_use
+      //    (function calling). Passing temperature results in:
+      //    "400 Unsupported value: 'temperature' does not support..."
+      // 3. Function calling uses the modern `tools` API format (not deprecated `functions`)
+      // ============================================================================
+
+      // Determine if we're using a GPT-5 model (which has different parameter support)
+      const isGPT5Model = model.startsWith('gpt-5');
+
+      // Build base request parameters
+      const requestParams = {
         model,
         messages: messagesArray,
-        temperature,
         max_completion_tokens: maxTokens, // Note: GPT-5+ uses max_completion_tokens, not max_tokens
         // Convert our function definitions to OpenAI's tool format
         tools: functions.map(fn => ({
@@ -246,11 +301,45 @@ export async function callOpenAIWithFunctions(messages, functions, options = {})
         tool_choice: functionCall === 'auto'
           ? 'auto'
           : { type: 'function', function: { name: functionCall } },
-      });
+      };
+
+      // IMPORTANT: GPT-5 models do NOT support temperature with function calling (tool_use)
+      // Only include temperature for non-GPT-5 models to avoid "Unsupported value" errors
+      if (!isGPT5Model) {
+        requestParams.temperature = temperature;
+        logger.debug('📝 Including temperature parameter (non-GPT-5 model)', {
+          episodeId,
+          stageNumber,
+          model,
+          temperature,
+        });
+      } else {
+        // Log that we're omitting temperature for GPT-5 compatibility
+        logger.debug('⚠️ Omitting temperature parameter (GPT-5 model does not support it with tool_use)', {
+          episodeId,
+          stageNumber,
+          model,
+          requestedTemperature: temperature,
+          note: 'GPT-5 models use deterministic outputs for function calling',
+        });
+      }
+
+      const completion = await openai.chat.completions.create(requestParams);
 
       return completion;
     } catch (error) {
-      // Log detailed error information for debugging function call failures
+      // ============================================================================
+      // ENHANCED ERROR LOGGING FOR FUNCTION CALLING FAILURES
+      // ============================================================================
+      // Log comprehensive error details to help diagnose function call API failures.
+      // Common issues with tool_use (function calling):
+      // - 400 "Unsupported value: temperature": GPT-5 doesn't support temperature with tool_use
+      // - 400: Invalid function schema (missing required fields, wrong types)
+      // - 400: max_tokens used instead of max_completion_tokens for GPT-5
+      // - 429: Rate limit exceeded
+      // - 500-503: OpenAI service issues
+      // ============================================================================
+
       logger.error('❌ OpenAI function call (tool_use) failed', {
         episodeId,
         stageNumber,
@@ -260,6 +349,15 @@ export async function callOpenAIWithFunctions(messages, functions, options = {})
         errorStatus: error.status,
         errorCode: error.code,
         errorType: error.type,
+        // Include full request context for debugging
+        requestContext: {
+          isGPT5Model: model.startsWith('gpt-5'),
+          temperatureIncluded: !model.startsWith('gpt-5'),
+          requestedTemperature: temperature,
+          maxTokens,
+          toolChoice: functionCall,
+          messageCount: messagesArray.length,
+        },
       });
 
       // Convert OpenAI errors to our APIError type for consistent error handling

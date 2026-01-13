@@ -28,12 +28,13 @@
  * }
  *
  * Model: GPT-5 mini (OpenAI) with function calling (tool_use)
- * Temperature: 0.5 (balanced for consistent extraction)
  *
  * API Notes:
  * ----------
  * - Uses OpenAI's tool_use (function calling) for guaranteed structured output
  * - GPT-5 models require `max_completion_tokens` instead of `max_tokens`
+ * - IMPORTANT: GPT-5 models do NOT support the `temperature` parameter when
+ *   using tool_use (function calling). The API client automatically omits it.
  * - The function schema enforces the expected JSON structure
  *
  * Dependencies:
@@ -304,11 +305,14 @@ export async function analyzeTranscript(context) {
   // - No JSON parsing issues from free-form text
   // - Better type safety and validation
 
+  // Log API call attempt
+  // Note: temperature is passed to the API client but will be automatically omitted
+  // for GPT-5 models since they don't support it with function calling (tool_use)
   logger.info('📤 Stage 1: Calling OpenAI API with function calling', {
     episodeId,
     functionName: 'episode_analysis',
     model: 'gpt-5-mini',
-    temperature: 0.5,
+    note: 'Temperature omitted for GPT-5 tool_use compatibility',
   });
 
   let response;

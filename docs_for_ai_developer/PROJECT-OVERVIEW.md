@@ -22,7 +22,7 @@ Transform raw podcast transcripts into publication-ready content across multiple
 - **Framework**: Express.js (lightweight REST API)
 - **Database**: Supabase (PostgreSQL + real-time subscriptions)
 - **AI Providers**: 
-  - OpenAI GPT-4o-mini (Stages 1-6: analysis, outlining, drafting)
+  - OpenAI GPT-5 mini (Stages 1-6: analysis, outlining, drafting)
   - Anthropic Claude Sonnet 4 (Stages 7-9: refinement, social, email)
 
 ### Frontend
@@ -54,22 +54,22 @@ Transform raw podcast transcripts into publication-ready content across multiple
 
 ### The 9 Stages
 
-1. **Transcript Analysis** (GPT-4o-mini)
+1. **Transcript Analysis** (GPT-5 mini)
    - Extract episode metadata, guest info, main topics
 
-2. **Quote Extraction** (GPT-4o-mini)
+2. **Quote Extraction** (GPT-5 mini)
    - Find 5-8 key verbatim quotes with context
 
-3. **Blog Outline - High Level** (GPT-4o-mini)
+3. **Blog Outline - High Level** (GPT-5 mini)
    - Structure 750-word post with sections and hooks
 
-4. **Paragraph-Level Outlines** (GPT-4o-mini)
+4. **Paragraph-Level Outlines** (GPT-5 mini)
    - Detail each paragraph's content and flow
 
-5. **Headlines & Copy Options** (GPT-4o-mini)
+5. **Headlines & Copy Options** (GPT-5 mini)
    - Generate 10-15 headlines, subheads, taglines, hooks
 
-6. **Draft Generation** (GPT-4o-mini)
+6. **Draft Generation** (GPT-5 mini)
    - Write first half, then second half of blog post
 
 7. **Refinement Pass** (Claude Sonnet)

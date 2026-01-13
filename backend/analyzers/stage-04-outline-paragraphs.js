@@ -6,7 +6,7 @@
  *
  * Input: Stage 3 outline + Stage 2 quotes
  * Output: Detailed paragraph roadmap (JSON)
- * Model: GPT-4o-mini (OpenAI)
+ * Model: GPT-5 mini (OpenAI)
  * ============================================================================
  */
 

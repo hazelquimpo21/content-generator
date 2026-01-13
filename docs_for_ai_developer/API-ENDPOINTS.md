@@ -332,7 +332,7 @@ Get single episode with all stage outputs.
       "started_at": "2025-01-12T14:30:05Z",
       "completed_at": "2025-01-12T14:30:17Z",
       "duration_seconds": 12,
-      "model_used": "gpt-4o-mini-2024-07-18",
+      "model_used": "gpt-5-mini",
       "provider": "openai",
       "input_tokens": 1500,
       "output_tokens": 300,

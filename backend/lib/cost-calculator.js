@@ -9,7 +9,7 @@
  *
  * Usage:
  *   import { calculateCost, estimateEpisodeCost } from './lib/cost-calculator.js';
- *   const cost = calculateCost('gpt-4o-mini', 1000, 500);
+ *   const cost = calculateCost('gpt-5-mini', 1000, 500);
  * ============================================================================
  */
 
@@ -23,7 +23,13 @@
  * Source: https://openai.com/pricing
  */
 const OPENAI_PRICING = {
-  // GPT-4o-mini - main model for stages 1-6
+  // GPT-5 mini - main model for stages 1-6
+  'gpt-5-mini': {
+    input: 0.30,    // $0.30 per 1M input tokens
+    output: 1.25,   // $1.25 per 1M output tokens
+    cached_input: 0.15, // Cached prompts are 50% off
+  },
+  // GPT-4o-mini - legacy, kept for backwards compatibility
   'gpt-4o-mini': {
     input: 0.15,    // $0.15 per 1M input tokens
     output: 0.60,   // $0.60 per 1M output tokens
@@ -130,7 +136,7 @@ function getPricing(model) {
 /**
  * Calculates the cost of an API call based on token usage
  *
- * @param {string} model - Model identifier (e.g., 'gpt-4o-mini', 'claude-sonnet-4-20250514')
+ * @param {string} model - Model identifier (e.g., 'gpt-5-mini', 'claude-sonnet-4-20250514')
  * @param {number} inputTokens - Number of input tokens
  * @param {number} outputTokens - Number of output tokens
  * @param {Object} [options] - Additional options
@@ -138,7 +144,7 @@ function getPricing(model) {
  * @returns {number} Cost in USD
  *
  * @example
- * const cost = calculateCost('gpt-4o-mini', 1500, 800);
+ * const cost = calculateCost('gpt-5-mini', 1500, 800);
  * console.log(`Cost: $${cost.toFixed(4)}`); // Cost: $0.0007
  */
 export function calculateCost(model, inputTokens, outputTokens, options = {}) {
@@ -235,12 +241,12 @@ const STAGE_TOKEN_ESTIMATES = {
 };
 
 const STAGE_MODELS = {
-  1: 'gpt-4o-mini',
-  2: 'gpt-4o-mini',
-  3: 'gpt-4o-mini',
-  4: 'gpt-4o-mini',
-  5: 'gpt-4o-mini',
-  6: 'gpt-4o-mini',
+  1: 'gpt-5-mini',
+  2: 'gpt-5-mini',
+  3: 'gpt-5-mini',
+  4: 'gpt-5-mini',
+  5: 'gpt-5-mini',
+  6: 'gpt-5-mini',
   7: 'claude-sonnet-4-20250514',
   8: 'claude-sonnet-4-20250514',
   9: 'claude-sonnet-4-20250514',

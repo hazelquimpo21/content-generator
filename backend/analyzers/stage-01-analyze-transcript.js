@@ -7,7 +7,7 @@
  *
  * Input: Raw transcript + evergreen content
  * Output: Structured episode analysis (JSON)
- * Model: GPT-4o-mini (OpenAI)
+ * Model: GPT-5 mini (OpenAI)
  * ============================================================================
  */
 

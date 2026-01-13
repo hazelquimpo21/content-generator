@@ -13,7 +13,7 @@ Transform podcast transcripts into polished blog posts, social media content, an
 ## Features
 
 - **9-Stage AI Pipeline**: Systematic content generation from transcript analysis to final outputs
-- **Multiple AI Models**: OpenAI GPT-4o-mini (stages 1-6) + Anthropic Claude (stages 7-9)
+- **Multiple AI Models**: OpenAI GPT-5 mini (stages 1-6) + Anthropic Claude (stages 7-9)
 - **Real-time Progress**: Watch processing happen stage-by-stage
 - **Content Review Hub**: View, edit, and copy all generated content
 - **Cost Tracking**: Monitor API usage and costs per episode
@@ -137,7 +137,7 @@ Visit `http://localhost:5173` to see the app.
 │  │              Episode Processor (9 Stages)                    │   │
 │  │                                                              │   │
 │  │  Stage 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9                   │   │
-│  │  (GPT-4o-mini)────────────────►│(Claude Sonnet)────────────►│   │
+│  │  (GPT-5 mini)─────────────────►│(Claude Sonnet)────────────►│   │
 │  └─────────────────────────────────────────────────────────────┘   │
 └───────┬─────────────────────────────────────────────────────────────┘
         │
@@ -154,12 +154,12 @@ Visit `http://localhost:5173` to see the app.
 
 | Stage | Name | Model | Output |
 |-------|------|-------|--------|
-| 1 | Transcript Analysis | GPT-4o-mini | Themes, structure, audiences |
-| 2 | Quote Extraction | GPT-4o-mini | Key quotes with context |
-| 3 | Title Generation | GPT-4o-mini | SEO-optimized titles |
-| 4 | Summary Writing | GPT-4o-mini | Short/medium/long summaries |
-| 5 | Outline Creation | GPT-4o-mini | Blog post structure |
-| 6 | Blog Post Draft | GPT-4o-mini | Full draft content |
+| 1 | Transcript Analysis | GPT-5 mini | Themes, structure, audiences |
+| 2 | Quote Extraction | GPT-5 mini | Key quotes with context |
+| 3 | Title Generation | GPT-5 mini | SEO-optimized titles |
+| 4 | Summary Writing | GPT-5 mini | Short/medium/long summaries |
+| 5 | Outline Creation | GPT-5 mini | Blog post structure |
+| 6 | Blog Post Draft | GPT-5 mini | Full draft content |
 | 7 | Blog Post Editing | Claude Sonnet | Polished final version |
 | 8 | Social Content | Claude Sonnet | Platform-specific posts |
 | 9 | Email Campaign | Claude Sonnet | Newsletter content |
@@ -496,7 +496,7 @@ Typical costs per episode (based on ~10,000 word transcript):
 
 | Stage | Model | Est. Cost |
 |-------|-------|-----------|
-| 1-6 | GPT-4o-mini | ~$0.02-0.05 |
+| 1-6 | GPT-5 mini | ~$0.03-0.08 |
 | 7-9 | Claude Sonnet | ~$0.03-0.08 |
 | **Total** | | **~$0.05-0.13** |
 

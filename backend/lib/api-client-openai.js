@@ -3,7 +3,7 @@
  * OPENAI API CLIENT
  * ============================================================================
  * Provides a robust wrapper around OpenAI's API for the content pipeline.
- * Used for stages 1-6 which use GPT-4o-mini.
+ * Used for stages 1-6 which use GPT-5 mini.
  *
  * Features:
  * - Automatic retry with exponential backoff
@@ -14,7 +14,7 @@
  *
  * Usage:
  *   import { callOpenAI, callOpenAIWithFunctions } from './lib/api-client-openai.js';
- *   const response = await callOpenAI('Your prompt here', { model: 'gpt-4o-mini' });
+ *   const response = await callOpenAI('Your prompt here', { model: 'gpt-5-mini' });
  * ============================================================================
  */
 
@@ -36,7 +36,7 @@ if (!OPENAI_API_KEY) {
 }
 
 // Default model for the pipeline (stages 1-6)
-const DEFAULT_MODEL = 'gpt-4o-mini';
+const DEFAULT_MODEL = 'gpt-5-mini';
 
 // Default temperature for consistent outputs
 const DEFAULT_TEMPERATURE = 0.7;
@@ -61,7 +61,7 @@ const openai = new OpenAI({
  *
  * @param {string|Array} messages - Prompt string or array of message objects
  * @param {Object} [options] - API options
- * @param {string} [options.model='gpt-4o-mini'] - Model to use
+ * @param {string} [options.model='gpt-5-mini'] - Model to use
  * @param {number} [options.temperature=0.7] - Sampling temperature
  * @param {number} [options.maxTokens=4096] - Max output tokens
  * @param {string} [options.episodeId] - Episode ID for logging

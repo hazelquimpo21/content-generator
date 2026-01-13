@@ -4,7 +4,7 @@
  * ============================================================================
  * Exports all stage analyzer functions for the 9-stage pipeline.
  *
- * Stages 1-6: Use GPT-4o-mini (OpenAI)
+ * Stages 1-6: Use GPT-5 mini (OpenAI)
  * Stages 7-9: Use Claude Sonnet 4 (Anthropic)
  * ============================================================================
  */

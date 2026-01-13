@@ -78,12 +78,12 @@ export const STAGE_PROVIDERS = {
  * Model used for each stage
  */
 export const STAGE_MODELS = {
-  1: 'gpt-4o-mini',
-  2: 'gpt-4o-mini',
-  3: 'gpt-4o-mini',
-  4: 'gpt-4o-mini',
-  5: 'gpt-4o-mini',
-  6: 'gpt-4o-mini',
+  1: 'gpt-5-mini',
+  2: 'gpt-5-mini',
+  3: 'gpt-5-mini',
+  4: 'gpt-5-mini',
+  5: 'gpt-5-mini',
+  6: 'gpt-5-mini',
   7: 'claude-sonnet-4-20250514',
   8: 'claude-sonnet-4-20250514',
   9: 'claude-sonnet-4-20250514',

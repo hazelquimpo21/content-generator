@@ -2,13 +2,17 @@
  * ============================================================================
  * EPISODE PROCESSOR MODULE
  * ============================================================================
- * Orchestrates the complete 9-stage AI pipeline for processing an episode.
+ * Orchestrates the complete 10-stage AI pipeline for processing an episode.
  * Handles state management, progress tracking, and error recovery.
  *
  * Flow:
  * 1. Load episode and evergreen content
  * 2. Create stage records (pending)
- * 3. For each stage 1-9:
+ * 3. For each stage 0-9:
+ *    - Stage 0: Preprocess transcript (Claude Haiku, 200K context)
+ *      - For long transcripts, creates compressed summary + quotes
+ *      - Skipped for short transcripts
+ *    - Stages 1-9: Main content pipeline
  *    - Mark processing
  *    - Run analyzer
  *    - Save output
@@ -30,7 +34,10 @@ import { runStage, STAGE_NAMES } from './stage-runner.js';
 // CONFIGURATION
 // ============================================================================
 
-const TOTAL_STAGES = 9;
+// Total stages: 0 (preprocessing) + 1-9 (main pipeline) = 10 stages
+const TOTAL_STAGES = 10;
+const FIRST_STAGE = 0;  // Start with preprocessing
+const LAST_STAGE = 9;   // End with email campaign
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -116,11 +123,13 @@ async function loadPreviousStages(context, upToStage) {
 // ============================================================================
 
 /**
- * Processes an episode through all 9 stages
+ * Processes an episode through all 10 stages (0-9)
+ * Stage 0: Transcript preprocessing (for long transcripts)
+ * Stages 1-9: Main content pipeline
  *
  * @param {string} episodeId - Episode UUID
  * @param {Object} [options] - Processing options
- * @param {number} [options.startFromStage=1] - Stage to start from
+ * @param {number} [options.startFromStage=0] - Stage to start from (0-9)
  * @param {Function} [options.onProgress] - Progress callback
  * @returns {Promise<Object>} Processing result
  * @throws {ProcessingError} If processing fails
@@ -131,13 +140,15 @@ async function loadPreviousStages(context, upToStage) {
  * });
  */
 export async function processEpisode(episodeId, options = {}) {
-  const { startFromStage = 1, onProgress } = options;
+  const { startFromStage = FIRST_STAGE, onProgress } = options;
 
   logger.info('🎬 Starting episode processing', {
     episodeId,
     startFromStage,
     totalStages: TOTAL_STAGES,
-    isResume: startFromStage > 1,
+    firstStage: FIRST_STAGE,
+    lastStage: LAST_STAGE,
+    isResume: startFromStage > FIRST_STAGE,
   });
 
   const startTime = Date.now();
@@ -154,7 +165,7 @@ export async function processEpisode(episodeId, options = {}) {
     await episodeRepo.updateStatus(episodeId, 'processing', startFromStage);
 
     // Create stage records if starting fresh
-    if (startFromStage === 1) {
+    if (startFromStage === FIRST_STAGE) {
       logger.debug('📋 Phase 3: Creating stage records (fresh start)', { episodeId });
       await stageRepo.createAllStages(episodeId);
     } else {
@@ -166,11 +177,11 @@ export async function processEpisode(episodeId, options = {}) {
     logger.info('🚀 Beginning stage processing loop', {
       episodeId,
       startStage: startFromStage,
-      endStage: TOTAL_STAGES,
+      endStage: LAST_STAGE,
     });
 
-    // Process each stage
-    for (let stageNum = startFromStage; stageNum <= TOTAL_STAGES; stageNum++) {
+    // Process each stage (0 through 9)
+    for (let stageNum = startFromStage; stageNum <= LAST_STAGE; stageNum++) {
       const stageName = STAGE_NAMES[stageNum];
       const stageStartTime = Date.now();
 
@@ -211,7 +222,14 @@ export async function processEpisode(episodeId, options = {}) {
         totalCost += result.cost_usd;
         stagesCompleted++;
 
-        logger.info(`✅ Stage ${stageNum}/${TOTAL_STAGES} completed: ${stageName}`, {
+        // Log special info for Stage 0 preprocessing
+        const stageLogExtra = {};
+        if (stageNum === 0 && result.skipped) {
+          stageLogExtra.preprocessingSkipped = true;
+          stageLogExtra.reason = 'Transcript small enough for direct processing';
+        }
+
+        logger.info(`✅ Stage ${stageNum}/${LAST_STAGE} completed: ${stageName}`, {
           episodeId,
           stage: stageNum,
           stageDurationMs: stageDuration,
@@ -220,7 +238,8 @@ export async function processEpisode(episodeId, options = {}) {
           outputTokens: result.output_tokens,
           runningTotalCost: totalCost,
           stagesCompleted,
-          stagesRemaining: TOTAL_STAGES - stageNum,
+          stagesRemaining: LAST_STAGE - stageNum,
+          ...stageLogExtra,
         });
 
         // Report progress
@@ -271,7 +290,7 @@ export async function processEpisode(episodeId, options = {}) {
     // Mark episode as complete
     await episodeRepo.update(episodeId, {
       status: 'completed',
-      current_stage: TOTAL_STAGES,
+      current_stage: LAST_STAGE,
       total_cost_usd: totalCost,
       total_duration_seconds: durationSeconds,
       processing_completed_at: new Date().toISOString(),
@@ -280,6 +299,7 @@ export async function processEpisode(episodeId, options = {}) {
     logger.info('🎉 Episode processing complete!', {
       episodeId,
       stagesCompleted,
+      totalStages: TOTAL_STAGES,
       totalCostUsd: totalCost,
       totalDurationSeconds: durationSeconds,
       averageSecondsPerStage: Math.round(durationSeconds / stagesCompleted),
@@ -291,7 +311,7 @@ export async function processEpisode(episodeId, options = {}) {
       status: 'completed',
       totalCost,
       durationSeconds,
-      stagesCompleted: TOTAL_STAGES,
+      stagesCompleted,
     };
 
   } catch (error) {

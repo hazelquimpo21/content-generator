@@ -173,15 +173,18 @@ A trigger automatically creates user_settings when a new user_profile is created
 
 ### `stage_outputs`
 
-Stores the output and metadata for each of the 9 stages of processing.
+Stores the output and metadata for each of the 10 stages of processing (Stage 0-9).
 
 ```sql
 CREATE TABLE stage_outputs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   episode_id UUID NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
-  
+
   -- Stage identification
-  stage_number INTEGER NOT NULL CHECK (stage_number >= 1 AND stage_number <= 9),
+  -- NOTE: Stage 0 = Transcript Preprocessing (Claude Haiku, skipped for short transcripts)
+  -- Stages 1-6 = Analysis & Drafting (GPT-5 mini)
+  -- Stages 7-9 = Refinement & Distribution (Claude Sonnet)
+  stage_number INTEGER NOT NULL CHECK (stage_number >= 0 AND stage_number <= 9),
   stage_name TEXT NOT NULL,
   
   -- Status tracking
@@ -223,24 +226,25 @@ CREATE INDEX idx_stage_outputs_created_at ON stage_outputs(created_at DESC);
 **Field Descriptions:**
 
 - `episode_id`: Foreign key to episodes table
-- `stage_number`: 1-9 (which stage this represents)
+- `stage_number`: 0-9 (which stage this represents, 10 stages total)
 - `stage_name`: Human-readable name
-  - 1: "Transcript Analysis"
-  - 2: "Quote Extraction"
-  - 3: "Blog Outline - High Level"
-  - 4: "Paragraph-Level Outlines"
-  - 5: "Headlines & Copy Options"
-  - 6: "Draft Generation"
-  - 7: "Refinement Pass"
-  - 8: "Social Content"
-  - 9: "Email Campaign"
+  - 0: "Transcript Preprocessing" (Claude Haiku - skipped for short transcripts)
+  - 1: "Transcript Analysis" (GPT-5 mini)
+  - 2: "Quote Extraction" (GPT-5 mini)
+  - 3: "Blog Outline - High Level" (GPT-5 mini)
+  - 4: "Paragraph-Level Outlines" (GPT-5 mini)
+  - 5: "Headlines & Copy Options" (GPT-5 mini)
+  - 6: "Draft Generation" (GPT-5 mini)
+  - 7: "Refinement Pass" (Claude Sonnet)
+  - 8: "Social Content" (Claude Sonnet)
+  - 9: "Email Campaign" (Claude Sonnet)
 - `status`: Current status of this stage
-- `model_used`: e.g., "gpt-5-mini" or "claude-sonnet-4-20250514"
+- `model_used`: e.g., "gpt-5-mini", "claude-3-5-haiku-20241022", or "claude-sonnet-4-20250514"
 - `provider`: "openai" or "anthropic"
 - `input_tokens`: Tokens sent to AI
 - `output_tokens`: Tokens received from AI
 - `cost_usd`: Cost in USD (calculated from tokens + pricing)
-- `output_data`: Structured JSON from function calling (for stages 1-5)
+- `output_data`: Structured JSON from function calling (for stages 0-5)
 - `output_text`: Markdown or text output (for stages 6-9)
 - `error_message`: If status='failed', error description
 - `error_details`: Full error object as JSON

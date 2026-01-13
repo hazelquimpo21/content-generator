@@ -35,6 +35,13 @@ router.get('/costs', async (req, res, next) => {
   try {
     const { period = 'week', startDate, endDate } = req.query;
 
+    logger.info('📥 GET /api/admin/costs - Fetching cost analytics', {
+      period,
+      hasCustomDateRange: !!(startDate && endDate),
+      startDate: startDate || 'auto',
+      endDate: endDate || 'auto',
+    });
+
     // Calculate date range based on period
     const now = new Date();
     let start, end;
@@ -57,8 +64,17 @@ router.get('/costs', async (req, res, next) => {
       }
     }
 
+    logger.debug('GET /api/admin/costs - Date range calculated', {
+      start: start.toISOString(),
+      end: end.toISOString(),
+    });
+
     // Get usage logs for the period
     const usageLogs = await apiLogRepo.getByDateRange(start.toISOString(), end.toISOString());
+
+    logger.debug('GET /api/admin/costs - Usage logs fetched', {
+      logCount: usageLogs.length,
+    });
 
     // Calculate totals
     const totalCost = usageLogs.reduce((sum, log) => sum + (log.cost_usd || 0), 0);
@@ -122,6 +138,13 @@ router.get('/costs', async (req, res, next) => {
       byDay[day].calls++;
     }
 
+    logger.info('📤 GET /api/admin/costs - Success', {
+      totalCost: totalCost.toFixed(4),
+      totalCalls: usageLogs.length,
+      providerCount: Object.keys(byProvider).length,
+      modelCount: Object.keys(byModel).length,
+    });
+
     res.json({
       period: {
         start: start.toISOString(),
@@ -141,6 +164,11 @@ router.get('/costs', async (req, res, next) => {
       byDay,
     });
   } catch (error) {
+    logger.error('❌ GET /api/admin/costs - Failed', {
+      errorName: error.name,
+      errorMessage: error.message,
+      stack: error.stack,
+    });
     next(error);
   }
 });
@@ -157,13 +185,22 @@ router.get('/performance', async (req, res, next) => {
   try {
     const { limit = 100 } = req.query;
 
+    logger.info('📥 GET /api/admin/performance - Fetching performance metrics', {
+      limit: parseInt(limit, 10),
+    });
+
     // Get recent completed episodes
     const episodes = await episodeRepo.findAll({
       status: 'completed',
       limit: parseInt(limit, 10),
     });
 
+    logger.debug('GET /api/admin/performance - Episodes fetched', {
+      completedEpisodeCount: episodes.length,
+    });
+
     if (episodes.length === 0) {
+      logger.info('📤 GET /api/admin/performance - No completed episodes found');
       return res.json({
         message: 'No completed episodes yet',
         metrics: null,
@@ -221,6 +258,13 @@ router.get('/performance', async (req, res, next) => {
       };
     }
 
+    logger.info('📤 GET /api/admin/performance - Success', {
+      episodesAnalyzed: episodes.length,
+      avgDurationSeconds: Math.round(avgDuration),
+      avgCostUsd: avgCost.toFixed(4),
+      stageMetricsCount: Object.keys(stageAverages).length,
+    });
+
     res.json({
       episodesAnalyzed: episodes.length,
       overall: {
@@ -234,6 +278,11 @@ router.get('/performance', async (req, res, next) => {
       byStage: stageAverages,
     });
   } catch (error) {
+    logger.error('❌ GET /api/admin/performance - Failed', {
+      errorName: error.name,
+      errorMessage: error.message,
+      stack: error.stack,
+    });
     next(error);
   }
 });
@@ -249,6 +298,10 @@ router.get('/performance', async (req, res, next) => {
 router.get('/errors', async (req, res, next) => {
   try {
     const { limit = 50 } = req.query;
+
+    logger.info('📥 GET /api/admin/errors - Fetching recent errors', {
+      limit: parseInt(limit, 10),
+    });
 
     // Get episodes with errors
     const errorEpisodes = await episodeRepo.findAll({
@@ -284,6 +337,12 @@ router.get('/errors', async (req, res, next) => {
       errorsByType[type].push(error);
     }
 
+    logger.info('📤 GET /api/admin/errors - Success', {
+      totalErrors: failedStages.length,
+      errorEpisodeCount: errorEpisodes.length,
+      errorTypeCount: Object.keys(errorsByType).length,
+    });
+
     res.json({
       totalErrors: failedStages.length,
       recentErrors: failedStages.slice(0, parseInt(limit, 10)),
@@ -301,6 +360,11 @@ router.get('/errors', async (req, res, next) => {
       })),
     });
   } catch (error) {
+    logger.error('❌ GET /api/admin/errors - Failed', {
+      errorName: error.name,
+      errorMessage: error.message,
+      stack: error.stack,
+    });
     next(error);
   }
 });
@@ -311,8 +375,14 @@ router.get('/errors', async (req, res, next) => {
  */
 router.get('/usage', async (req, res, next) => {
   try {
+    logger.info('📥 GET /api/admin/usage - Fetching usage statistics');
+
     // Get episode counts by status
     const allEpisodes = await episodeRepo.findAll({ limit: 1000 });
+
+    logger.debug('GET /api/admin/usage - Episodes fetched', {
+      totalEpisodes: allEpisodes.length,
+    });
 
     const statusCounts = {
       pending: 0,
@@ -342,6 +412,15 @@ router.get('/usage', async (req, res, next) => {
     const dailyAvgCost = daysTracked > 0 ? totalCost30Days / daysTracked : 0;
     const projectedMonthlyCost = dailyAvgCost * 30;
 
+    logger.info('📤 GET /api/admin/usage - Success', {
+      totalEpisodes: allEpisodes.length,
+      completedEpisodes: statusCounts.completed,
+      errorEpisodes: statusCounts.error,
+      totalCalls30Days,
+      totalCost30Days: totalCost30Days.toFixed(4),
+      projectedMonthlyCost: projectedMonthlyCost.toFixed(2),
+    });
+
     res.json({
       episodes: {
         total: allEpisodes.length,
@@ -364,6 +443,11 @@ router.get('/usage', async (req, res, next) => {
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {
+    logger.error('❌ GET /api/admin/usage - Failed', {
+      errorName: error.name,
+      errorMessage: error.message,
+      stack: error.stack,
+    });
     next(error);
   }
 });

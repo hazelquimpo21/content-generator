@@ -26,6 +26,7 @@ const BASE_URL = '/api';
  */
 async function fetchAPI(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
+  const requestId = Math.random().toString(36).substring(7);
 
   const config = {
     headers: {
@@ -40,14 +41,41 @@ async function fetchAPI(endpoint, options = {}) {
     delete config.headers['Content-Type'];
   }
 
+  // Log outgoing request
+  console.log(`[API:${requestId}] ${options.method || 'GET'} ${url}`, {
+    headers: config.headers,
+    bodySize: config.body ? config.body.length : 0,
+  });
+
+  if (config.body && options.method !== 'GET') {
+    try {
+      const parsedBody = JSON.parse(config.body);
+      console.log(`[API:${requestId}] Request body:`, parsedBody);
+    } catch {
+      console.log(`[API:${requestId}] Request body (raw):`, config.body);
+    }
+  }
+
+  const startTime = performance.now();
+
   try {
     const response = await fetch(url, config);
+    const duration = Math.round(performance.now() - startTime);
+
+    console.log(`[API:${requestId}] Response: ${response.status} ${response.statusText} (${duration}ms)`);
 
     // Parse response as JSON
     const data = await response.json().catch(() => null);
 
+    console.log(`[API:${requestId}] Response data:`, data);
+
     // Handle HTTP errors
     if (!response.ok) {
+      console.error(`[API:${requestId}] HTTP Error:`, {
+        status: response.status,
+        statusText: response.statusText,
+        errorData: data,
+      });
       const error = new Error(data?.error?.message || `HTTP ${response.status}`);
       error.status = response.status;
       error.data = data;
@@ -56,6 +84,14 @@ async function fetchAPI(endpoint, options = {}) {
 
     return data;
   } catch (error) {
+    const duration = Math.round(performance.now() - startTime);
+    console.error(`[API:${requestId}] Request failed (${duration}ms):`, {
+      name: error.name,
+      message: error.message,
+      status: error.status,
+      data: error.data,
+    });
+
     // Network errors or JSON parse errors
     if (!error.status) {
       error.status = 0;

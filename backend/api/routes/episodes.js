@@ -5,12 +5,15 @@
  * API endpoints for managing podcast episodes.
  *
  * Routes:
- * GET    /api/episodes          - List all episodes
- * POST   /api/episodes          - Create new episode
- * GET    /api/episodes/:id      - Get episode with stages
- * PUT    /api/episodes/:id      - Update episode
- * DELETE /api/episodes/:id      - Delete episode
- * POST   /api/episodes/:id/process - Start processing
+ * GET    /api/episodes              - List all episodes
+ * POST   /api/episodes              - Create new episode
+ * GET    /api/episodes/:id          - Get episode with stages
+ * GET    /api/episodes/:id/stages   - Get all stages for episode (polling)
+ * GET    /api/episodes/:id/status   - Get processing status
+ * PUT    /api/episodes/:id          - Update episode
+ * DELETE /api/episodes/:id          - Delete episode
+ * POST   /api/episodes/:id/process  - Start processing
+ * POST   /api/episodes/:id/pause    - Pause processing
  * ============================================================================
  */
 
@@ -113,9 +116,44 @@ router.get('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
 
+    logger.debug('Fetching episode with stages', { episodeId: id });
     const episode = await episodeRepo.findByIdWithStages(id);
 
     res.json({ episode, stages: episode.stages });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/episodes/:id/stages
+ * Get all stage outputs for an episode (dedicated endpoint for polling)
+ */
+router.get('/:id/stages', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    logger.debug('Fetching stages for episode', { episodeId: id });
+
+    // First verify episode exists
+    const episode = await episodeRepo.findById(id);
+
+    // Then get all stages
+    const stages = await stageRepo.findAllByEpisode(id);
+
+    logger.debug('Stages retrieved', {
+      episodeId: id,
+      stageCount: stages.length,
+      completedCount: stages.filter(s => s.status === 'completed').length,
+      processingCount: stages.filter(s => s.status === 'processing').length,
+    });
+
+    res.json({
+      episode_id: id,
+      status: episode.status,
+      current_stage: episode.current_stage,
+      stages,
+    });
   } catch (error) {
     next(error);
   }

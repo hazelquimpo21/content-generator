@@ -296,6 +296,146 @@ const logger = {
   },
 
   /**
+   * Logs a database query for debugging
+   * @param {string} operation - Query operation (select, insert, update, delete)
+   * @param {string} table - Table being queried
+   * @param {Object} [metadata] - Additional query context
+   */
+  dbQuery(operation, table, metadata = {}) {
+    this.debug(`📊 DB ${operation.toUpperCase()}: ${table}`, metadata);
+  },
+
+  /**
+   * Logs successful database result
+   * @param {string} operation - Query operation
+   * @param {string} table - Table queried
+   * @param {Object} [metadata] - Result metadata (count, duration, etc.)
+   */
+  dbResult(operation, table, metadata = {}) {
+    this.debug(`📊 DB ${operation.toUpperCase()} completed: ${table}`, metadata);
+  },
+
+  /**
+   * Logs database error with context
+   * @param {string} operation - Failed operation
+   * @param {string} table - Table involved
+   * @param {Error|string} error - Error that occurred
+   * @param {Object} [metadata] - Additional context
+   */
+  dbError(operation, table, error, metadata = {}) {
+    this.error(`📊 DB ${operation.toUpperCase()} failed: ${table}`, {
+      error: typeof error === 'string' ? error : error.message,
+      ...metadata,
+    });
+  },
+
+  /**
+   * Logs an incoming HTTP request with details
+   * @param {Object} req - Express request object
+   */
+  httpRequest(req) {
+    const sanitizedBody = req.body ? this._sanitizeBody(req.body) : null;
+    this.debug(`📥 ${req.method} ${req.path}`, {
+      correlationId: req.correlationId,
+      query: Object.keys(req.query).length > 0 ? req.query : undefined,
+      bodyKeys: sanitizedBody ? Object.keys(sanitizedBody) : undefined,
+      contentLength: req.headers['content-length'],
+    });
+  },
+
+  /**
+   * Logs HTTP response with timing
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   * @param {number} durationMs - Request duration in milliseconds
+   */
+  httpResponse(req, res, durationMs) {
+    const statusEmoji = res.statusCode < 400 ? '✅' : res.statusCode < 500 ? '⚠️' : '❌';
+    this.info(`${statusEmoji} ${req.method} ${req.path}`, {
+      status: res.statusCode,
+      duration_ms: durationMs,
+      correlationId: req.correlationId,
+      contentLength: res.get('Content-Length') || 0,
+    });
+  },
+
+  /**
+   * Logs validation errors with detailed context
+   * @param {string} field - Field that failed validation
+   * @param {string} reason - Why validation failed
+   * @param {*} [value] - The invalid value (sanitized)
+   */
+  validationError(field, reason, value = undefined) {
+    this.warn(`🚫 Validation failed: ${field}`, {
+      reason,
+      valueType: value !== undefined ? typeof value : undefined,
+      valueLength: typeof value === 'string' ? value.length : undefined,
+    });
+  },
+
+  /**
+   * Logs when a requested route is not found (helpful for debugging)
+   * @param {string} method - HTTP method
+   * @param {string} path - Requested path
+   * @param {string[]} [availableRoutes] - Suggested similar routes
+   */
+  routeNotFound(method, path, availableRoutes = []) {
+    this.warn(`🔍 Route not found: ${method} ${path}`, {
+      suggestedRoutes: availableRoutes.length > 0 ? availableRoutes : undefined,
+    });
+  },
+
+  /**
+   * Logs processing pipeline state changes
+   * @param {string} episodeId - Episode UUID
+   * @param {string} fromState - Previous state
+   * @param {string} toState - New state
+   * @param {Object} [metadata] - Additional context
+   */
+  stateChange(episodeId, fromState, toState, metadata = {}) {
+    this.info(`🔄 State: ${fromState} → ${toState}`, {
+      episodeId,
+      ...metadata,
+    });
+  },
+
+  /**
+   * Logs prompt loading for AI calls
+   * @param {string} stageName - Name of the stage prompt
+   * @param {number} promptLength - Length of the loaded prompt
+   */
+  promptLoaded(stageName, promptLength) {
+    this.debug(`📝 Prompt loaded: ${stageName}`, {
+      promptLength,
+      estimatedTokens: Math.ceil(promptLength / 4), // Rough estimate
+    });
+  },
+
+  /**
+   * Sanitizes request body for logging (removes sensitive/large data)
+   * @param {Object} body - Request body
+   * @returns {Object} Sanitized body summary
+   * @private
+   */
+  _sanitizeBody(body) {
+    const sanitized = {};
+    for (const [key, value] of Object.entries(body)) {
+      if (key.toLowerCase().includes('password') || key.toLowerCase().includes('secret') || key.toLowerCase().includes('key')) {
+        sanitized[key] = '[REDACTED]';
+      } else if (key === 'transcript' && typeof value === 'string') {
+        sanitized[key] = `[${value.length} chars]`;
+      } else if (typeof value === 'string' && value.length > 100) {
+        sanitized[key] = `[${value.length} chars]`;
+      } else if (typeof value === 'object' && value !== null) {
+        sanitized[key] = Array.isArray(value) ? `[${value.length} items]` : '{...}';
+      } else {
+        sanitized[key] = value;
+      }
+    }
+    return sanitized;
+  },
+
+  /**
    * Logs application startup banner
    * @param {number} port - Server port
    */

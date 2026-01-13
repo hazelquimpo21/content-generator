@@ -7,7 +7,7 @@
  *
  * Input: Stage 1-2 outputs + evergreen content
  * Output: Blog structure with sections (JSON)
- * Model: GPT-4o-mini (OpenAI)
+ * Model: GPT-5 mini (OpenAI)
  * ============================================================================
  */
 

@@ -356,7 +356,7 @@ export const stageRepo = {
         stage_number: stageNum,
         stage_name: STAGE_NAMES[stageNum],
         status: 'pending',
-        model_used: stageNum <= 6 ? 'gpt-4o-mini' : 'claude-sonnet-4-20250514',
+        model_used: stageNum <= 6 ? 'gpt-5-mini' : 'claude-sonnet-4-20250514',
         provider: stageNum <= 6 ? 'openai' : 'anthropic',
       });
     }

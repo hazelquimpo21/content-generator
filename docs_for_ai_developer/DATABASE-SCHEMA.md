@@ -235,7 +235,7 @@ CREATE INDEX idx_stage_outputs_created_at ON stage_outputs(created_at DESC);
   - 8: "Social Content"
   - 9: "Email Campaign"
 - `status`: Current status of this stage
-- `model_used`: e.g., "gpt-4o-mini-2024-07-18" or "claude-sonnet-4-20250514"
+- `model_used`: e.g., "gpt-5-mini" or "claude-sonnet-4-20250514"
 - `provider`: "openai" or "anthropic"
 - `input_tokens`: Tokens sent to AI
 - `output_tokens`: Tokens received from AI
@@ -398,7 +398,7 @@ CREATE INDEX idx_api_usage_date ON api_usage_log(DATE(timestamp));
 **Field Descriptions:**
 
 - `provider`: "openai" or "anthropic"
-- `model`: Full model name (e.g., "gpt-4o-mini-2024-07-18")
+- `model`: Full model name (e.g., "gpt-5-mini")
 - `endpoint`: API endpoint called (e.g., "/v1/chat/completions")
 - `input_tokens`: Tokens sent
 - `output_tokens`: Tokens received

@@ -7,7 +7,7 @@
  *
  * Input: Transcript + Stage 1 output (episode crux)
  * Output: 5-8 key quotes with metadata (JSON)
- * Model: GPT-4o-mini (OpenAI)
+ * Model: GPT-5 mini (OpenAI)
  * ============================================================================
  */
 

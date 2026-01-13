@@ -6,7 +6,7 @@
  *
  * Input: All previous stage outputs (1-5)
  * Output: Complete blog post in Markdown (text)
- * Model: GPT-4o-mini (OpenAI)
+ * Model: GPT-5 mini (OpenAI)
  * ============================================================================
  */
 

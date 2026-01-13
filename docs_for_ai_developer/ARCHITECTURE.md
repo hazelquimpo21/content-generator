@@ -408,7 +408,7 @@ async function retryWithBackoff(fn, options = {}) {
     "tokens_input": 1500,
     "tokens_output": 800,
     "cost_usd": 0.0045,
-    "model": "gpt-4o-mini"
+    "model": "gpt-5-mini"
   }
 }
 ```

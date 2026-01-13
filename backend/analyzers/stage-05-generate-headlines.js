@@ -6,7 +6,7 @@
  *
  * Input: Stage 1-3 outputs
  * Output: Headlines, subheadings, taglines, social hooks (JSON)
- * Model: GPT-4o-mini (OpenAI)
+ * Model: GPT-5 mini (OpenAI)
  * ============================================================================
  */
 

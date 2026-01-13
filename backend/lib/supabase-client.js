@@ -730,16 +730,38 @@ export const apiLogRepo = {
    * @returns {Promise<Array>} Usage log entries
    */
   async getByDateRange(startDate, endDate) {
+    logger.dbQuery('select', 'api_usage_log', {
+      operation: 'getByDateRange',
+      startDate,
+      endDate,
+    });
+
+    // Note: api_usage_log table uses 'timestamp' column, not 'created_at'
     const { data, error } = await db
       .from('api_usage_log')
       .select('*')
-      .gte('created_at', startDate)
-      .lte('created_at', endDate)
-      .order('created_at', { ascending: false });
+      .gte('timestamp', startDate)
+      .lte('timestamp', endDate)
+      .order('timestamp', { ascending: false });
 
     if (error) {
+      logger.dbError('select', 'api_usage_log', error, {
+        operation: 'getByDateRange',
+        errorCode: error.code,
+        errorDetails: error.details,
+        errorHint: error.hint,
+        startDate,
+        endDate,
+      });
       throw new DatabaseError('select', `Failed to get usage logs: ${error.message}`);
     }
+
+    logger.dbResult('select', 'api_usage_log', {
+      operation: 'getByDateRange',
+      rowCount: data?.length || 0,
+      startDate,
+      endDate,
+    });
 
     return data || [];
   },

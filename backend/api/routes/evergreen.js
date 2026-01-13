@@ -39,6 +39,11 @@ router.get('/', async (req, res, next) => {
     logger.error('❌ GET /api/evergreen - Failed', {
       errorName: error.name,
       errorMessage: error.message,
+      errorCode: error.code,
+      errorDetails: error.details,
+      errorHint: error.hint,
+      operation: error.operation,
+      correlationId: req.correlationId,
       stack: error.stack,
     });
     next(error);
@@ -149,7 +154,13 @@ router.put('/', async (req, res, next) => {
     logger.error('❌ PUT /api/evergreen - Failed', {
       errorName: error.name,
       errorMessage: error.message,
+      errorCode: error.code,
+      errorDetails: error.details,
+      errorHint: error.hint,
       errorField: error.field,
+      operation: error.operation,
+      requestBodyKeys: req.body ? Object.keys(req.body) : [],
+      correlationId: req.correlationId,
       stack: error.stack,
     });
     next(error);

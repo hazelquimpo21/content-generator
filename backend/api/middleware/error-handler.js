@@ -37,6 +37,7 @@ const KNOWN_ROUTES = [
   'GET /api/admin/costs',
   'GET /api/admin/performance',
   'GET /api/admin/errors',
+  'GET /api/admin/usage',
   'GET /health',
 ];
 
@@ -133,13 +134,36 @@ export function errorHandler(err, req, res, next) {
   }
 
   if (err instanceof DatabaseError) {
-    logger.dbError(err.operation || 'unknown', 'unknown', err);
-    return res.status(503).json({
+    // Enhanced logging for database errors
+    logger.dbError(err.operation || 'unknown', 'unknown', err, {
+      originalMessage: err.message,
+      operation: err.operation,
+      context: err.context,
+      path: req.path,
+      method: req.method,
+      query: req.query,
+      correlationId: req.correlationId,
+    });
+
+    // Build response with optional debug info in development
+    const response = {
       error: 'Database Error',
       message: 'A database error occurred. Please try again.',
       timestamp: new Date().toISOString(),
       correlationId: req.correlationId,
-    });
+    };
+
+    // Include detailed error info in development mode for troubleshooting
+    if (process.env.NODE_ENV === 'development') {
+      response.debug = {
+        operation: err.operation,
+        originalMessage: err.message,
+        context: err.context,
+        hint: 'Check server logs for full stack trace and database error details',
+      };
+    }
+
+    return res.status(503).json(response);
   }
 
   if (err instanceof ProcessingError) {

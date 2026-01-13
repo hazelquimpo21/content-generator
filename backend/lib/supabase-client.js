@@ -519,14 +519,24 @@ export const evergreenRepo = {
    * @returns {Promise<Object>} Evergreen content record
    */
   async get() {
+    logger.dbQuery('select', 'evergreen_content', { id: EVERGREEN_SINGLETON_ID });
+
     const { data, error } = await db
       .from('evergreen_content')
       .select('*')
       .eq('id', EVERGREEN_SINGLETON_ID)
       .single();
 
-    if (error || !data) {
-      logger.warn('Evergreen content not found, using defaults');
+    if (error) {
+      logger.dbError('select', 'evergreen_content', error, {
+        id: EVERGREEN_SINGLETON_ID,
+        errorCode: error.code,
+        errorDetails: error.details,
+      });
+      logger.warn('Evergreen content fetch failed, using defaults', {
+        errorCode: error.code,
+        errorMessage: error.message,
+      });
       return {
         therapist_profile: {},
         podcast_info: {},
@@ -534,6 +544,25 @@ export const evergreenRepo = {
         seo_defaults: {},
       };
     }
+
+    if (!data) {
+      logger.warn('Evergreen content not found (no data returned), using defaults', {
+        id: EVERGREEN_SINGLETON_ID,
+      });
+      return {
+        therapist_profile: {},
+        podcast_info: {},
+        voice_guidelines: {},
+        seo_defaults: {},
+      };
+    }
+
+    logger.dbResult('select', 'evergreen_content', {
+      id: EVERGREEN_SINGLETON_ID,
+      hasTherapistProfile: !!data.therapist_profile && Object.keys(data.therapist_profile).length > 0,
+      hasPodcastInfo: !!data.podcast_info && Object.keys(data.podcast_info).length > 0,
+      hasVoiceGuidelines: !!data.voice_guidelines && Object.keys(data.voice_guidelines).length > 0,
+    });
 
     return data;
   },
@@ -544,6 +573,20 @@ export const evergreenRepo = {
    * @returns {Promise<Object>} Updated record
    */
   async update(updates) {
+    const sectionsToUpdate = Object.keys(updates);
+    logger.dbQuery('update', 'evergreen_content', {
+      id: EVERGREEN_SINGLETON_ID,
+      sectionsToUpdate,
+      updatePayloadSize: JSON.stringify(updates).length,
+    });
+
+    logger.debug('Evergreen update payload details', {
+      therapistProfileFields: updates.therapist_profile ? Object.keys(updates.therapist_profile) : [],
+      podcastInfoFields: updates.podcast_info ? Object.keys(updates.podcast_info) : [],
+      voiceGuidelinesFields: updates.voice_guidelines ? Object.keys(updates.voice_guidelines) : [],
+      seoDefaultsFields: updates.seo_defaults ? Object.keys(updates.seo_defaults) : [],
+    });
+
     const { data, error } = await db
       .from('evergreen_content')
       .update(updates)
@@ -552,10 +595,36 @@ export const evergreenRepo = {
       .single();
 
     if (error) {
+      logger.dbError('update', 'evergreen_content', error, {
+        id: EVERGREEN_SINGLETON_ID,
+        sectionsToUpdate,
+        errorCode: error.code,
+        errorMessage: error.message,
+        errorDetails: error.details,
+        errorHint: error.hint,
+      });
       throw new DatabaseError('update', `Failed to update evergreen content: ${error.message}`);
     }
 
-    logger.info('Evergreen content updated');
+    if (!data) {
+      logger.error('Evergreen update returned no data - record may not exist', {
+        id: EVERGREEN_SINGLETON_ID,
+        sectionsToUpdate,
+      });
+      throw new DatabaseError('update', 'Evergreen content update returned no data - singleton record may be missing');
+    }
+
+    logger.dbResult('update', 'evergreen_content', {
+      id: EVERGREEN_SINGLETON_ID,
+      sectionsUpdated: sectionsToUpdate,
+      updatedAt: data.updated_at,
+    });
+
+    logger.info('Evergreen content updated successfully', {
+      sectionsUpdated: sectionsToUpdate,
+      updatedAt: data.updated_at,
+    });
+
     return data;
   },
 };

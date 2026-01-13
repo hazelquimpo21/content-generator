@@ -54,36 +54,59 @@ function Settings() {
       setLoading(true);
       setError(null);
 
+      console.log('[Settings] Loading settings from API...');
       const data = await api.evergreen.get();
+      console.log('[Settings] API response:', data);
+
       const evergreen = data.evergreen || {};
+      console.log('[Settings] Evergreen data:', {
+        hasTherapistProfile: !!evergreen.therapist_profile,
+        hasPodcastInfo: !!evergreen.podcast_info,
+        hasVoiceGuidelines: !!evergreen.voice_guidelines,
+      });
 
       // Populate form fields
       if (evergreen.therapist_profile) {
-        setTherapistProfile({
+        const profile = {
           name: evergreen.therapist_profile.name || '',
           credentials: evergreen.therapist_profile.credentials || '',
           bio: evergreen.therapist_profile.bio || '',
           website: evergreen.therapist_profile.website || '',
-        });
+        };
+        console.log('[Settings] Setting therapist profile:', profile);
+        setTherapistProfile(profile);
       }
 
       if (evergreen.podcast_info) {
-        setPodcastInfo({
+        const podcast = {
           name: evergreen.podcast_info.name || '',
           tagline: evergreen.podcast_info.tagline || '',
           target_audience: evergreen.podcast_info.target_audience || '',
           content_pillars: (evergreen.podcast_info.content_pillars || []).join(', '),
-        });
+        };
+        console.log('[Settings] Setting podcast info:', podcast);
+        setPodcastInfo(podcast);
       }
 
       if (evergreen.voice_guidelines) {
-        setVoiceGuidelines({
+        const voice = {
           tone: (evergreen.voice_guidelines.tone || []).join(', '),
           style_notes: evergreen.voice_guidelines.style_notes || '',
           avoid: (evergreen.voice_guidelines.avoid || []).join(', '),
-        });
+        };
+        console.log('[Settings] Setting voice guidelines:', voice);
+        setVoiceGuidelines(voice);
       }
+
+      console.log('[Settings] Settings loaded successfully');
     } catch (err) {
+      console.error('[Settings] Failed to load settings:', err);
+      console.error('[Settings] Error details:', {
+        name: err.name,
+        message: err.message,
+        status: err.status,
+        data: err.data,
+      });
       setError(err.message || 'Failed to load settings');
     } finally {
       setLoading(false);
@@ -95,6 +118,11 @@ function Settings() {
       setSaving(true);
       setError(null);
       setSuccess(false);
+
+      console.log('[Settings] Starting save operation...');
+      console.log('[Settings] Current therapist profile state:', therapistProfile);
+      console.log('[Settings] Current podcast info state:', podcastInfo);
+      console.log('[Settings] Current voice guidelines state:', voiceGuidelines);
 
       // Build update payload
       const updates = {
@@ -121,12 +149,26 @@ function Settings() {
         },
       };
 
-      await api.evergreen.update(updates);
+      console.log('[Settings] Update payload being sent:', JSON.stringify(updates, null, 2));
+
+      const response = await api.evergreen.update(updates);
+      console.log('[Settings] Update response:', response);
+      console.log('[Settings] Updated evergreen data:', response?.evergreen);
+
       setSuccess(true);
+      console.log('[Settings] Save completed successfully');
 
       // Clear success message after delay
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
+      console.error('[Settings] Failed to save settings:', err);
+      console.error('[Settings] Error details:', {
+        name: err.name,
+        message: err.message,
+        status: err.status,
+        data: err.data,
+        stack: err.stack,
+      });
       setError(err.message || 'Failed to save settings');
     } finally {
       setSaving(false);

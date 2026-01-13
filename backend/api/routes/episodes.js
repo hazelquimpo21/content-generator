@@ -321,7 +321,9 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
 router.post('/:id/process', requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { start_from_stage = 1 } = req.body;
+    // Default to stage 0 (preprocessing) for fresh starts
+    // Stage 0 handles long transcript preprocessing with Claude Haiku
+    const { start_from_stage = 0 } = req.body;
 
     // Verify episode exists
     const episode = await episodeRepo.findById(id);

@@ -2,8 +2,30 @@
  * ============================================================================
  * STAGE RUNNER MODULE
  * ============================================================================
- * Executes individual stages of the 9-stage AI pipeline.
+ * Executes individual stages of the 10-stage AI pipeline (stages 0-9).
  * Routes stage numbers to their corresponding analyzer functions.
+ *
+ * Stage Architecture:
+ * -------------------
+ * Each stage is implemented as a separate analyzer module that:
+ * 1. Receives processing context (transcript, evergreen, previous outputs)
+ * 2. Loads its specific prompt template
+ * 3. Calls the appropriate AI API (OpenAI or Anthropic)
+ * 4. Parses and validates the response
+ * 5. Returns structured output with usage metrics
+ *
+ * Stage-to-Model Mapping:
+ * -----------------------
+ * Stage 0: Claude Haiku (preprocessing, 200K context)
+ * Stages 1-6: GPT-5 mini (analysis and drafting)
+ * Stages 7-9: Claude Sonnet (refinement and distribution)
+ *
+ * Error Handling:
+ * ---------------
+ * All analyzer errors are wrapped in ProcessingError with:
+ * - Stage number and name
+ * - Episode ID for tracing
+ * - Original error details
  *
  * Usage:
  *   import { runStage } from './orchestrator/stage-runner.js';
@@ -101,40 +123,72 @@ export const STAGE_MODELS = {
 // ============================================================================
 
 /**
- * Runs a specific stage of the pipeline
+ * Runs a specific stage of the pipeline.
  *
- * @param {number} stageNumber - Stage to run (1-9)
+ * This function is the bridge between the episode processor and individual
+ * stage analyzers. It handles:
+ * - Stage validation
+ * - Analyzer lookup and execution
+ * - Result normalization
+ * - Error wrapping with context
+ *
+ * @param {number} stageNumber - Stage to run (0-9)
  * @param {Object} context - Processing context
  * @param {string} context.episodeId - Episode UUID
- * @param {string} context.transcript - Full transcript
+ * @param {string} context.transcript - Full transcript text
  * @param {Object} context.evergreen - Evergreen content settings
- * @param {Object} context.previousStages - Outputs from previous stages
- * @returns {Promise<Object>} Stage result with output_data/output_text and usage stats
- * @throws {ProcessingError} If stage execution fails
+ * @param {Object} context.previousStages - Outputs from completed stages
+ * @returns {Promise<Object>} Stage result object:
+ *   - output_data: Structured JSON output (stages 0-5)
+ *   - output_text: Text/markdown output (stages 6-9)
+ *   - input_tokens: Number of tokens sent to AI
+ *   - output_tokens: Number of tokens received
+ *   - cost_usd: API cost in USD
+ * @throws {ProcessingError} If stage validation or execution fails
  *
  * @example
  * const result = await runStage(1, {
  *   episodeId: 'uuid',
  *   transcript: '...',
  *   evergreen: {...},
- *   previousStages: {}
+ *   previousStages: { 0: {...} }
  * });
+ * // result = {
+ * //   output_data: { episode_basics: {...}, guest_info: {...} },
+ * //   output_text: null,
+ * //   input_tokens: 1500,
+ * //   output_tokens: 800,
+ * //   cost_usd: 0.0045
+ * // }
  */
 export async function runStage(stageNumber, context) {
-  // Validate stage number
-  if (stageNumber < 1 || stageNumber > 9) {
+  // Validate stage number is within allowed range (0-9)
+  if (stageNumber < 0 || stageNumber > 9) {
+    logger.error('Invalid stage number requested', {
+      stageNumber,
+      episodeId: context.episodeId,
+      validRange: '0-9',
+    });
     throw new ProcessingError(
       stageNumber,
       'Unknown',
-      `Invalid stage number: ${stageNumber}. Must be 1-9.`
+      `Invalid stage number: ${stageNumber}. Must be 0-9.`
     );
   }
 
-  // Get the analyzer function
+  // Get the analyzer function for this stage
   const analyzer = STAGE_ANALYZERS[stageNumber];
   const stageName = STAGE_NAMES[stageNumber];
+  const provider = STAGE_PROVIDERS[stageNumber];
+  const model = STAGE_MODELS[stageNumber];
 
+  // Verify analyzer exists (should always exist for valid stage numbers)
   if (!analyzer) {
+    logger.error('No analyzer found for stage', {
+      stageNumber,
+      stageName,
+      episodeId: context.episodeId,
+    });
     throw new ProcessingError(
       stageNumber,
       stageName,
@@ -142,18 +196,39 @@ export async function runStage(stageNumber, context) {
     );
   }
 
-  logger.debug('Running stage analyzer', {
+  // Log stage execution start with context info
+  logger.debug('🔧 Running stage analyzer', {
     stage: stageNumber,
     name: stageName,
-    provider: STAGE_PROVIDERS[stageNumber],
-    model: STAGE_MODELS[stageNumber],
+    provider,
+    model,
+    episodeId: context.episodeId,
+    transcriptLength: context.transcript?.length,
+    previousStagesCount: Object.keys(context.previousStages || {}).length,
   });
 
+  const startTime = Date.now();
+
   try {
-    // Execute the analyzer
+    // Execute the analyzer - this makes the AI API call
     const result = await analyzer(context);
 
-    // Ensure result has required fields
+    const durationMs = Date.now() - startTime;
+
+    // Log successful completion with metrics
+    logger.debug('✅ Stage analyzer completed', {
+      stage: stageNumber,
+      name: stageName,
+      episodeId: context.episodeId,
+      durationMs,
+      inputTokens: result.input_tokens,
+      outputTokens: result.output_tokens,
+      costUsd: result.cost_usd,
+      hasOutputData: !!result.output_data,
+      hasOutputText: !!result.output_text,
+    });
+
+    // Normalize result to ensure all expected fields exist
     return {
       output_data: result.output_data || null,
       output_text: result.output_text || null,
@@ -163,7 +238,22 @@ export async function runStage(stageNumber, context) {
     };
 
   } catch (error) {
-    // Wrap in ProcessingError if not already
+    const durationMs = Date.now() - startTime;
+
+    // Log the failure with as much context as possible
+    logger.error('❌ Stage analyzer failed', {
+      stage: stageNumber,
+      name: stageName,
+      provider,
+      model,
+      episodeId: context.episodeId,
+      durationMs,
+      errorType: error.name,
+      errorMessage: error.message,
+      isRetryable: error.retryable ?? false,
+    });
+
+    // Wrap in ProcessingError if not already (preserves original error)
     if (error.name === 'ProcessingError') {
       throw error;
     }

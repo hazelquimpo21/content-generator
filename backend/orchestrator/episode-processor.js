@@ -5,23 +5,49 @@
  * Orchestrates the complete 10-stage AI pipeline for processing an episode.
  * Handles state management, progress tracking, and error recovery.
  *
- * Flow:
- * 1. Load episode and evergreen content
- * 2. Create stage records (pending)
- * 3. For each stage 0-9:
- *    - Stage 0: Preprocess transcript (Claude Haiku, 200K context)
- *      - For long transcripts, creates compressed summary + quotes
- *      - Skipped for short transcripts
- *    - Stages 1-9: Main content pipeline
- *    - Mark processing
- *    - Run analyzer
- *    - Save output
- *    - Update progress
- * 4. Mark episode complete
+ * Pipeline Architecture:
+ * ----------------------
+ * Stage 0: Transcript Preprocessing (Claude Haiku)
+ *   - Compresses long transcripts for downstream processing
+ *   - Automatically skipped for short transcripts (<8000 tokens)
+ *
+ * Stages 1-6: Analysis & Drafting (GPT-5 mini)
+ *   - 1: Transcript Analysis - Extract metadata, guest info, topics
+ *   - 2: Quote Extraction - Find key verbatim quotes
+ *   - 3: Blog Outline - High-level post structure
+ *   - 4: Paragraph Outlines - Detailed content plan
+ *   - 5: Headlines & Copy - Generate title options
+ *   - 6: Draft Generation - Write the blog post
+ *
+ * Stages 7-9: Refinement & Distribution (Claude Sonnet)
+ *   - 7: Refinement Pass - Polish and improve the draft
+ *   - 8: Social Content - Platform-specific posts
+ *   - 9: Email Campaign - Newsletter content
+ *
+ * Processing Flow:
+ * ----------------
+ * 1. Load episode transcript and evergreen content
+ * 2. Create pending stage records (if fresh start from stage 0)
+ * 3. For each stage:
+ *    a. Mark stage as 'processing'
+ *    b. Run the stage analyzer (AI API call)
+ *    c. Save output to database
+ *    d. Mark stage as 'completed'
+ *    e. Add output to context for next stage
+ * 4. Mark episode as 'completed'
+ *
+ * Error Handling:
+ * ---------------
+ * - Stage failures are recorded with error details
+ * - Episode status is set to 'error' on failure
+ * - Partial progress is preserved for resume capability
  *
  * Usage:
  *   import { processEpisode } from './orchestrator/episode-processor.js';
  *   await processEpisode('episode-uuid');
+ *
+ *   // Resume from specific stage
+ *   await processEpisode('episode-uuid', { startFromStage: 3 });
  * ============================================================================
  */
 
@@ -44,14 +70,31 @@ const LAST_STAGE = 9;   // End with email campaign
 // ============================================================================
 
 /**
- * Loads the processing context (episode + evergreen content)
+ * Loads the processing context required for stage analyzers.
+ *
+ * The context includes:
+ * - Episode transcript and metadata
+ * - Evergreen content (therapist profile, podcast info, voice guidelines)
+ * - Container for previous stage outputs
+ *
  * @param {string} episodeId - Episode UUID
- * @returns {Promise<Object>} Processing context
+ * @returns {Promise<Object>} Processing context object
+ * @throws {NotFoundError} If episode doesn't exist in database
+ *
+ * @example
+ * const context = await loadContext('uuid-here');
+ * // context = {
+ * //   episodeId: 'uuid-here',
+ * //   transcript: '...',
+ * //   episodeContext: { guest_name: '...' },
+ * //   evergreen: { therapist_profile: {...}, ... },
+ * //   previousStages: {}
+ * // }
  */
 async function loadContext(episodeId) {
   logger.debug('📦 Loading processing context', { episodeId });
 
-  // Load episode
+  // Load episode from database
   const episode = await episodeRepo.findById(episodeId);
 
   if (!episode) {
@@ -59,14 +102,17 @@ async function loadContext(episodeId) {
     throw new NotFoundError('episode', episodeId);
   }
 
+  // Log episode details for debugging
   logger.debug('📄 Episode loaded', {
     episodeId,
     transcriptLength: episode.transcript?.length,
+    transcriptWordCount: episode.transcript?.split(/\s+/).length || 0,
     status: episode.status,
     hasContext: !!episode.episode_context && Object.keys(episode.episode_context).length > 0,
   });
 
-  // Load evergreen content
+  // Load evergreen content (therapist profile, podcast info, etc.)
+  // This content is shared across all episodes and provides voice/style guidance
   const evergreen = await evergreenRepo.get();
   const hasEvergreen = evergreen && Object.keys(evergreen).some(k =>
     evergreen[k] && Object.keys(evergreen[k]).length > 0
@@ -77,44 +123,80 @@ async function loadContext(episodeId) {
     hasTherapistProfile: !!evergreen.therapist_profile && Object.keys(evergreen.therapist_profile).length > 0,
     hasPodcastInfo: !!evergreen.podcast_info && Object.keys(evergreen.podcast_info).length > 0,
     hasVoiceGuidelines: !!evergreen.voice_guidelines && Object.keys(evergreen.voice_guidelines).length > 0,
+    hasSeoDefaults: !!evergreen.seo_defaults && Object.keys(evergreen.seo_defaults).length > 0,
   });
 
+  // Return the processing context object
+  // previousStages will be populated as each stage completes
   return {
     episodeId,
     transcript: episode.transcript,
     episodeContext: episode.episode_context || {},
     evergreen,
-    previousStages: {},
+    previousStages: {},  // Populated during processing or loaded from DB for resumes
   };
 }
 
 /**
- * Loads previous stage outputs into context
- * @param {Object} context - Processing context
- * @param {number} upToStage - Load outputs up to this stage
+ * Loads previous stage outputs into the processing context.
+ *
+ * This is used when resuming processing from a specific stage.
+ * Each stage analyzer may need outputs from previous stages as context.
+ *
+ * @param {Object} context - Processing context object (modified in place)
+ * @param {number} upToStage - Load outputs for stages before this number
+ * @returns {Promise<void>}
+ *
+ * @example
+ * // Resuming from stage 4, need stages 0-3 outputs
+ * await loadPreviousStages(context, 4);
+ * // context.previousStages = { 0: {...}, 1: {...}, 2: {...}, 3: {...} }
  */
 async function loadPreviousStages(context, upToStage) {
-  logger.debug('📥 Loading previous stage outputs', {
+  logger.debug('📥 Loading previous stage outputs for resume', {
     episodeId: context.episodeId,
     upToStage,
+    stagesNeeded: `0-${upToStage - 1}`,
   });
 
+  // Fetch all stage records for this episode
   const stages = await stageRepo.findAllByEpisode(context.episodeId);
   let loadedCount = 0;
+  const missingStages = [];
 
+  // Load completed stage outputs into context
   for (const stage of stages) {
-    if (stage.stage_number < upToStage && stage.status === 'completed') {
-      context.previousStages[stage.stage_number] = stage.output_data || {
-        output_text: stage.output_text,
-      };
-      loadedCount++;
+    if (stage.stage_number < upToStage) {
+      if (stage.status === 'completed') {
+        // Store output_data (structured) or fallback to output_text wrapper
+        context.previousStages[stage.stage_number] = stage.output_data || {
+          output_text: stage.output_text,
+        };
+        loadedCount++;
+      } else {
+        // Track stages that aren't completed - may cause issues
+        missingStages.push({
+          stage: stage.stage_number,
+          status: stage.status,
+        });
+      }
     }
   }
 
-  logger.debug('📥 Previous stages loaded', {
+  // Warn if expected stages are missing
+  if (missingStages.length > 0) {
+    logger.warn('Some previous stages not completed - resume may fail', {
+      episodeId: context.episodeId,
+      upToStage,
+      missingStages,
+    });
+  }
+
+  logger.debug('📥 Previous stages loaded successfully', {
     episodeId: context.episodeId,
     loadedCount,
     stagesLoaded: Object.keys(context.previousStages).map(Number),
+    expectedCount: upToStage,
   });
 }
 
@@ -123,20 +205,44 @@ async function loadPreviousStages(context, upToStage) {
 // ============================================================================
 
 /**
- * Processes an episode through all 10 stages (0-9)
- * Stage 0: Transcript preprocessing (for long transcripts)
- * Stages 1-9: Main content pipeline
+ * Processes an episode through all 10 stages (0-9) of the AI pipeline.
  *
- * @param {string} episodeId - Episode UUID
+ * Pipeline Stages:
+ * ----------------
+ * Stage 0: Transcript Preprocessing (Claude Haiku)
+ *   - For long transcripts (>8000 tokens), creates compressed summary
+ *   - Automatically skipped for short transcripts
+ *
+ * Stages 1-9: Main Content Pipeline
+ *   - Uses outputs from previous stages as context
+ *   - Each stage calls its analyzer and saves results
+ *
+ * Resume Capability:
+ * ------------------
+ * - Set startFromStage to resume from a specific stage
+ * - Previous stage outputs are loaded from database
+ * - IMPORTANT: Stage records must exist (created on fresh start)
+ *
+ * @param {string} episodeId - Episode UUID to process
  * @param {Object} [options] - Processing options
  * @param {number} [options.startFromStage=0] - Stage to start from (0-9)
- * @param {Function} [options.onProgress] - Progress callback
- * @returns {Promise<Object>} Processing result
- * @throws {ProcessingError} If processing fails
+ * @param {Function} [options.onProgress] - Progress callback (stage, status, name)
+ * @returns {Promise<Object>} Processing result with status, cost, duration
+ * @throws {ProcessingError} If any stage fails
+ * @throws {NotFoundError} If episode doesn't exist
  *
  * @example
+ * // Fresh start (all stages)
+ * await processEpisode('uuid');
+ *
+ * // Resume from stage 3
+ * await processEpisode('uuid', { startFromStage: 3 });
+ *
+ * // With progress callback
  * await processEpisode('uuid', {
- *   onProgress: (stage, status) => console.log(`Stage ${stage}: ${status}`)
+ *   onProgress: (stage, status, name) => {
+ *     console.log(`Stage ${stage} (${name}): ${status}`);
+ *   }
  * });
  */
 export async function processEpisode(episodeId, options = {}) {

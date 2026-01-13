@@ -7,6 +7,18 @@
  */
 
 import logger from '../../lib/logger.js';
+import { randomUUID } from 'crypto';
+
+/**
+ * Correlation ID middleware
+ * Adds a unique ID to each request for tracing across logs
+ */
+export function correlationId(req, res, next) {
+  const id = req.headers['x-correlation-id'] || randomUUID();
+  req.correlationId = id;
+  res.setHeader('X-Correlation-ID', id);
+  next();
+}
 
 /**
  * Request logging middleware

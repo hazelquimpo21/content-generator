@@ -167,7 +167,7 @@ function validateEnvironment() {
  */
 async function startServer() {
   // Print startup banner
-  logger.banner();
+  logger.startupBanner(PORT);
 
   // Validate environment
   if (!validateEnvironment()) {

@@ -239,6 +239,165 @@ Style Guidelines:
   });
 }
 
+/**
+ * Calls Claude with tool_use (function calling) for structured JSON output.
+ * This is the preferred method for extracting structured data as it:
+ * - Enforces the schema at the model level
+ * - Eliminates JSON parsing issues
+ * - Provides better type safety
+ *
+ * @param {string} prompt - The prompt/task for Claude
+ * @param {Object} options - Configuration options
+ * @param {string} options.toolName - Name of the tool (used in tool_choice)
+ * @param {string} options.toolDescription - Description of what the tool does
+ * @param {Object} options.inputSchema - JSON Schema for the tool's input parameters
+ * @param {string} [options.model] - Model to use (defaults to claude-3-5-haiku for preprocessing)
+ * @param {string} [options.system] - System prompt
+ * @param {number} [options.temperature=0.3] - Temperature (lower for structured output)
+ * @param {number} [options.maxTokens=8192] - Max output tokens
+ * @param {string} [options.episodeId] - Episode ID for logging
+ * @param {number} [options.stageNumber] - Stage number for logging
+ * @returns {Promise<Object>} Response with toolInput (parsed JSON) and usage stats
+ *
+ * @example
+ * const result = await callClaudeStructured('Extract quotes from this text...', {
+ *   toolName: 'extract_quotes',
+ *   toolDescription: 'Extract verbatim quotes from the transcript',
+ *   inputSchema: {
+ *     type: 'object',
+ *     properties: {
+ *       quotes: {
+ *         type: 'array',
+ *         items: { type: 'object', properties: { quote: { type: 'string' } } }
+ *       }
+ *     },
+ *     required: ['quotes']
+ *   }
+ * });
+ * console.log(result.toolInput.quotes);
+ */
+export async function callClaudeStructured(prompt, options = {}) {
+  const {
+    toolName,
+    toolDescription,
+    inputSchema,
+    model = DEFAULT_MODEL,
+    system = '',
+    temperature = 0.3, // Lower temperature for structured output consistency
+    maxTokens = DEFAULT_MAX_TOKENS,
+    episodeId = null,
+    stageNumber = null,
+  } = options;
+
+  // Validate required options
+  if (!toolName || !toolDescription || !inputSchema) {
+    throw new Error('callClaudeStructured requires toolName, toolDescription, and inputSchema');
+  }
+
+  // Define the tool for structured output
+  const tool = {
+    name: toolName,
+    description: toolDescription,
+    input_schema: inputSchema,
+  };
+
+  const startTime = Date.now();
+  const retryConfig = createAPIRetryConfig('Anthropic');
+
+  logger.debug('📤 Calling Claude with tool_use for structured output', {
+    episodeId,
+    model,
+    toolName,
+    schemaProperties: Object.keys(inputSchema.properties || {}),
+  });
+
+  const response = await retryWithBackoff(async () => {
+    try {
+      const message = await anthropic.messages.create({
+        model,
+        max_tokens: maxTokens,
+        temperature,
+        system: system || undefined,
+        messages: [{ role: 'user', content: prompt }],
+        tools: [tool],
+        // Force the model to use our tool (ensures structured output)
+        tool_choice: { type: 'tool', name: toolName },
+      });
+
+      return message;
+    } catch (error) {
+      const status = error.status || error.statusCode || 500;
+      throw new APIError(
+        'anthropic',
+        status,
+        error.message,
+        { type: error.type, code: error.error?.type }
+      );
+    }
+  }, retryConfig);
+
+  const durationMs = Date.now() - startTime;
+
+  // Extract usage stats
+  const inputTokens = response.usage?.input_tokens || 0;
+  const outputTokens = response.usage?.output_tokens || 0;
+  const cost = calculateCost(model, inputTokens, outputTokens);
+
+  // Log API call
+  logger.apiCall('anthropic', model, inputTokens, outputTokens, durationMs, cost);
+
+  // Log to database (non-blocking)
+  apiLogRepo.create({
+    provider: 'anthropic',
+    model,
+    endpoint: '/v1/messages',
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    cost_usd: cost,
+    episode_id: episodeId,
+    stage_number: stageNumber,
+    response_time_ms: durationMs,
+    success: true,
+  }).catch(() => {}); // Ignore logging errors
+
+  // Extract the tool use result from the response
+  // The response.content will contain a tool_use block with the structured input
+  const toolUseBlock = response.content.find(block => block.type === 'tool_use');
+
+  if (!toolUseBlock) {
+    logger.error('❌ Claude did not return tool_use block', {
+      episodeId,
+      contentTypes: response.content.map(b => b.type),
+      stopReason: response.stop_reason,
+    });
+    throw new APIError(
+      'anthropic',
+      500,
+      'Expected tool_use response but got none',
+      { contentTypes: response.content.map(b => b.type) }
+    );
+  }
+
+  logger.debug('✅ Claude returned structured output via tool_use', {
+    episodeId,
+    toolName: toolUseBlock.name,
+    inputKeys: Object.keys(toolUseBlock.input || {}),
+  });
+
+  return {
+    toolInput: toolUseBlock.input, // The structured JSON data
+    toolName: toolUseBlock.name,
+    toolId: toolUseBlock.id,
+    model: response.model,
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    cost,
+    durationMs,
+    stopReason: response.stop_reason,
+  };
+}
+
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
@@ -292,6 +451,7 @@ export async function testConnection() {
 
 export default {
   callClaude,
+  callClaudeStructured,
   callClaudeWithRole,
   callClaudeEditor,
   callClaudeCreative,

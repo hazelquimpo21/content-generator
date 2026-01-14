@@ -545,12 +545,99 @@ export async function callOpenAIWithFunctions(messages, functions, options = {})
   } else {
     // Model didn't return a function call - this might be expected or an error
     // depending on the tool_choice setting
-    logger.debug('ℹ️ No function call in response', {
+    logger.debug('ℹ️ No function call in response, checking for JSON content fallback', {
       episodeId,
       stageNumber,
       hasContent: !!message?.content,
+      contentLength: message?.content?.length,
       finishReason: response.choices[0]?.finish_reason,
     });
+
+    // ============================================================================
+    // FALLBACK: TRY TO PARSE CONTENT AS JSON
+    // ============================================================================
+    // Sometimes GPT-5 returns JSON as regular content instead of using the tool call,
+    // even when tool_choice is set to force a specific function. This fallback
+    // attempts to parse the content as JSON and use it as the function result.
+    // This is especially important for stages that rely on structured output.
+    // ============================================================================
+    if (message?.content) {
+      const content = message.content.trim();
+
+      // Check if content looks like JSON (starts with { or [)
+      if (content.startsWith('{') || content.startsWith('[')) {
+        logger.info('🔄 Attempting to parse response content as JSON fallback', {
+          episodeId,
+          stageNumber,
+          contentPreview: content.substring(0, 100),
+        });
+
+        try {
+          // Try to parse the content as JSON
+          const parsedContent = JSON.parse(content);
+
+          // Use the first function name from the provided functions as the fallback name
+          const fallbackFunctionName = functions.length > 0 ? functions[0].name : 'unknown';
+
+          functionCallResult = {
+            name: fallbackFunctionName,
+            arguments: parsedContent,
+          };
+
+          logger.info('✅ Successfully parsed content as JSON fallback', {
+            episodeId,
+            stageNumber,
+            functionName: fallbackFunctionName,
+            argumentKeys: Object.keys(parsedContent),
+          });
+
+        } catch (jsonError) {
+          // Try to fix common JSON issues before giving up
+          logger.warn('⚠️ Direct JSON parse failed, attempting to fix common issues', {
+            episodeId,
+            stageNumber,
+            error: jsonError.message,
+          });
+
+          try {
+            const fixedContent = content
+              .replace(/,\s*}/g, '}')  // Remove trailing commas before }
+              .replace(/,\s*]/g, ']')  // Remove trailing commas before ]
+              .replace(/[\x00-\x1F\x7F]/g, ''); // Remove control characters
+
+            const parsedContent = JSON.parse(fixedContent);
+            const fallbackFunctionName = functions.length > 0 ? functions[0].name : 'unknown';
+
+            functionCallResult = {
+              name: fallbackFunctionName,
+              arguments: parsedContent,
+            };
+
+            logger.info('✅ Successfully parsed content as JSON after fixes', {
+              episodeId,
+              stageNumber,
+              functionName: fallbackFunctionName,
+            });
+
+          } catch (secondJsonError) {
+            logger.warn('❌ JSON fallback parsing failed completely', {
+              episodeId,
+              stageNumber,
+              originalError: jsonError.message,
+              fixedError: secondJsonError.message,
+              contentPreview: content.substring(0, 200),
+            });
+            // Leave functionCallResult as null - the calling code will handle the error
+          }
+        }
+      } else {
+        logger.debug('ℹ️ Content does not appear to be JSON', {
+          episodeId,
+          stageNumber,
+          contentPreview: content.substring(0, 50),
+        });
+      }
+    }
   }
 
   return {

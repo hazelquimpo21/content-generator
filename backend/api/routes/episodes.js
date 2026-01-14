@@ -288,27 +288,62 @@ router.put('/:id', requireAuth, async (req, res, next) => {
  * DELETE /api/episodes/:id
  * Delete an episode and all related data.
  * User must own the episode or be a superadmin.
+ *
+ * NOTE: Cannot delete episodes that are currently processing.
+ * The cascade delete in the database will automatically remove
+ * all associated stage_outputs records.
  */
 router.delete('/:id', requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    // Fetch episode first to check ownership
+    logger.debug('Delete episode request received', {
+      episodeId: id,
+      userId: req.user.id,
+    });
+
+    // Fetch episode first to check ownership and status
     const episode = await episodeRepo.findById(id);
 
     // Check authorization (owner or superadmin can delete)
     checkEpisodeAccess(episode, req.user, 'delete');
 
+    // Prevent deletion of episodes that are currently processing
+    // This avoids orphaned stage updates and race conditions
+    if (episode.status === 'processing') {
+      logger.warn('Attempted to delete processing episode', {
+        episodeId: id,
+        userId: req.user.id,
+        currentStage: episode.current_stage,
+      });
+      throw new ValidationError(
+        'status',
+        'Cannot delete an episode while it is being processed. Please wait for processing to complete or pause the episode first.'
+      );
+    }
+
     logger.info('Deleting episode', {
       episodeId: id,
       userId: req.user.id,
       deletedBy: req.user.role === 'superadmin' ? 'superadmin' : 'owner',
+      episodeStatus: episode.status,
+      totalCostUsd: episode.total_cost_usd,
     });
 
     await episodeRepo.delete(id);
 
+    logger.info('Episode deleted successfully', {
+      episodeId: id,
+      userId: req.user.id,
+    });
+
     res.status(204).send();
   } catch (error) {
+    logger.error('Failed to delete episode', {
+      episodeId: req.params.id,
+      userId: req.user?.id,
+      error: error.message,
+    });
     next(error);
   }
 });

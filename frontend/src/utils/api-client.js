@@ -345,31 +345,26 @@ const stages = {
    * Get all stages for an episode
    * @param {string} episodeId - Episode UUID
    */
-  list: (episodeId) => get('/stages', { episodeId }),
+  list: (episodeId) => get(`/stages/episode/${episodeId}`),
 
   /**
-   * Get single stage output
-   * @param {string} episodeId - Episode UUID
-   * @param {number} stageNumber - Stage number (1-9)
+   * Get single stage by ID
+   * @param {string} stageId - Stage UUID
    */
-  get: (episodeId, stageNumber) => get(`/stages/${episodeId}/${stageNumber}`),
+  get: (stageId) => get(`/stages/${stageId}`),
 
   /**
-   * Update stage output (for manual edits)
-   * @param {string} episodeId - Episode UUID
-   * @param {number} stageNumber - Stage number
-   * @param {Object} data - Updated output
+   * Update stage output by stage ID (for manual edits)
+   * @param {string} stageId - Stage UUID
+   * @param {Object} data - Updated output (output_data, output_text)
    */
-  update: (episodeId, stageNumber, data) =>
-    put(`/stages/${episodeId}/${stageNumber}`, data),
+  update: (stageId, data) => put(`/stages/${stageId}`, data),
 
   /**
-   * Regenerate a stage
-   * @param {string} episodeId - Episode UUID
-   * @param {number} stageNumber - Stage number
+   * Regenerate a stage by stage ID
+   * @param {string} stageId - Stage UUID
    */
-  regenerate: (episodeId, stageNumber) =>
-    post(`/stages/${episodeId}/${stageNumber}/regenerate`),
+  regenerate: (stageId) => post(`/stages/${stageId}/regenerate`),
 };
 
 /**

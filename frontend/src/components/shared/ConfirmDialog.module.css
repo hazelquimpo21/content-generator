@@ -1,0 +1,91 @@
+/**
+ * ============================================================================
+ * CONFIRM DIALOG STYLES
+ * ============================================================================
+ * Styles for the confirmation dialog component.
+ * Uses design system tokens for consistency.
+ * ============================================================================
+ */
+
+/* ============================================================================
+ * CONTENT LAYOUT
+ * ============================================================================ */
+
+.content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-4);
+}
+
+/* ============================================================================
+ * ICON WRAPPER
+ * ============================================================================ */
+
+.iconWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  margin-bottom: var(--space-2);
+}
+
+.iconWrapper.danger {
+  background-color: var(--color-error-light, rgba(184, 82, 74, 0.1));
+  color: var(--color-error);
+}
+
+.iconWrapper.warning {
+  background-color: var(--color-warning-light, rgba(217, 166, 73, 0.1));
+  color: var(--color-warning);
+}
+
+.iconWrapper.info {
+  background-color: var(--color-info-light, rgba(79, 142, 182, 0.1));
+  color: var(--color-info, #4F8EB6);
+}
+
+.icon {
+  width: 28px;
+  height: 28px;
+}
+
+/* ============================================================================
+ * TEXT CONTENT
+ * ============================================================================ */
+
+.textContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.message {
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+  margin: 0;
+  line-height: var(--leading-relaxed);
+}
+
+.description {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+  line-height: var(--leading-relaxed);
+}
+
+/* ============================================================================
+ * FOOTER
+ * ============================================================================ */
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  width: 100%;
+}

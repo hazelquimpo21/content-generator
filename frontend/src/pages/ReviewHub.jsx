@@ -4,10 +4,18 @@
  * ============================================================================
  * View and edit all generated content for an episode.
  * Tabbed interface for different content types.
+ *
+ * Features:
+ * - View generated content by category (analysis, quotes, titles, blog, social, email)
+ * - Edit episode title inline
+ * - Edit blog post content with save functionality
+ * - Delete episode with confirmation
+ * - Regenerate individual stages
+ * - Copy content to clipboard
  * ============================================================================
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   FileText,
@@ -20,8 +28,13 @@ import {
   RefreshCw,
   Check,
   AlertCircle,
+  Trash2,
+  ArrowLeft,
+  Edit3,
+  Save,
+  X,
 } from 'lucide-react';
-import { Button, Card, Spinner, Badge } from '@components/shared';
+import { Button, Card, Spinner, Badge, ConfirmDialog } from '@components/shared';
 import api from '@utils/api-client';
 import styles from './ReviewHub.module.css';
 
@@ -42,40 +55,192 @@ function ReviewHub() {
   const { id: episodeId } = useParams();
   const navigate = useNavigate();
 
-  // State
+  // ============================================================================
+  // STATE
+  // ============================================================================
+
+  // Episode and stage data
   const [loading, setLoading] = useState(true);
   const [episode, setEpisode] = useState(null);
   const [stages, setStages] = useState([]);
   const [activeTab, setActiveTab] = useState('analysis');
-  const [copied, setCopied] = useState(null);
-  const [regenerating, setRegenerating] = useState(null);
   const [error, setError] = useState(null);
 
-  // Fetch episode data
+  // UI interaction states
+  const [copied, setCopied] = useState(null);
+  const [regenerating, setRegenerating] = useState(null);
+
+  // Delete confirmation dialog
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteError, setDeleteError] = useState(null);
+
+  // Title editing state
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+  const [savingTitle, setSavingTitle] = useState(false);
+  const titleInputRef = useRef(null);
+
+  // Blog post editing state
+  const [isEditingBlog, setIsEditingBlog] = useState(false);
+  const [editedBlogContent, setEditedBlogContent] = useState('');
+  const [savingBlog, setSavingBlog] = useState(false);
+
+  // ============================================================================
+  // EFFECTS
+  // ============================================================================
+
+  // Fetch episode data on mount
   useEffect(() => {
     fetchEpisode();
   }, [episodeId]);
 
+  // Focus title input when editing starts
+  useEffect(() => {
+    if (isEditingTitle && titleInputRef.current) {
+      titleInputRef.current.focus();
+      titleInputRef.current.select();
+    }
+  }, [isEditingTitle]);
+
+  // ============================================================================
+  // DATA FETCHING
+  // ============================================================================
+
+  /**
+   * Fetch episode and stage data from API
+   */
   async function fetchEpisode() {
     try {
       setLoading(true);
+      console.log('[ReviewHub] Fetching episode:', episodeId);
+
       const data = await api.episodes.getWithStages(episodeId);
       setEpisode(data.episode);
       setStages(data.stages || []);
       setError(null);
+
+      console.log('[ReviewHub] Episode loaded successfully');
     } catch (err) {
+      console.error('[ReviewHub] Failed to fetch episode:', err);
       setError(err.message || 'Failed to load episode');
     } finally {
       setLoading(false);
     }
   }
 
-  // Get stage data by number
+  /**
+   * Get stage data by stage number
+   * @param {number} stageNumber - The stage number (1-9)
+   * @returns {Object|undefined} Stage data or undefined if not found
+   */
   function getStage(stageNumber) {
     return stages.find((s) => s.stage_number === stageNumber);
   }
 
-  // Copy to clipboard
+  // ============================================================================
+  // DELETE HANDLERS
+  // ============================================================================
+
+  /**
+   * Handle delete confirmation
+   */
+  async function handleDeleteConfirm() {
+    try {
+      console.log('[ReviewHub] Deleting episode:', episodeId);
+      await api.episodes.delete(episodeId);
+
+      console.log('[ReviewHub] Episode deleted successfully');
+      setShowDeleteDialog(false);
+
+      // Navigate back to dashboard after successful deletion
+      navigate('/', { replace: true });
+    } catch (err) {
+      console.error('[ReviewHub] Failed to delete episode:', err);
+      setDeleteError(err.message || 'Failed to delete episode. Please try again.');
+      throw err; // Re-throw to keep dialog open
+    }
+  }
+
+  // ============================================================================
+  // TITLE EDITING HANDLERS
+  // ============================================================================
+
+  /**
+   * Start editing the episode title
+   */
+  function handleStartEditTitle() {
+    const currentTitle = episode?.episode_context?.title || '';
+    setEditedTitle(currentTitle);
+    setIsEditingTitle(true);
+  }
+
+  /**
+   * Cancel title editing
+   */
+  function handleCancelEditTitle() {
+    setIsEditingTitle(false);
+    setEditedTitle('');
+  }
+
+  /**
+   * Save the edited title
+   */
+  async function handleSaveTitle() {
+    if (!editedTitle.trim()) {
+      setError('Title cannot be empty');
+      return;
+    }
+
+    try {
+      setSavingTitle(true);
+      console.log('[ReviewHub] Saving episode title:', editedTitle);
+
+      // Update episode_context with new title
+      const updatedContext = {
+        ...(episode?.episode_context || {}),
+        title: editedTitle.trim(),
+      };
+
+      await api.episodes.update(episodeId, { episode_context: updatedContext });
+
+      // Update local state
+      setEpisode((prev) => ({
+        ...prev,
+        episode_context: updatedContext,
+      }));
+
+      setIsEditingTitle(false);
+      setEditedTitle('');
+      console.log('[ReviewHub] Title saved successfully');
+    } catch (err) {
+      console.error('[ReviewHub] Failed to save title:', err);
+      setError(err.message || 'Failed to save title');
+    } finally {
+      setSavingTitle(false);
+    }
+  }
+
+  /**
+   * Handle keyboard events in title input
+   */
+  function handleTitleKeyDown(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveTitle();
+    } else if (e.key === 'Escape') {
+      handleCancelEditTitle();
+    }
+  }
+
+  // ============================================================================
+  // CLIPBOARD HANDLERS
+  // ============================================================================
+
+  /**
+   * Copy text to clipboard with visual feedback
+   * @param {string} text - Text to copy
+   * @param {string} id - Identifier for visual feedback
+   */
   async function copyToClipboard(text, id) {
     try {
       await navigator.clipboard.writeText(text);
@@ -94,16 +259,92 @@ function ReviewHub() {
     }
   }
 
-  // Regenerate stage
+  // ============================================================================
+  // STAGE HANDLERS
+  // ============================================================================
+
+  /**
+   * Regenerate a specific stage
+   * @param {number} stageNumber - Stage number to regenerate
+   */
   async function handleRegenerate(stageNumber) {
     try {
       setRegenerating(stageNumber);
-      await api.stages.regenerate(episodeId, stageNumber);
+      console.log('[ReviewHub] Regenerating stage:', stageNumber);
+
+      // Find the stage by number to get its ID
+      const stage = getStage(stageNumber);
+      if (!stage) {
+        throw new Error(`Stage ${stageNumber} not found`);
+      }
+
+      await api.stages.regenerate(stage.id);
       await fetchEpisode();
+
+      console.log('[ReviewHub] Stage regenerated successfully');
     } catch (err) {
+      console.error('[ReviewHub] Failed to regenerate stage:', err);
       setError(err.message || 'Failed to regenerate');
     } finally {
       setRegenerating(null);
+    }
+  }
+
+  // ============================================================================
+  // BLOG EDITING HANDLERS
+  // ============================================================================
+
+  /**
+   * Start editing the blog post content
+   * @param {string} currentContent - Current blog content
+   */
+  function handleStartEditBlog(currentContent) {
+    setEditedBlogContent(currentContent || '');
+    setIsEditingBlog(true);
+  }
+
+  /**
+   * Cancel blog editing
+   */
+  function handleCancelEditBlog() {
+    setIsEditingBlog(false);
+    setEditedBlogContent('');
+  }
+
+  /**
+   * Save the edited blog content
+   * @param {Object} stage - The stage to update (stage 7 for edited blog)
+   */
+  async function handleSaveBlog(stage) {
+    if (!stage) {
+      setError('Stage not found');
+      return;
+    }
+
+    try {
+      setSavingBlog(true);
+      console.log('[ReviewHub] Saving blog content for stage:', stage.id);
+
+      // Use the stage ID for the API call
+      await api.stages.update(stage.id, {
+        output_text: editedBlogContent,
+      });
+
+      // Update local state to reflect the change immediately
+      setStages((prev) =>
+        prev.map((s) =>
+          s.id === stage.id ? { ...s, output_text: editedBlogContent } : s
+        )
+      );
+
+      setIsEditingBlog(false);
+      setEditedBlogContent('');
+      console.log('[ReviewHub] Blog content saved successfully');
+    } catch (err) {
+      console.error('[ReviewHub] Failed to save blog content:', err);
+      setError(err.message || 'Failed to save blog content');
+    } finally {
+      setSavingBlog(false);
     }
   }
 
@@ -122,16 +363,85 @@ function ReviewHub() {
   }
 
   const currentTab = TABS.find((t) => t.id === activeTab);
+  const episodeTitle = episode.episode_context?.title || 'Untitled Episode';
 
   return (
     <div className={styles.page}>
       {/* Header */}
       <header className={styles.header}>
-        <div>
-          <h1 className={styles.title}>
-            {episode.episode_context?.title || 'Untitled Episode'}
-          </h1>
-          <p className={styles.subtitle}>Review and edit your generated content</p>
+        <div className={styles.headerLeft}>
+          {/* Back button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            leftIcon={ArrowLeft}
+            onClick={() => navigate('/')}
+            className={styles.backButton}
+          >
+            Back
+          </Button>
+
+          {/* Editable title */}
+          <div className={styles.titleWrapper}>
+            {isEditingTitle ? (
+              <div className={styles.titleEditGroup}>
+                <input
+                  ref={titleInputRef}
+                  type="text"
+                  value={editedTitle}
+                  onChange={(e) => setEditedTitle(e.target.value)}
+                  onKeyDown={handleTitleKeyDown}
+                  className={styles.titleInput}
+                  placeholder="Enter episode title..."
+                  disabled={savingTitle}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={Check}
+                  onClick={handleSaveTitle}
+                  loading={savingTitle}
+                  disabled={!editedTitle.trim()}
+                >
+                  Save
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={X}
+                  onClick={handleCancelEditTitle}
+                  disabled={savingTitle}
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <div className={styles.titleDisplay}>
+                <h1 className={styles.title}>{episodeTitle}</h1>
+                <button
+                  className={styles.editTitleButton}
+                  onClick={handleStartEditTitle}
+                  title="Edit title"
+                  aria-label="Edit episode title"
+                >
+                  <Edit3 size={16} />
+                </button>
+              </div>
+            )}
+            <p className={styles.subtitle}>Review and edit your generated content</p>
+          </div>
+        </div>
+
+        {/* Header actions */}
+        <div className={styles.headerActions}>
+          <Button
+            variant="danger"
+            size="sm"
+            leftIcon={Trash2}
+            onClick={() => setShowDeleteDialog(true)}
+          >
+            Delete Episode
+          </Button>
         </div>
       </header>
 
@@ -189,6 +499,14 @@ function ReviewHub() {
             onRegenerate={handleRegenerate}
             copied={copied}
             regenerating={regenerating}
+            // Blog editing props
+            isEditing={isEditingBlog}
+            editedContent={editedBlogContent}
+            onEditedContentChange={setEditedBlogContent}
+            onStartEdit={handleStartEditBlog}
+            onSaveEdit={handleSaveBlog}
+            onCancelEdit={handleCancelEditBlog}
+            savingEdit={savingBlog}
           />
         )}
 
@@ -208,6 +526,25 @@ function ReviewHub() {
           />
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteDialog}
+        onClose={() => {
+          setShowDeleteDialog(false);
+          setDeleteError(null);
+        }}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Episode"
+        message={`Are you sure you want to delete "${episodeTitle}"?`}
+        description={
+          deleteError ||
+          'This action cannot be undone. All generated content for this episode will be permanently deleted.'
+        }
+        confirmLabel="Delete Episode"
+        cancelLabel="Cancel"
+        variant="danger"
+      />
     </div>
   );
 }
@@ -332,11 +669,34 @@ function TitlesTab({ titleStage, summaryStage, onCopy, copied }) {
   );
 }
 
-function BlogTab({ outlineStage, draftStage, editedStage, onCopy, onRegenerate, copied, regenerating }) {
+/**
+ * BlogTab component with inline editing support
+ * Allows viewing, copying, regenerating, and editing the blog post content
+ */
+function BlogTab({
+  outlineStage,
+  draftStage,
+  editedStage,
+  onCopy,
+  onRegenerate,
+  copied,
+  regenerating,
+  // Editing props
+  isEditing,
+  editedContent,
+  onEditedContentChange,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit,
+  savingEdit,
+}) {
   const blogPost = editedStage?.output_text || draftStage?.output_text;
+  // Use editedStage if available, otherwise fall back to draftStage for saving
+  const stageToUpdate = editedStage || draftStage;
 
   return (
     <div className={styles.tabContent}>
+      {/* Blog outline section */}
       {outlineStage?.output_data?.outline && (
         <Card title="Outline" padding="lg">
           <div className={styles.outline}>
@@ -354,34 +714,81 @@ function BlogTab({ outlineStage, draftStage, editedStage, onCopy, onRegenerate, 
         </Card>
       )}
 
+      {/* Blog post section with editing capability */}
       {blogPost && (
         <Card
           title="Blog Post"
           headerAction={
             <div className={styles.cardActions}>
-              <Button
-                variant="ghost"
-                size="sm"
-                leftIcon={RefreshCw}
-                loading={regenerating === 7}
-                onClick={() => onRegenerate(7)}
-              >
-                Regenerate
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                leftIcon={copied === 'blog' ? Check : Copy}
-                onClick={() => onCopy(blogPost, 'blog')}
-              >
-                Copy
-              </Button>
+              {isEditing ? (
+                <>
+                  {/* Editing mode actions */}
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    leftIcon={Save}
+                    onClick={() => onSaveEdit(stageToUpdate)}
+                    loading={savingEdit}
+                    disabled={!editedContent.trim()}
+                  >
+                    Save Changes
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={X}
+                    onClick={onCancelEdit}
+                    disabled={savingEdit}
+                  >
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <>
+                  {/* View mode actions */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={Edit3}
+                    onClick={() => onStartEdit(blogPost)}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={RefreshCw}
+                    loading={regenerating === 7}
+                    onClick={() => onRegenerate(7)}
+                  >
+                    Regenerate
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={copied === 'blog' ? Check : Copy}
+                    onClick={() => onCopy(blogPost, 'blog')}
+                  >
+                    Copy
+                  </Button>
+                </>
+              )}
             </div>
           }
           padding="lg"
         >
           <div className={styles.blogPost}>
-            <pre className={styles.blogContent}>{blogPost}</pre>
+            {isEditing ? (
+              <textarea
+                className={styles.blogTextarea}
+                value={editedContent}
+                onChange={(e) => onEditedContentChange(e.target.value)}
+                placeholder="Enter blog post content..."
+                disabled={savingEdit}
+              />
+            ) : (
+              <pre className={styles.blogContent}>{blogPost}</pre>
+            )}
           </div>
         </Card>
       )}

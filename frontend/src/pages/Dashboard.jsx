@@ -4,6 +4,12 @@
  * ============================================================================
  * Main landing page showing all episodes with filtering and quick actions.
  * Displays episode cards with status indicators and progress.
+ *
+ * Features:
+ * - View all episodes with status filtering
+ * - Search episodes by title
+ * - Navigate to episode details/review
+ * - Delete episodes with confirmation
  * ============================================================================
  */
 
@@ -18,9 +24,11 @@ import {
   AlertCircle,
   Loader2,
   ChevronRight,
+  Trash2,
+  Play,
 } from 'lucide-react';
 import { format } from 'date-fns';
-import { Button, Card, Badge, Spinner, Input } from '@components/shared';
+import { Button, Card, Badge, Spinner, ConfirmDialog } from '@components/shared';
 import api from '@utils/api-client';
 import styles from './Dashboard.module.css';
 
@@ -39,18 +47,25 @@ const STATUS_OPTIONS = [
 function Dashboard() {
   const navigate = useNavigate();
 
-  // State
+  // State for episode list
   const [episodes, setEpisodes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // State for delete confirmation dialog
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteError, setDeleteError] = useState(null);
+
   // Fetch episodes on mount and filter change
   useEffect(() => {
     fetchEpisodes();
   }, [statusFilter]);
 
+  /**
+   * Fetch all episodes from the API
+   */
   async function fetchEpisodes() {
     try {
       setLoading(true);
@@ -64,10 +79,56 @@ function Dashboard() {
       const data = await api.episodes.list(params);
       setEpisodes(data.episodes || []);
     } catch (err) {
+      console.error('[Dashboard] Failed to fetch episodes:', err);
       setError(err.message || 'Failed to load episodes');
     } finally {
       setLoading(false);
     }
+  }
+
+  /**
+   * Handle delete button click - opens confirmation dialog
+   * @param {Event} e - Click event (to stop propagation)
+   * @param {Object} episode - Episode to delete
+   */
+  function handleDeleteClick(e, episode) {
+    e.stopPropagation(); // Prevent card click navigation
+    setDeleteError(null);
+    setDeleteTarget(episode);
+  }
+
+  /**
+   * Confirm and execute episode deletion
+   */
+  async function handleDeleteConfirm() {
+    if (!deleteTarget) return;
+
+    try {
+      console.log('[Dashboard] Deleting episode:', deleteTarget.id);
+      await api.episodes.delete(deleteTarget.id);
+
+      console.log('[Dashboard] Episode deleted successfully');
+
+      // Remove from local state to update UI immediately
+      setEpisodes((prev) => prev.filter((ep) => ep.id !== deleteTarget.id));
+
+      // Close the dialog
+      setDeleteTarget(null);
+      setDeleteError(null);
+    } catch (err) {
+      console.error('[Dashboard] Failed to delete episode:', err);
+      // Show error in dialog instead of closing it
+      setDeleteError(err.message || 'Failed to delete episode. Please try again.');
+      throw err; // Re-throw to keep dialog open with loading state reset
+    }
+  }
+
+  /**
+   * Close delete confirmation dialog
+   */
+  function handleDeleteCancel() {
+    setDeleteTarget(null);
+    setDeleteError(null);
   }
 
   // Filter episodes by search query
@@ -77,7 +138,7 @@ function Dashboard() {
     return title.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
-  // Get status icon
+  // Get status icon (kept for potential future use)
   function getStatusIcon(status) {
     switch (status) {
       case 'completed':
@@ -177,6 +238,7 @@ function Dashboard() {
             <EpisodeCard
               key={episode.id}
               episode={episode}
+              onDelete={handleDeleteClick}
               onClick={() => {
                 if (episode.status === 'processing') {
                   navigate(`/episodes/${episode.id}/processing`);
@@ -188,14 +250,35 @@ function Dashboard() {
           ))}
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        onClose={handleDeleteCancel}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Episode"
+        message={`Are you sure you want to delete "${deleteTarget?.episode_context?.title || 'this episode'}"?`}
+        description={
+          deleteError ||
+          'This action cannot be undone. All generated content for this episode will be permanently deleted.'
+        }
+        confirmLabel="Delete Episode"
+        cancelLabel="Cancel"
+        variant="danger"
+      />
     </div>
   );
 }
 
 /**
  * Episode card component
+ * Displays episode info with status, progress, and action buttons.
+ *
+ * @param {Object} episode - Episode data object
+ * @param {Function} onClick - Handler for card click (navigation)
+ * @param {Function} onDelete - Handler for delete button click
  */
-function EpisodeCard({ episode, onClick }) {
+function EpisodeCard({ episode, onClick, onDelete }) {
   const title = episode.episode_context?.title || 'Untitled Episode';
   const createdAt = episode.created_at
     ? format(new Date(episode.created_at), 'MMM d, yyyy')
@@ -204,6 +287,9 @@ function EpisodeCard({ episode, onClick }) {
   const progress = episode.current_stage
     ? Math.round((episode.current_stage / 9) * 100)
     : 0;
+
+  // Check if episode can be deleted (not currently processing)
+  const canDelete = episode.status !== 'processing';
 
   return (
     <Card
@@ -245,11 +331,26 @@ function EpisodeCard({ episode, onClick }) {
         <p className={styles.cardError}>{episode.error_message}</p>
       )}
 
-      <div className={styles.cardAction}>
-        <span>
-          {episode.status === 'completed' ? 'View Content' : 'View Details'}
-        </span>
-        <ChevronRight size={16} />
+      {/* Card footer with actions */}
+      <div className={styles.cardFooter}>
+        <div className={styles.cardAction}>
+          <span>
+            {episode.status === 'completed' ? 'View Content' : 'View Details'}
+          </span>
+          <ChevronRight size={16} />
+        </div>
+
+        {/* Delete button - disabled for processing episodes */}
+        {canDelete && (
+          <button
+            className={styles.deleteButton}
+            onClick={(e) => onDelete(e, episode)}
+            title="Delete episode"
+            aria-label="Delete episode"
+          >
+            <Trash2 size={16} />
+          </button>
+        )}
       </div>
     </Card>
   );

@@ -262,23 +262,12 @@ export async function loadStagePrompt(stageName, context) {
   const stage0Output = previousStages[0];
   const wasPreprocessed = stage0Output?.preprocessed === true;
 
-  // For Stages 1-2, use preprocessed summary if available
-  // This avoids token limit issues with long transcripts
+  // For Stage 1, use preprocessed summary if available (saves tokens)
+  // Stage 2 (quotes) ALWAYS uses original transcript for verbatim accuracy
   let effectiveTranscript = transcript;
   if (wasPreprocessed && stage0Output?.comprehensive_summary) {
-    // Use the compressed summary for analysis (preserves all key info)
+    // Use the compressed summary for Stage 1 analysis (preserves all key info)
     effectiveTranscript = `[PREPROCESSED TRANSCRIPT SUMMARY - Full transcript was analyzed by Claude Haiku]\n\n${stage0Output.comprehensive_summary}`;
-
-    // Add extracted quotes if available (helpful for Stage 2)
-    if (stage0Output.verbatim_quotes && stage0Output.verbatim_quotes.length > 0) {
-      effectiveTranscript += '\n\n[KEY QUOTES EXTRACTED FROM FULL TRANSCRIPT]\n';
-      for (const q of stage0Output.verbatim_quotes) {
-        effectiveTranscript += `\n"${q.quote}" - ${q.speaker} (${q.position || 'unknown position'})`;
-        if (q.potential_use) {
-          effectiveTranscript += ` [suggested use: ${q.potential_use}]`;
-        }
-      }
-    }
 
     // Add topics if available
     if (stage0Output.key_topics && stage0Output.key_topics.length > 0) {
@@ -324,7 +313,6 @@ export async function loadStagePrompt(stageName, context) {
       originalLength: transcript?.length,
       preprocessedLength: effectiveTranscript.length,
       compressionRatio: transcript ? (transcript.length / effectiveTranscript.length).toFixed(1) : 'N/A',
-      quotesIncluded: stage0Output.verbatim_quotes?.length || 0,
     });
   }
 
@@ -353,15 +341,19 @@ export async function loadStagePrompt(stageName, context) {
     TONE: evergreen?.voice_guidelines?.tone?.join(', ') || '',
 
     // Stage 0 preprocessing outputs (available for all subsequent stages)
+    // NOTE: Quotes are NOT from Stage 0 - they come from Stage 2 (dedicated quote extraction)
     STAGE_0_OUTPUT: JSON.stringify(previousStages[0] || {}, null, 2),
     PREPROCESSED_SUMMARY: stage0Output?.comprehensive_summary || '',
-    PREPROCESSED_QUOTES: JSON.stringify(stage0Output?.verbatim_quotes || [], null, 2),
     PREPROCESSED_TOPICS: stage0Output?.key_topics?.join(', ') || '',
     WAS_PREPROCESSED: wasPreprocessed ? 'true' : 'false',
 
     // Previous stage outputs (1-9)
     STAGE_1_OUTPUT: JSON.stringify(previousStages[1] || {}, null, 2),
     STAGE_2_OUTPUT: JSON.stringify(previousStages[2] || {}, null, 2),
+
+    // Stage 2 quotes in standardized format: { text, speaker, context, usage }
+    // This is the CANONICAL source of quotes for all downstream stages
+    STAGE_2_QUOTES: JSON.stringify(previousStages[2]?.quotes || [], null, 2),
     STAGE_3_OUTPUT: JSON.stringify(previousStages[3] || {}, null, 2),
     STAGE_4_OUTPUT: JSON.stringify(previousStages[4] || {}, null, 2),
     STAGE_5_OUTPUT: JSON.stringify(previousStages[5] || {}, null, 2),

@@ -41,43 +41,18 @@ const PREPROCESSING_THRESHOLD_TOKENS = 8000;
 // ============================================================================
 // This schema is used with Claude's tool_use feature for guaranteed structured output.
 // Tool_use eliminates JSON parsing issues and ensures type-safe responses.
+//
+// NOTE: Quote extraction is handled by Stage 2 (dedicated quote stage).
+// Stage 0 focuses ONLY on compression/summarization for long transcripts.
 // ============================================================================
 
 const PREPROCESSING_TOOL_SCHEMA = {
   type: 'object',
-  description: 'Preprocessed transcript data with summary, quotes, and metadata',
+  description: 'Preprocessed transcript data with summary, topics, speakers, and metadata',
   properties: {
     comprehensive_summary: {
       type: 'string',
       description: 'Detailed 800-1500 word summary preserving all key information, including specific examples, advice, and the logical flow of the conversation',
-    },
-    verbatim_quotes: {
-      type: 'array',
-      description: 'Exact verbatim quotes from the transcript (aim for 5-15 quotes)',
-      items: {
-        type: 'object',
-        properties: {
-          quote: {
-            type: 'string',
-            description: 'Exact verbatim text from transcript (15-50 words)',
-          },
-          speaker: {
-            type: 'string',
-            description: 'Name of the person who said this quote',
-          },
-          position: {
-            type: 'string',
-            enum: ['early', 'middle', 'late'],
-            description: 'Approximate position in the episode',
-          },
-          potential_use: {
-            type: 'string',
-            enum: ['headline', 'pullquote', 'social', 'key_point'],
-            description: 'Best potential use for this quote',
-          },
-        },
-        required: ['quote', 'speaker', 'position', 'potential_use'],
-      },
     },
     key_topics: {
       type: 'array',
@@ -130,7 +105,7 @@ const PREPROCESSING_TOOL_SCHEMA = {
       required: ['inferred_title', 'core_message'],
     },
   },
-  required: ['comprehensive_summary', 'verbatim_quotes', 'key_topics', 'speakers', 'episode_metadata'],
+  required: ['comprehensive_summary', 'key_topics', 'speakers', 'episode_metadata'],
 };
 
 // ============================================================================
@@ -143,13 +118,12 @@ const PREPROCESSING_TOOL_SCHEMA = {
  *
  * Validation requirements:
  * - comprehensive_summary: Must be at least 500 characters
- * - verbatim_quotes: Need at least 3 quotes (5+ preferred, warns if fewer)
  * - key_topics: Need at least 3 topics
  * - speakers: Must have host information
  * - episode_metadata: Required for downstream processing
  *
- * Note: Quote requirements are relaxed because some transcripts naturally
- * have fewer quotable moments, and we don't want to fail the entire pipeline.
+ * NOTE: Quote extraction is handled by Stage 2 (dedicated quote stage).
+ * Stage 0 focuses ONLY on compression/summarization.
  *
  * @param {Object} data - Structured output from Claude's tool_use response
  * @throws {ValidationError} If validation fails with detailed reason
@@ -158,7 +132,6 @@ const PREPROCESSING_TOOL_SCHEMA = {
 function validateOutput(data) {
   logger.debug('🔍 Starting validation of preprocessing output', {
     hasComprehensiveSummary: !!data.comprehensive_summary,
-    hasVerbatimQuotes: !!data.verbatim_quotes,
     hasKeyTopics: !!data.key_topics,
     hasSpeakers: !!data.speakers,
     hasEpisodeMetadata: !!data.episode_metadata,
@@ -190,63 +163,6 @@ function validateOutput(data) {
   logger.debug('✓ comprehensive_summary validated', {
     length: data.comprehensive_summary.length,
     wordCount: data.comprehensive_summary.split(/\s+/).length,
-  });
-
-  // -------------------------------------------------------------------------
-  // Validate verbatim_quotes
-  // -------------------------------------------------------------------------
-  if (!data.verbatim_quotes || !Array.isArray(data.verbatim_quotes)) {
-    logger.error('❌ Validation failed: verbatim_quotes missing or not an array', {
-      exists: !!data.verbatim_quotes,
-      isArray: Array.isArray(data.verbatim_quotes),
-    });
-    throw new ValidationError('verbatim_quotes', 'Missing or invalid quotes array');
-  }
-
-  // Relaxed minimum: 3 quotes is acceptable (AI may not always find many good quotes)
-  // Log a warning if we have fewer than 5, but only fail if we have fewer than 3
-  if (data.verbatim_quotes.length < 3) {
-    logger.error('❌ Validation failed: not enough verbatim_quotes', {
-      count: data.verbatim_quotes.length,
-      minimum: 3,
-    });
-    throw new ValidationError('verbatim_quotes', `Need at least 3 quotes, got ${data.verbatim_quotes.length}`);
-  }
-
-  if (data.verbatim_quotes.length < 5) {
-    logger.warn('⚠️ Fewer quotes than ideal extracted', {
-      count: data.verbatim_quotes.length,
-      recommended: 5,
-    });
-  }
-
-  // Validate each quote's structure
-  for (let i = 0; i < data.verbatim_quotes.length; i++) {
-    const q = data.verbatim_quotes[i];
-    if (!q.quote || q.quote.length < 20) {
-      logger.error('❌ Validation failed: quote too short or missing', {
-        quoteIndex: i,
-        quoteLength: q.quote?.length || 0,
-        minimum: 20,
-        quote: q.quote?.substring(0, 50),
-      });
-      throw new ValidationError(
-        `verbatim_quotes[${i}].quote`,
-        `Quote too short or missing (got ${q.quote?.length || 0} chars, need at least 20)`
-      );
-    }
-    if (!q.speaker) {
-      logger.error('❌ Validation failed: quote missing speaker', {
-        quoteIndex: i,
-        quote: q.quote?.substring(0, 50),
-      });
-      throw new ValidationError(`verbatim_quotes[${i}].speaker`, 'Speaker is required for all quotes');
-    }
-  }
-
-  logger.debug('✓ verbatim_quotes validated', {
-    count: data.verbatim_quotes.length,
-    speakers: [...new Set(data.verbatim_quotes.map((q) => q.speaker))],
   });
 
   // -------------------------------------------------------------------------
@@ -309,7 +225,6 @@ function validateOutput(data) {
   // All validations passed
   logger.info('✅ All preprocessing output validations passed', {
     summaryLength: data.comprehensive_summary.length,
-    quotesCount: data.verbatim_quotes.length,
     topicsCount: data.key_topics.length,
     hostName: data.speakers.host?.name,
   });
@@ -716,12 +631,12 @@ export async function preprocessTranscript(context) {
     });
 
     // Return a pass-through result that signals no preprocessing was done
+    // NOTE: Quote extraction is handled by Stage 2 (dedicated quote stage)
     return {
       output_data: {
         preprocessed: false,
         original_transcript: transcript,
         comprehensive_summary: null,
-        verbatim_quotes: [],
         key_topics: [],
         speakers: null,
         episode_metadata: null,
@@ -748,14 +663,16 @@ export async function preprocessTranscript(context) {
   });
 
   // Build the system prompt for structured output via tool_use
+  // NOTE: Quote extraction is handled by Stage 2 - this stage focuses on compression
   const systemPrompt = `You are an expert content analyst specializing in podcast transcript processing.
 Your task is to analyze the provided transcript and extract structured information using the provided tool.
 
 IMPORTANT GUIDELINES:
 - The comprehensive_summary should be 800-1500 words and preserve ALL key information
-- Verbatim quotes must be EXACT text from the transcript (aim for 5-15 quotes)
 - Key topics should be specific (not generic like "anxiety" but "managing anxiety during job transitions")
-- Quotes should represent different themes and be suitable for headlines, social media, or pull quotes`;
+- Identify all speakers accurately with their roles/credentials
+- Capture the core message and a compelling title for the episode
+- DO NOT extract quotes - that is handled by a separate stage`;
 
   // -------------------------------------------------------------------------
   // Call Claude Haiku API with tool_use for guaranteed structured output
@@ -811,7 +728,6 @@ IMPORTANT GUIDELINES:
   logger.info('✅ Received structured output via tool_use', {
     episodeId,
     outputKeys: Object.keys(outputData),
-    quotesCount: outputData.verbatim_quotes?.length || 0,
     topicsCount: outputData.key_topics?.length || 0,
     summaryLength: outputData.comprehensive_summary?.length || 0,
   });
@@ -831,7 +747,6 @@ IMPORTANT GUIDELINES:
     originalWords: transcriptWords,
     summaryWords,
     compressionRatio: `${compressionRatio}:1`,
-    quotesExtracted: outputData.verbatim_quotes.length,
     topicsIdentified: outputData.key_topics.length,
     cost: response.cost,
   });

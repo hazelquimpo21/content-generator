@@ -37,7 +37,7 @@ import logger from './logger.js';
 // ============================================================================
 
 // Target word counts for the blog post
-const TARGET_TOTAL_WORDS = 750;
+export const TARGET_TOTAL_WORDS = 750;
 const WORD_COUNT_TOLERANCE = 50; // +/- 50 words is acceptable
 
 // Section word count defaults if not specified

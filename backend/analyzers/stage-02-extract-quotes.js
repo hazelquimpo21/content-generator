@@ -2,66 +2,95 @@
  * ============================================================================
  * STAGE 2: QUOTE EXTRACTION
  * ============================================================================
- * Extracts key verbatim quotes from the transcript that can be used
- * as pull quotes, headlines, and social media content.
+ * Extracts key verbatim quotes from the podcast transcript.
  *
- * Input: Transcript + Stage 1 output (episode crux)
- * Output: 5-8 key quotes with metadata (JSON)
- * Model: GPT-5 mini (OpenAI)
+ * This is the SOLE source of quotes for the entire pipeline.
+ * All downstream stages (blog, social, email) use quotes from this stage.
+ *
+ * Architecture Notes:
+ * -------------------
+ * - Uses Claude Haiku (fast, cheap, excellent at extraction tasks)
+ * - ALWAYS uses the ORIGINAL transcript (not Stage 0 summary)
+ * - This ensures quotes are verbatim and accurate
+ * - Uses tool_use for guaranteed structured JSON output
+ *
+ * Quote Structure (standardized across the pipeline):
+ * ---------------------------------------------------
+ * {
+ *   text: "The actual quote...",           // Verbatim quote (required)
+ *   speaker: "Dr. Jane Smith",             // Who said it (required)
+ *   context: "Why this matters...",        // Significance (optional)
+ *   usage: "headline|pullquote|social|key_point"  // Suggested use (optional)
+ * }
+ *
+ * Input: Original transcript + Stage 1 analysis for context
+ * Output: Array of 8-12 quotes with standardized structure
+ * Model: Claude Haiku (fast, accurate extraction)
  * ============================================================================
  */
 
-import { callOpenAIWithFunctions } from '../lib/api-client-openai.js';
-import { loadStagePrompt } from '../lib/prompt-loader.js';
+import { callClaudeStructured } from '../lib/api-client-anthropic.js';
 import logger from '../lib/logger.js';
 import { ValidationError } from '../lib/errors.js';
 
 // ============================================================================
-// FUNCTION SCHEMA FOR STRUCTURED OUTPUT
+// CONFIGURATION
+// ============================================================================
+
+// Model for quote extraction - Haiku is perfect for precise extraction tasks
+const QUOTE_EXTRACTION_MODEL = 'claude-3-5-haiku-20241022';
+
+// Target quote count
+const MIN_QUOTES = 5;
+const MAX_QUOTES = 15;
+const TARGET_QUOTES = 10;
+
+// ============================================================================
+// JSON SCHEMA FOR TOOL_USE
+// ============================================================================
+// This schema is used with Claude's tool_use for guaranteed structured output.
+// Fields marked as required will always be present in the output.
 // ============================================================================
 
 const QUOTE_EXTRACTION_SCHEMA = {
-  name: 'quote_extraction',
-  description: 'Key quotes extracted from podcast transcript',
-  parameters: {
-    type: 'object',
-    properties: {
-      key_quotes: {
-        type: 'array',
-        description: '5-8 key verbatim quotes from the transcript',
-        items: {
-          type: 'object',
-          properties: {
-            quote: {
-              type: 'string',
-              description: 'Exact verbatim quote (15-40 words ideal)',
-            },
-            speaker: {
-              type: 'string',
-              description: 'Name of who said it (host or guest)',
-            },
-            timestamp_estimate: {
-              type: ['string', 'null'],
-              description: 'Rough position in episode (early, middle, near end)',
-            },
-            significance: {
-              type: 'string',
-              description: 'Why this quote matters (1-2 sentences)',
-            },
-            usage_suggestion: {
-              type: 'string',
-              enum: ['headline', 'pullquote', 'social', 'key_point'],
-              description: 'Suggested use for this quote',
-            },
+  type: 'object',
+  description: 'Extracted quotes from the podcast transcript',
+  properties: {
+    quotes: {
+      type: 'array',
+      description: `Array of ${TARGET_QUOTES} key verbatim quotes from the transcript`,
+      items: {
+        type: 'object',
+        properties: {
+          text: {
+            type: 'string',
+            description: 'The exact verbatim quote from the transcript (15-60 words). Must be word-for-word accurate.',
           },
-          required: ['quote', 'speaker', 'significance', 'usage_suggestion'],
+          speaker: {
+            type: 'string',
+            description: 'Name of the person who said this quote (e.g., "Dr. Sarah Chen" or "Host")',
+          },
+          context: {
+            type: 'string',
+            description: 'Brief explanation of why this quote is significant or what it illustrates (1-2 sentences)',
+          },
+          usage: {
+            type: 'string',
+            enum: ['headline', 'pullquote', 'social', 'key_point'],
+            description: 'Best suggested use for this quote: headline (attention-grabbing), pullquote (article highlight), social (social media post), key_point (illustrates main argument)',
+          },
         },
-        minItems: 5,
-        maxItems: 8,
+        required: ['text', 'speaker'],
       },
+      minItems: MIN_QUOTES,
+      maxItems: MAX_QUOTES,
     },
-    required: ['key_quotes'],
+    extraction_notes: {
+      type: 'string',
+      description: 'Brief notes about the quote extraction (e.g., "Found strong quotes on attachment theory, fewer on practical exercises")',
+    },
   },
+  required: ['quotes'],
 };
 
 // ============================================================================
@@ -69,59 +98,86 @@ const QUOTE_EXTRACTION_SCHEMA = {
 // ============================================================================
 
 /**
- * Validates the quote extraction output
- * @param {Object} data - Parsed output data
+ * Validates the extracted quotes output.
+ * Ensures quotes are present, properly structured, and meet quality standards.
+ *
+ * @param {Object} data - The extracted data from Claude
  * @throws {ValidationError} If validation fails
+ * @returns {boolean} True if validation passes
  */
 function validateOutput(data) {
-  if (!data.key_quotes || !Array.isArray(data.key_quotes)) {
-    throw new ValidationError('key_quotes', 'Missing or invalid quotes array');
+  logger.debug('🔍 Validating quote extraction output', {
+    hasQuotes: !!data.quotes,
+    quoteCount: data.quotes?.length || 0,
+  });
+
+  // Check quotes array exists
+  if (!data.quotes || !Array.isArray(data.quotes)) {
+    logger.error('❌ Validation failed: quotes missing or invalid', {
+      exists: !!data.quotes,
+      isArray: Array.isArray(data.quotes),
+    });
+    throw new ValidationError('quotes', 'Missing or invalid quotes array');
   }
 
-  const quotes = data.key_quotes;
-
-  if (quotes.length < 5) {
-    throw new ValidationError('key_quotes', `Need at least 5 quotes, got ${quotes.length}`);
-  }
-
-  if (quotes.length > 8) {
-    throw new ValidationError('key_quotes', `Maximum 8 quotes, got ${quotes.length}`);
+  // Check minimum quote count
+  if (data.quotes.length < MIN_QUOTES) {
+    logger.error('❌ Validation failed: not enough quotes', {
+      count: data.quotes.length,
+      minimum: MIN_QUOTES,
+    });
+    throw new ValidationError('quotes', `Need at least ${MIN_QUOTES} quotes, got ${data.quotes.length}`);
   }
 
   // Validate each quote
-  for (let i = 0; i < quotes.length; i++) {
-    const q = quotes[i];
+  for (let i = 0; i < data.quotes.length; i++) {
+    const quote = data.quotes[i];
 
-    if (!q.quote || q.quote.length < 20) {
-      throw new ValidationError(`key_quotes[${i}].quote`, 'Quote too short or missing');
+    // Check required fields
+    if (!quote.text || typeof quote.text !== 'string') {
+      throw new ValidationError(`quotes[${i}].text`, 'Quote text is required');
     }
 
-    if (!q.speaker) {
-      throw new ValidationError(`key_quotes[${i}].speaker`, 'Speaker is required');
+    if (!quote.speaker || typeof quote.speaker !== 'string') {
+      throw new ValidationError(`quotes[${i}].speaker`, 'Speaker is required');
     }
 
-    if (!q.significance) {
-      throw new ValidationError(`key_quotes[${i}].significance`, 'Significance is required');
+    // Check quote length (should be substantial but not too long)
+    const wordCount = quote.text.split(/\s+/).length;
+    if (wordCount < 8) {
+      logger.warn('⚠️ Quote may be too short', {
+        quoteIndex: i,
+        wordCount,
+        text: quote.text.substring(0, 50),
+      });
     }
 
-    const validUsages = ['headline', 'pullquote', 'social', 'key_point'];
-    if (!validUsages.includes(q.usage_suggestion)) {
-      throw new ValidationError(
-        `key_quotes[${i}].usage_suggestion`,
-        `Invalid usage. Must be one of: ${validUsages.join(', ')}`
-      );
+    if (wordCount > 80) {
+      logger.warn('⚠️ Quote may be too long', {
+        quoteIndex: i,
+        wordCount,
+        text: quote.text.substring(0, 50) + '...',
+      });
     }
   }
 
-  // Check variety in usage suggestions
-  const usageCounts = quotes.reduce((acc, q) => {
-    acc[q.usage_suggestion] = (acc[q.usage_suggestion] || 0) + 1;
+  // Log success with stats
+  const usageCounts = data.quotes.reduce((acc, q) => {
+    if (q.usage) {
+      acc[q.usage] = (acc[q.usage] || 0) + 1;
+    }
     return acc;
   }, {});
 
-  if (Object.keys(usageCounts).length < 2) {
-    logger.warn('Low variety in quote usage suggestions', { usageCounts });
-  }
+  const speakers = [...new Set(data.quotes.map(q => q.speaker))];
+
+  logger.info('✅ Quote extraction validation passed', {
+    totalQuotes: data.quotes.length,
+    uniqueSpeakers: speakers.length,
+    speakers,
+    usageDistribution: usageCounts,
+    hasExtractionNotes: !!data.extraction_notes,
+  });
 
   return true;
 }
@@ -131,49 +187,136 @@ function validateOutput(data) {
 // ============================================================================
 
 /**
- * Extracts key quotes from a podcast transcript
+ * Extracts key verbatim quotes from the podcast transcript.
+ *
+ * This function is the CANONICAL source of quotes for the entire pipeline.
+ * Downstream stages (blog, social, email) all reference these quotes.
+ *
+ * Key Design Decisions:
+ * ---------------------
+ * 1. Always uses ORIGINAL transcript (not Stage 0 summary) for verbatim accuracy
+ * 2. Uses Claude Haiku - fast, cheap, excellent at extraction
+ * 3. Uses tool_use for guaranteed JSON structure
+ * 4. Standardized output format used by all downstream stages
  *
  * @param {Object} context - Processing context
  * @param {string} context.episodeId - Episode UUID
- * @param {string} context.transcript - Full transcript text
+ * @param {string} context.transcript - ORIGINAL transcript (always used, not summary)
  * @param {Object} context.evergreen - Evergreen content settings
- * @param {Object} context.previousStages - Previous stage outputs
- * @returns {Promise<Object>} Extraction result with output_data, tokens, cost
+ * @param {Object} context.previousStages - Previous stage outputs (uses Stage 1 for context)
+ * @returns {Promise<Object>} Result with output_data containing quotes array
  */
 export async function extractQuotes(context) {
   const { episodeId, transcript, evergreen, previousStages } = context;
 
   logger.stageStart(2, 'Quote Extraction', episodeId);
 
-  // Load prompt with context (includes stage 1 output)
-  const prompt = await loadStagePrompt('stage-02-quote-extraction', {
-    transcript,
-    evergreen,
-    previousStages,
+  // -------------------------------------------------------------------------
+  // IMPORTANT: Always use ORIGINAL transcript for quote extraction
+  // This ensures quotes are verbatim and accurate, even if Stage 0 preprocessed
+  // -------------------------------------------------------------------------
+  const originalTranscript = transcript;
+
+  logger.debug('📝 Using ORIGINAL transcript for quote extraction', {
+    episodeId,
+    transcriptLength: originalTranscript?.length,
+    wordCount: originalTranscript?.split(/\s+/).length || 0,
+    wasPreprocessed: previousStages[0]?.preprocessed === true,
   });
 
-  // Call OpenAI with function calling
-  const response = await callOpenAIWithFunctions(
-    prompt,
-    [QUOTE_EXTRACTION_SCHEMA],
-    {
-      episodeId,
-      stageNumber: 2,
-      functionCall: 'quote_extraction',
-      temperature: 0.6,
-    }
-  );
+  // Get context from Stage 1 analysis (helps guide quote selection)
+  const stage1Output = previousStages[1] || {};
+  const episodeCrux = stage1Output.episode_crux || '';
+  const keyThemes = stage1Output.key_themes || [];
 
-  // Validate output
-  const outputData = response.functionCall;
+  // -------------------------------------------------------------------------
+  // Build the prompt for Claude Haiku
+  // -------------------------------------------------------------------------
+  const systemPrompt = `You are an expert content curator specializing in extracting powerful, quotable moments from podcast transcripts.
 
-  if (!outputData) {
-    throw new ValidationError('response', 'No function call output returned');
-  }
+Your task is to find the most impactful verbatim quotes that could be used for:
+- Headlines and article titles
+- Pull quotes in blog posts
+- Social media posts
+- Key takeaway callouts
 
+CRITICAL REQUIREMENTS:
+- Quotes MUST be EXACT verbatim text from the transcript
+- Do NOT paraphrase, clean up grammar, or modify the quotes in any way
+- Include quotes from different parts of the conversation
+- Capture a mix of insightful, practical, and emotionally resonant quotes
+- Aim for ${TARGET_QUOTES} quotes total`;
+
+  const userPrompt = `## Episode Context
+
+**Podcast:** ${evergreen?.podcast_info?.name || 'Podcast'}
+**Host:** ${evergreen?.therapist_profile?.name || 'Host'}
+
+${episodeCrux ? `**Episode Crux:** ${episodeCrux}` : ''}
+
+${keyThemes.length > 0 ? `**Key Themes:**
+${keyThemes.map(t => `- ${t.theme}: ${t.description}`).join('\n')}` : ''}
+
+## Instructions
+
+Extract ${TARGET_QUOTES} powerful verbatim quotes from this transcript. Focus on:
+1. **Headline-worthy statements** - Bold, attention-grabbing insights
+2. **Practical wisdom** - Actionable advice listeners can apply
+3. **Emotional resonance** - Moments that will connect with readers
+4. **Expert insights** - Credible, authoritative statements
+5. **Unique perspectives** - Fresh takes not commonly heard
+
+For each quote:
+- Copy the EXACT words from the transcript (verbatim)
+- Note who said it
+- Explain briefly why it's significant (context)
+- Suggest the best use (headline, pullquote, social, or key_point)
+
+## Full Transcript
+
+${originalTranscript}`;
+
+  // -------------------------------------------------------------------------
+  // Call Claude Haiku with tool_use for structured output
+  // -------------------------------------------------------------------------
+  const response = await callClaudeStructured(userPrompt, {
+    model: QUOTE_EXTRACTION_MODEL,
+    system: systemPrompt,
+    toolName: 'extract_quotes',
+    toolDescription: 'Extract key verbatim quotes from the podcast transcript',
+    inputSchema: QUOTE_EXTRACTION_SCHEMA,
+    episodeId,
+    stageNumber: 2,
+    temperature: 0.3, // Low temperature for accurate extraction
+    maxTokens: 4096,
+  });
+
+  // Extract the structured output
+  const outputData = response.toolInput;
+
+  logger.debug('📥 Received quote extraction response', {
+    episodeId,
+    quoteCount: outputData.quotes?.length || 0,
+    hasExtractionNotes: !!outputData.extraction_notes,
+  });
+
+  // Validate the output
   validateOutput(outputData);
 
+  // Log success with detailed stats
+  const avgQuoteLength = Math.round(
+    outputData.quotes.reduce((sum, q) => sum + q.text.split(/\s+/).length, 0) / outputData.quotes.length
+  );
+
   logger.stageComplete(2, 'Quote Extraction', episodeId, response.durationMs, response.cost);
+
+  logger.info('📝 Quote extraction complete', {
+    episodeId,
+    totalQuotes: outputData.quotes.length,
+    avgQuoteWords: avgQuoteLength,
+    model: QUOTE_EXTRACTION_MODEL,
+    cost: response.cost,
+  });
 
   return {
     output_data: outputData,

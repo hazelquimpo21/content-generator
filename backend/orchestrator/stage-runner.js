@@ -17,7 +17,9 @@
  * Stage-to-Model Mapping:
  * -----------------------
  * Stage 0: Claude Haiku (preprocessing, 200K context)
- * Stages 1-6: GPT-5 mini (analysis and drafting)
+ * Stage 1: GPT-5 mini (transcript analysis)
+ * Stage 2: Claude Haiku (quote extraction - accurate, verbatim)
+ * Stages 3-6: GPT-5 mini (outlining and drafting)
  * Stages 7-9: Claude Sonnet (refinement and distribution)
  *
  * Error Handling:
@@ -92,7 +94,7 @@ export const STAGE_NAMES = {
 export const STAGE_PROVIDERS = {
   0: 'anthropic',  // Claude Haiku for preprocessing (200K context)
   1: 'openai',
-  2: 'openai',
+  2: 'anthropic',  // Claude Haiku for quote extraction (fast, accurate)
   3: 'openai',
   4: 'openai',
   5: 'openai',
@@ -104,11 +106,16 @@ export const STAGE_PROVIDERS = {
 
 /**
  * Model used for each stage
+ *
+ * Stage 2 uses Haiku because:
+ * - Quote extraction is a precise extraction task (not creative)
+ * - Haiku has 200K context (handles long transcripts)
+ * - Much cheaper and faster than GPT-5 mini for this task
  */
 export const STAGE_MODELS = {
   0: 'claude-3-5-haiku-20241022',  // Haiku for preprocessing (200K context, cheap)
   1: 'gpt-5-mini',
-  2: 'gpt-5-mini',
+  2: 'claude-3-5-haiku-20241022',  // Haiku for quote extraction (fast, accurate)
   3: 'gpt-5-mini',
   4: 'gpt-5-mini',
   5: 'gpt-5-mini',

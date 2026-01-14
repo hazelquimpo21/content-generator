@@ -136,6 +136,92 @@ frontend/
     └── validation.js                        (~150 lines)
 ```
 
+## Stage-to-Model Mapping
+
+Each stage uses the most appropriate AI model for its task:
+
+| Stage | Name | Model | Provider | Purpose |
+|-------|------|-------|----------|---------|
+| 0 | Preprocessing | Claude Haiku | Anthropic | Compress long transcripts (200K context) |
+| 1 | Analysis | GPT-5 mini | OpenAI | Extract metadata, themes, audience |
+| 2 | **Quote Extraction** | **Claude Haiku** | Anthropic | Extract verbatim quotes (fast, accurate) |
+| 3 | Blog Outline | GPT-5 mini | OpenAI | High-level post structure |
+| 4 | Paragraph Outlines | GPT-5 mini | OpenAI | Detailed section plans |
+| 5 | Headlines | GPT-5 mini | OpenAI | Title and copy options |
+| 6 | Draft Generation | GPT-5 mini | OpenAI | Write the blog post |
+| 7 | Refinement | Claude Sonnet | Anthropic | Polish and improve |
+| 8 | Social Content | Claude Sonnet | Anthropic | Platform-specific posts |
+| 9 | Email Campaign | Claude Sonnet | Anthropic | Newsletter content |
+
+## Quote Architecture
+
+**IMPORTANT:** Stage 2 is the SOLE source of quotes for the entire pipeline.
+
+### Quote Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ ORIGINAL TRANSCRIPT (always used for Stage 2, never the summary)   │
+└─────────────────────────────────┬───────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ STAGE 2: Quote Extraction (Claude Haiku)                            │
+│ ────────────────────────────────────────────────────────────────────│
+│ Extracts 8-12 verbatim quotes with standardized structure:          │
+│                                                                     │
+│ {                                                                   │
+│   quotes: [                                                         │
+│     {                                                               │
+│       text: "Exact verbatim quote...",  // Required                │
+│       speaker: "Dr. Jane Smith",         // Required                │
+│       context: "Why significant...",     // Optional                │
+│       usage: "headline|pullquote|social|key_point" // Optional     │
+│     }                                                               │
+│   ]                                                                 │
+│ }                                                                   │
+└─────────────────────────────────┬───────────────────────────────────┘
+                                  │
+            ┌─────────────────────┼─────────────────────┐
+            ▼                     ▼                     ▼
+┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐
+│ Stage 6: Blog     │ │ Stage 8: Social   │ │ Frontend UI       │
+│ Draft Generation  │ │ Content           │ │ (ReviewHub)       │
+│ ─────────────────│ │ ─────────────────│ │ ─────────────────│
+│ Integrates quotes │ │ Uses quotes for   │ │ Displays quotes   │
+│ into blog post    │ │ social media      │ │ with copy button  │
+└───────────────────┘ └───────────────────┘ └───────────────────┘
+```
+
+### Accessing Quotes in Code
+
+**In Analyzers:**
+```javascript
+const quotes = previousStages[2]?.quotes;
+```
+
+**In Prompt Templates:**
+```
+{{STAGE_2_QUOTES}}
+```
+
+### Why Stage 2 Uses Haiku
+
+1. **Extraction Task** - Not creative generation, just finding verbatim text
+2. **200K Context** - Handles very long transcripts without truncation
+3. **Cost Effective** - Much cheaper than GPT-5 mini for this task
+4. **Fast** - Quicker response times for the extraction task
+5. **Accuracy** - Excellent at precise, verbatim extraction
+
+### Stage 0 Does NOT Extract Quotes
+
+Stage 0 (preprocessing) focuses ONLY on:
+- Compressing long transcripts into summaries
+- Identifying speakers and topics
+- Extracting episode metadata
+
+**Stage 0 does not extract quotes** to maintain single responsibility and avoid diluted output quality.
+
 ## Data Flow Architecture
 
 ### Episode Processing Pipeline

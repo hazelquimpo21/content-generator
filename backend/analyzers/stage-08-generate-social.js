@@ -68,7 +68,8 @@ export async function generateSocial(context) {
   logger.stageStart(8, 'Social Content', episodeId);
 
   const refinedPost = previousStages[7]?.output_text;
-  const quotes = previousStages[2]?.key_quotes;
+  // Stage 2 quotes use standardized structure: { text, speaker, context, usage }
+  const quotes = previousStages[2]?.quotes;
   const headlines = previousStages[5];
 
   if (!refinedPost) {

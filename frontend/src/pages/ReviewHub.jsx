@@ -588,6 +588,15 @@ function AnalysisTab({ stage }) {
   );
 }
 
+/**
+ * QuotesTab - Displays extracted quotes from Stage 2
+ *
+ * Quote structure (from Stage 2):
+ * - text: The verbatim quote (required)
+ * - speaker: Who said it (required)
+ * - context: Why it's significant (optional)
+ * - usage: Suggested use - headline/pullquote/social/key_point (optional)
+ */
 function QuotesTab({ stage, onCopy, copied }) {
   if (!stage?.output_data?.quotes) return <EmptyState message="No quotes extracted" />;
 
@@ -596,15 +605,20 @@ function QuotesTab({ stage, onCopy, copied }) {
       {stage.output_data.quotes.map((quote, i) => (
         <Card key={i} padding="lg" className={styles.quoteCard}>
           <blockquote className={styles.quote}>
-            "{quote.quote_text}"
+            "{quote.text}"
           </blockquote>
           <p className={styles.quoteSpeaker}>— {quote.speaker}</p>
-          <p className={styles.quoteContext}>{quote.context}</p>
+          {quote.context && <p className={styles.quoteContext}>{quote.context}</p>}
+          {quote.usage && (
+            <Badge variant="secondary" className={styles.quoteUsage}>
+              {quote.usage}
+            </Badge>
+          )}
           <Button
             variant="ghost"
             size="sm"
             leftIcon={copied === `quote-${i}` ? Check : Copy}
-            onClick={() => onCopy(quote.quote_text, `quote-${i}`)}
+            onClick={() => onCopy(quote.text, `quote-${i}`)}
           >
             {copied === `quote-${i}` ? 'Copied!' : 'Copy'}
           </Button>

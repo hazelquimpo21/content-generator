@@ -224,6 +224,8 @@ Stage 0 (preprocessing) focuses ONLY on:
 
 ## Data Flow Architecture
 
+> **See also:** [STAGE-DATA-FLOW.md](./STAGE-DATA-FLOW.md) for detailed documentation on how data flows between stages, including the `previousStages` object structure and common debugging tips.
+
 ### Episode Processing Pipeline
 
 ```
@@ -346,6 +348,28 @@ async function analyzeStage(context) {
 - No database access (handled by orchestrator)
 - No side effects beyond logging
 - Comprehensive error handling
+
+**Output Structure (CRITICAL):**
+
+Every analyzer must return both `output_data` and `output_text`, even if one is null:
+
+```javascript
+return {
+  output_data: { /* structured JSON */ } || null,
+  output_text: "markdown content" || null,
+  input_tokens: number,
+  output_tokens: number,
+  cost_usd: number,
+};
+```
+
+The orchestrator merges BOTH into `previousStages[stageNum]` for downstream access:
+
+```javascript
+// Downstream stages can access either:
+previousStages[6].word_count     // from output_data
+previousStages[6].output_text    // the actual blog post
+```
 
 ### Parser Module Pattern
 

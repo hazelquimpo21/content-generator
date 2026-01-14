@@ -26,6 +26,11 @@ const BLOG_OUTLINE_SCHEMA = {
   parameters: {
     type: 'object',
     properties: {
+      // NEW: Narrative summary for downstream stages to understand the "big picture"
+      narrative_summary: {
+        type: 'string',
+        description: 'A 3-4 sentence summary of what this blog post will communicate. This captures the key message, main argument, and takeaway in prose form. Used by Stage 6 to understand the narrative arc.',
+      },
       post_structure: {
         type: 'object',
         properties: {
@@ -51,6 +56,11 @@ const BLOG_OUTLINE_SCHEMA = {
                   type: 'string',
                   description: 'What this section accomplishes',
                 },
+                key_points: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: '2-3 key points this section should cover',
+                },
                 word_count_target: {
                   type: 'number',
                   description: 'Target word count for this section',
@@ -73,7 +83,7 @@ const BLOG_OUTLINE_SCHEMA = {
         description: 'Sum of word count targets (should be ~750)',
       },
     },
-    required: ['post_structure', 'estimated_total_words'],
+    required: ['post_structure', 'estimated_total_words', 'narrative_summary'],
   },
 };
 
@@ -81,8 +91,25 @@ const BLOG_OUTLINE_SCHEMA = {
 // VALIDATION
 // ============================================================================
 
-function validateOutput(data) {
+function validateOutput(data, episodeId) {
+  logger.debug('🔍 Validating Stage 3 outline output', { episodeId });
+
+  // Check narrative summary (NEW - critical for Stage 6)
+  if (!data.narrative_summary || data.narrative_summary.length < 50) {
+    logger.warn('⚠️ Narrative summary missing or too short', {
+      episodeId,
+      length: data.narrative_summary?.length || 0,
+    });
+    // Don't throw - just warn. We can work without it.
+  } else {
+    logger.debug('✅ Narrative summary present', {
+      episodeId,
+      length: data.narrative_summary.length,
+    });
+  }
+
   if (!data.post_structure) {
+    logger.error('❌ Missing post_structure', { episodeId });
     throw new ValidationError('post_structure', 'Missing post structure');
   }
 
@@ -117,7 +144,8 @@ function validateOutput(data) {
 
   // Check total word count is reasonable
   if (estimated_total_words < 600 || estimated_total_words > 900) {
-    logger.warn('Word count estimate outside expected range', {
+    logger.warn('⚠️ Word count estimate outside expected range', {
+      episodeId,
       estimated: estimated_total_words,
       calculated: totalWords,
     });
@@ -127,6 +155,13 @@ function validateOutput(data) {
   if (!post_structure.cta || post_structure.cta.length < 10) {
     throw new ValidationError('cta', 'CTA description is too short');
   }
+
+  logger.info('✅ Stage 3 outline validation passed', {
+    episodeId,
+    sectionCount: sections.length,
+    estimatedWords: estimated_total_words,
+    hasNarrativeSummary: !!data.narrative_summary,
+  });
 
   return true;
 }
@@ -163,7 +198,7 @@ export async function outlineHighLevel(context) {
     throw new ValidationError('response', 'No function call output returned');
   }
 
-  validateOutput(outputData);
+  validateOutput(outputData, episodeId);
 
   logger.stageComplete(3, 'Blog Outline - High Level', episodeId, response.durationMs, response.cost);
 

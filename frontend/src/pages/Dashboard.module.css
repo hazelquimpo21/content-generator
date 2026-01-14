@@ -176,14 +176,55 @@
   overflow: hidden;
 }
 
+/* Card footer with actions */
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: var(--space-2);
+}
+
 .cardAction {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  margin-top: auto;
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
   color: var(--color-primary);
+}
+
+/* Delete button styling */
+.deleteButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  opacity: 0;
+}
+
+/* Show delete button on card hover */
+.episodeCard:hover .deleteButton {
+  opacity: 1;
+}
+
+.deleteButton:hover {
+  background-color: var(--color-error-light, rgba(184, 82, 74, 0.1));
+  color: var(--color-error);
+}
+
+.deleteButton:focus-visible {
+  outline: 2px solid var(--color-error);
+  outline-offset: 2px;
+  opacity: 1;
 }
 
 /* ============================================================================

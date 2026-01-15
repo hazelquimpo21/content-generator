@@ -458,6 +458,7 @@ function ReviewHub() {
         source_stage: saveLibraryData.source_stage,
         source_sub_stage: saveLibraryData.source_sub_stage || null,
         tags: libraryFormData.tags || [],
+        topic_ids: libraryFormData.topic_ids || [],
         metadata: saveLibraryData.metadata || {},
       });
 
@@ -1213,6 +1214,7 @@ function ReviewHub() {
         initialData={{
           title: saveLibraryData?.title || '',
         }}
+        suggestedTopics={getStage(1)?.output_data?.episode_basics?.main_topics || []}
       />
 
       {/* Schedule Modal */}

@@ -176,6 +176,7 @@ router.get('/', requireAuth, async (req, res, next) => {
       content_type,
       platform,
       status,
+      topic_id,
       limit = 100,
       offset = 0,
     } = req.query;
@@ -183,7 +184,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     logger.debug('Listing calendar items', {
       userId: req.user.id,
       dateRange: { start_date, end_date },
-      filters: { content_type, platform, status, episode_id },
+      filters: { content_type, platform, status, episode_id, topic_id },
       pagination: { limit, offset },
     });
 
@@ -237,6 +238,9 @@ router.get('/', requireAuth, async (req, res, next) => {
     if (status) {
       query = query.eq('status', status);
     }
+    if (topic_id) {
+      query = query.contains('topic_ids', [topic_id]);
+    }
 
     const { data: items, error, count } = await query;
 
@@ -288,6 +292,7 @@ router.post('/', requireAuth, async (req, res, next) => {
       library_item_id,
       notes,
       metadata,
+      topic_ids,
     } = req.body;
 
     logger.info('Scheduling content', {
@@ -299,6 +304,7 @@ router.post('/', requireAuth, async (req, res, next) => {
       hasContent: !!full_content,
       hasEpisodeId: !!episode_id,
       hasLibraryItemId: !!library_item_id,
+      topicCount: topic_ids?.length || 0,
     });
 
     // Validate input
@@ -330,6 +336,7 @@ router.post('/', requireAuth, async (req, res, next) => {
       library_item_id: library_item_id || null,
       notes: notes?.trim() || null,
       metadata: metadata || {},
+      topic_ids: topic_ids || [],
     };
 
     const { data: item, error } = await db

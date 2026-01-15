@@ -5,6 +5,14 @@
  * Assembles all previous stage outputs into a clear, structured context
  * document for Stage 6 (Draft Generation).
  *
+ * Architecture Context:
+ * ---------------------
+ * This module is used in PHASE 3 (Write) to compile outputs from:
+ * - PHASE 1 (Extract): Stage 1 (episode_crux), Stage 2 (quotes)
+ * - PHASE 2 (Plan): Stage 3 (outline), Stage 4 (paragraphs), Stage 5 (headlines)
+ *
+ * It transforms these into a single coherent context document for Stage 6.
+ *
  * Philosophy:
  * -----------
  * This module follows the "single responsibility" principle:
@@ -15,6 +23,14 @@
  * The compiler transforms fragmented JSON outputs from Stages 1-5 into a
  * cohesive, human-readable document that gives the AI everything it needs
  * to write a complete 750-word blog post.
+ *
+ * Key Data Sources:
+ * -----------------
+ * - Stage 1: episode_crux (CANONICAL SUMMARY) - The core insight to build around
+ * - Stage 2: quotes[] (CANONICAL QUOTES) - Verbatim quotes to integrate
+ * - Stage 3: post_structure - High-level blog outline
+ * - Stage 4: section_details - Paragraph-level guidance
+ * - Stage 5: headlines, subheadings - Title options
  *
  * Why This Exists:
  * ----------------

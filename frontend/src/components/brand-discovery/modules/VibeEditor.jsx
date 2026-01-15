@@ -191,6 +191,31 @@ function VibeEditor({ data = {}, onSave, onClose, saving }) {
 
             {/* Slider with endpoints */}
             <div className={styles.sliderRow}>
+              <div className={styles.endpointLeft}>
+                <span className={styles.endpointLabel}>{dimension.leftEnd}</span>
+              </div>
+
+              <div className={styles.sliderWrapper}>
+                {/* Track with filled portion */}
+                <div className={styles.sliderTrack}>
+                  <div
+                    className={styles.sliderFill}
+                    style={{ width: `${vibeValues[dimension.id]}%` }}
+                  />
+                </div>
+
+                {/* Tick marks */}
+                <div className={styles.tickMarks}>
+                  <div className={styles.tick} data-position="start" />
+                  <div className={styles.tick} data-position="quarter" />
+                  <div className={`${styles.tick} ${styles.tickCenter}`} data-position="center">
+                    <span className={styles.tickLabel}>Balanced</span>
+                  </div>
+                  <div className={styles.tick} data-position="three-quarter" />
+                  <div className={styles.tick} data-position="end" />
+                </div>
+
+                {/* The actual range input */}
               <span className={styles.endpoint}>{dimension.leftEnd}</span>
 
               <div className={styles.sliderWrapper}>
@@ -203,6 +228,23 @@ function VibeEditor({ data = {}, onSave, onClose, saving }) {
                   className={styles.slider}
                   aria-label={dimension.label}
                 />
+
+                {/* Value bubble indicator */}
+                <div
+                  className={styles.valueBubble}
+                  style={{ left: `${vibeValues[dimension.id]}%` }}
+                >
+                  <span className={styles.valueBubbleText}>
+                    {vibeValues[dimension.id] < 40 ? 'More ' + dimension.leftEnd.split(' ')[0] :
+                     vibeValues[dimension.id] > 60 ? 'More ' + dimension.rightEnd.split(' ')[0] :
+                     'Balanced'}
+                  </span>
+                </div>
+              </div>
+
+              <div className={styles.endpointRight}>
+                <span className={styles.endpointLabel}>{dimension.rightEnd}</span>
+              </div>
                 {/* Visual indicator for center */}
                 <div className={styles.sliderCenter} />
               </div>

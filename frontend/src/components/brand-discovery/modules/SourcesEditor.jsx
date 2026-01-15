@@ -188,6 +188,7 @@ function SourcesEditor({ data = {}, onSave, onClose, saving }) {
       {/* Source tabs */}
       <div className={styles.sourceTabs}>
         {sources.map((source, index) => (
+          <button
           <div
             key={source.id}
             className={clsx(
@@ -218,6 +219,7 @@ function SourcesEditor({ data = {}, onSave, onClose, saving }) {
             >
               <Trash2 className={styles.tabRemoveIcon} />
             </button>
+          </button>
           </div>
         ))}
 

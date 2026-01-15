@@ -128,6 +128,13 @@ function BrandDiscoveryStudio({ defaultExpanded = true, onBrandDnaChange }) {
       ]);
 
       console.log('[BrandDiscoveryStudio] Data loaded:', {
+        hasDiscovery: !!discoveryResponse.brandDiscovery,
+        completion: discoveryResponse.brandDiscovery?.overall_completion_percent,
+        hasBrandDna: !!discoveryResponse.brandDiscovery?.brand_dna,
+      });
+
+      setBrandDiscovery(discoveryResponse.brandDiscovery);
+      setReferenceData(refDataResponse);
         hasDiscovery: !!discoveryResponse.data,
         completion: discoveryResponse.data?.overall_completion_percent,
         hasBrandDna: !!discoveryResponse.data?.brand_dna,
@@ -158,6 +165,7 @@ function BrandDiscoveryStudio({ defaultExpanded = true, onBrandDnaChange }) {
       const response = await api.brandDiscovery.updateModule(moduleId, data, status);
 
       // Update local state with response
+      setBrandDiscovery(response.brandDiscovery);
       setBrandDiscovery(response.data);
 
       // Show success feedback
@@ -169,6 +177,8 @@ function BrandDiscoveryStudio({ defaultExpanded = true, onBrandDnaChange }) {
 
       console.log('[BrandDiscoveryStudio] Module updated:', {
         moduleId,
+        newCompletion: response.brandDiscovery?.overall_completion_percent,
+        hasBrandDna: !!response.brandDiscovery?.brand_dna,
         newCompletion: response.data?.overall_completion_percent,
         hasBrandDna: !!response.data?.brand_dna,
       });
@@ -194,6 +204,7 @@ function BrandDiscoveryStudio({ defaultExpanded = true, onBrandDnaChange }) {
       console.log('[BrandDiscoveryStudio] Regenerating Brand DNA...');
       const response = await api.brandDiscovery.regenerateBrandDna();
 
+      setBrandDiscovery(response.brandDiscovery);
       setBrandDiscovery(response.data);
 
       showToast({
@@ -202,6 +213,7 @@ function BrandDiscoveryStudio({ defaultExpanded = true, onBrandDnaChange }) {
       });
 
       console.log('[BrandDiscoveryStudio] Brand DNA regenerated:', {
+        hasResult: !!response.brandDiscovery?.brand_dna,
         hasResult: !!response.data?.brand_dna,
       });
     } catch (err) {
@@ -228,6 +240,7 @@ function BrandDiscoveryStudio({ defaultExpanded = true, onBrandDnaChange }) {
       console.log('[BrandDiscoveryStudio] Resetting brand discovery...');
 
       const response = await api.brandDiscovery.reset();
+      setBrandDiscovery(response.brandDiscovery);
       setBrandDiscovery(response.data);
 
       showToast({

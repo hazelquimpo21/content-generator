@@ -93,12 +93,11 @@ function NewEpisode() {
     setEpisodeContext((prev) => {
       const updates = { ...prev };
 
-      // Auto-populate title if empty or not manually edited
+      // Auto-populate title if not manually edited by user
+      // Always use AI-suggested title over filename-based defaults
       if (metadata.suggested_title && !userEditedFieldsRef.current.has('title')) {
-        if (!prev.title || prev.title === '') {
-          updates.title = metadata.suggested_title;
-          newAutoPopulated.add('title');
-        }
+        updates.title = metadata.suggested_title;
+        newAutoPopulated.add('title');
       }
 
       // Auto-populate guest name if empty or not manually edited

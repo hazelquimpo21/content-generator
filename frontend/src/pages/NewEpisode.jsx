@@ -507,7 +507,6 @@ function NewEpisode() {
           <Card
             title="Episode Title"
             subtitle="AI-generated title based on your transcript"
-            headerAction={<Wand2 className={styles.sectionIcon} />}
             className={styles.titleCard}
           >
             <div className={styles.generatedTitleSection}>
@@ -603,7 +602,8 @@ function NewEpisode() {
                     type="button"
                     variant="ghost"
                     size="sm"
-                    leftIcon={isRegenerating ? Loader2 : RefreshCw}
+                    leftIcon={RefreshCw}
+                    loading={isRegenerating}
                     onClick={handleRegenerateTitle}
                     disabled={!canRegenerate}
                     title={
@@ -614,11 +614,9 @@ function NewEpisode() {
                           : 'Generate a new title'
                     }
                   >
-                    {isRegenerating
-                      ? 'Generating...'
-                      : regenerateCooldown > 0
-                        ? `Wait ${regenerateCooldown}s`
-                        : 'Regenerate'}
+                    {regenerateCooldown > 0
+                      ? `Wait ${regenerateCooldown}s`
+                      : 'Regenerate'}
                   </Button>
                   {regenerationCount > 0 && (
                     <span className={styles.regenerationInfo}>

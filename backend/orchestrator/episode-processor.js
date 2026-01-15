@@ -168,9 +168,12 @@ async function loadPreviousStages(context, upToStage) {
   for (const stage of stages) {
     if (stage.stage_number < upToStage) {
       if (stage.status === 'completed') {
-        // Store output_data (structured) or fallback to output_text wrapper
-        context.previousStages[stage.stage_number] = stage.output_data || {
-          output_text: stage.output_text,
+        // Store BOTH output_data and output_text for downstream stages.
+        // Some stages (like Stage 7) need output_text from previous stage (Stage 6).
+        // Some stages need structured output_data. Merge both to ensure availability.
+        context.previousStages[stage.stage_number] = {
+          ...(stage.output_data || {}),
+          output_text: stage.output_text || null,
         };
         loadedCount++;
       } else {
@@ -320,8 +323,13 @@ export async function processEpisode(episodeId, options = {}) {
         await stageRepo.markCompleted(episodeId, stageNum, result);
 
         // Add to context for next stage
-        context.previousStages[stageNum] = result.output_data || {
-          output_text: result.output_text,
+        // IMPORTANT: Merge both output_data and output_text so downstream stages
+        // can access either structured data OR text content as needed.
+        // Stage 6 returns output_data (word_count, structure) AND output_text (blog post).
+        // Stage 7 needs output_text for refinement.
+        context.previousStages[stageNum] = {
+          ...(result.output_data || {}),
+          output_text: result.output_text || null,
         };
 
         // Track total cost

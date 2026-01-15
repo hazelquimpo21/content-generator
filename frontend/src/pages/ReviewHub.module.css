@@ -243,6 +243,78 @@
 }
 
 /* ============================================================================
+ * PILL NAVIGATION (shared by Titles & Social tabs)
+ * ============================================================================ */
+
+.pillNav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.pill {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.pill:hover {
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border-color: var(--color-bg-accent);
+}
+
+.pillActive {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-dark);
+  border-color: var(--color-primary);
+}
+
+.pillActive:hover {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary-dark);
+}
+
+/* Platform-specific pill styling */
+.platformPill.pillActive {
+  background-color: color-mix(in srgb, var(--platform-color, var(--color-primary)) 15%, transparent);
+  color: var(--platform-color, var(--color-primary-dark));
+  border-color: var(--platform-color, var(--color-primary));
+}
+
+.pillCount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 var(--space-1);
+  background-color: var(--color-bg-secondary);
+  border-radius: 999px;
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+}
+
+.pillActive .pillCount {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+.platformPill.pillActive .pillCount {
+  background-color: var(--platform-color, var(--color-primary));
+}
+
+/* ============================================================================
  * TITLES TAB
  * ============================================================================ */
 
@@ -356,7 +428,7 @@
   padding: var(--space-4);
   background-color: var(--color-bg-tertiary);
   border-radius: var(--radius-md);
-  border-left: 3px solid var(--color-primary);
+  border-left: 3px solid var(--platform-accent, var(--color-primary));
 }
 
 .postType {

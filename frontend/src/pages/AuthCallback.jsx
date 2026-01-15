@@ -66,16 +66,46 @@ function AuthCallback() {
         }
 
         if (session) {
-          console.log('AuthCallback: Session established, redirecting...');
+          console.log('AuthCallback: Session established, checking onboarding status...');
           setStatus('success');
 
-          // Get the original destination from state or default to dashboard
-          const from = location.state?.from?.pathname || '/';
+          // Fetch user profile to check onboarding status
+          try {
+            const response = await fetch('/api/auth/me', {
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json',
+              },
+            });
 
-          // Short delay to show success state
-          setTimeout(() => {
-            navigate(from, { replace: true });
-          }, 1000);
+            if (response.ok) {
+              const data = await response.json();
+              const needsOnboarding = !data.user?.onboarding_complete;
+
+              // Redirect to onboarding if needed, otherwise to original destination
+              const destination = needsOnboarding
+                ? '/onboarding'
+                : (location.state?.from?.pathname || '/');
+
+              console.log('AuthCallback: Redirecting to', destination, { needsOnboarding });
+
+              setTimeout(() => {
+                navigate(destination, { replace: true });
+              }, 1000);
+            } else {
+              // Fallback to default destination if profile check fails
+              const from = location.state?.from?.pathname || '/';
+              setTimeout(() => {
+                navigate(from, { replace: true });
+              }, 1000);
+            }
+          } catch (err) {
+            console.error('AuthCallback: Failed to check onboarding status', err);
+            const from = location.state?.from?.pathname || '/';
+            setTimeout(() => {
+              navigate(from, { replace: true });
+            }, 1000);
+          }
         } else {
           // No session yet - wait for auth state change
           console.log('AuthCallback: Waiting for session...');
@@ -90,10 +120,12 @@ function AuthCallback() {
     // Only process if not already authenticated
     if (!loading) {
       if (user) {
-        // Already authenticated, redirect immediately
+        // Already authenticated, redirect based on onboarding status
         console.log('AuthCallback: Already authenticated, redirecting');
-        const from = location.state?.from?.pathname || '/';
-        navigate(from, { replace: true });
+        const destination = !user.onboarding_complete
+          ? '/onboarding'
+          : (location.state?.from?.pathname || '/');
+        navigate(destination, { replace: true });
       } else {
         handleCallback();
       }
@@ -105,9 +137,14 @@ function AuthCallback() {
     if (user && status === 'processing') {
       console.log('AuthCallback: User authenticated via state change');
       setStatus('success');
-      const from = location.state?.from?.pathname || '/';
+
+      // Check onboarding status and redirect appropriately
+      const destination = !user.onboarding_complete
+        ? '/onboarding'
+        : (location.state?.from?.pathname || '/');
+
       setTimeout(() => {
-        navigate(from, { replace: true });
+        navigate(destination, { replace: true });
       }, 1000);
     }
   }, [user, status, navigate, location]);

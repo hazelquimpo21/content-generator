@@ -39,10 +39,7 @@ router.get('/', async (req, res) => {
 
     const brandDiscovery = await brandDiscoveryService.getBrandDiscovery(req.user.id);
 
-    res.json({
-      success: true,
-      data: brandDiscovery,
-    });
+    res.json({ brandDiscovery });
   } catch (error) {
     logger.error('Failed to fetch brand discovery', { ...logContext, error: error.message });
     res.status(500).json({ error: 'Failed to fetch brand discovery', details: error.message });
@@ -62,11 +59,7 @@ router.delete('/reset', async (req, res) => {
 
     const brandDiscovery = await brandDiscoveryService.resetBrandDiscovery(req.user.id);
 
-    res.json({
-      success: true,
-      message: 'Brand discovery reset successfully',
-      data: brandDiscovery,
-    });
+    res.json({ brandDiscovery, message: 'Brand discovery reset successfully' });
   } catch (error) {
     logger.error('Failed to reset brand discovery', { ...logContext, error: error.message });
     res.status(500).json({ error: 'Failed to reset brand discovery', details: error.message });
@@ -129,10 +122,7 @@ router.patch('/modules/:moduleId', async (req, res) => {
       );
     }
 
-    res.json({
-      success: true,
-      data: brandDiscovery,
-    });
+    res.json({ brandDiscovery });
   } catch (error) {
     logger.error('Failed to update module', { ...logContext, error: error.message });
 
@@ -223,10 +213,7 @@ router.post('/inferences/confirm', async (req, res) => {
       confirmed
     );
 
-    res.json({
-      success: true,
-      data: brandDiscovery,
-    });
+    res.json({ brandDiscovery });
   } catch (error) {
     logger.error('Failed to confirm inference', { ...logContext, error: error.message });
 
@@ -272,10 +259,7 @@ router.post('/brand-dna/regenerate', async (req, res) => {
       'manual_regenerate'
     );
 
-    res.json({
-      success: true,
-      data: updated,
-    });
+    res.json({ brandDiscovery: updated });
   } catch (error) {
     logger.error('Failed to regenerate Brand DNA', { ...logContext, error: error.message });
     res.status(500).json({ error: 'Failed to regenerate Brand DNA', details: error.message });
@@ -362,17 +346,14 @@ router.get('/reference-data', async (req, res) => {
     logger.debug('Fetching reference data', logContext);
 
     res.json({
-      success: true,
-      data: {
-        values: VALUES_DECK,
-        shuffled_values: getShuffledDeck(),
-        brand_archetypes: BRAND_ARCHETYPES,
-        audience_archetypes: AUDIENCE_ARCHETYPES,
-        modalities: MODALITIES,
-        specialties: SPECIALTIES,
-        platforms: PLATFORMS,
-        default_platform_order: DEFAULT_PLATFORM_ORDER,
-      },
+      values: VALUES_DECK,
+      shuffled_values: getShuffledDeck(),
+      brand_archetypes: BRAND_ARCHETYPES,
+      audience_archetypes: AUDIENCE_ARCHETYPES,
+      modalities: MODALITIES,
+      specialties: SPECIALTIES,
+      platforms: PLATFORMS,
+      default_platform_order: DEFAULT_PLATFORM_ORDER,
     });
   } catch (error) {
     logger.error('Failed to fetch reference data', { ...logContext, error: error.message });

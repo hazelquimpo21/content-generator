@@ -76,7 +76,7 @@ const EPISODE_ANALYSIS_SCHEMA = {
         properties: {
           title: {
             type: ['string', 'null'],
-            description: 'Episode title (stated or inferred), 40-60 characters',
+            description: 'Scan the transcrit and suggest a compelling Episode title for this podcast episode. The title should be 40-60 characters and should be a compelling, SEO-friendly title that would entice someone to listen to the episode. Episode title (stated or inferred), 40-60 characters',
           },
           date: {
             type: ['string', 'null'],

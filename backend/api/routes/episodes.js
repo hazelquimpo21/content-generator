@@ -105,6 +105,7 @@ function validateTranscript(transcript) {
  *
  * Request Body:
  * - transcript: string (required, min 200 chars)
+ * - regenerate: boolean (optional) - if true, generates a different/creative title
  *
  * Response:
  * - metadata: { suggested_title, guest_name, guest_credentials, main_topics, ... }
@@ -112,7 +113,7 @@ function validateTranscript(transcript) {
  */
 router.post('/analyze-transcript', requireAuth, async (req, res, next) => {
   try {
-    const { transcript } = req.body;
+    const { transcript, regenerate } = req.body;
 
     // Validate transcript
     if (!transcript || typeof transcript !== 'string') {
@@ -129,19 +130,23 @@ router.post('/analyze-transcript', requireAuth, async (req, res, next) => {
     logger.info('Quick transcript analysis requested', {
       userId: req.user.id,
       transcriptLength: transcript.length,
+      regenerate: !!regenerate,
     });
 
     // Get cost estimate first
     const estimate = estimateQuickAnalysisCost(transcript);
 
-    // Run the quick analysis
-    const result = await analyzeTranscriptQuick(transcript);
+    // Run the quick analysis (with regenerate flag for title variation)
+    const result = await analyzeTranscriptQuick(transcript, {
+      regenerateTitle: !!regenerate,
+    });
 
     logger.info('Quick transcript analysis completed', {
       userId: req.user.id,
       durationMs: result.usage.durationMs,
       cost: result.usage.cost,
       confidence: result.metadata.confidence,
+      regenerate: !!regenerate,
     });
 
     res.json({

@@ -564,6 +564,7 @@ export function logPipelineConfig() {
 
 /**
  * Maps stage numbers to task keys (for backward compatibility).
+ * Note: Stage 8 has 4 platform-specific tasks, all mapping to stage_number 8.
  */
 export const STAGE_TO_TASK = {
   0: 'preprocess',
@@ -574,16 +575,26 @@ export const STAGE_TO_TASK = {
   5: 'headlines',
   6: 'draft',
   7: 'refine',
-  8: 'social',
+  // Stage 8 is split into 4 platform-specific tasks
+  // Use 'social_instagram' as the primary mapping for backward compatibility
+  8: 'social_instagram',
   9: 'email',
 };
 
 /**
  * Maps task keys to stage numbers (for DB storage).
+ * Includes all 4 Stage 8 platform tasks.
  */
-export const TASK_TO_STAGE = Object.fromEntries(
-  Object.entries(STAGE_TO_TASK).map(([k, v]) => [v, parseInt(k)])
-);
+export const TASK_TO_STAGE = {
+  ...Object.fromEntries(
+    Object.entries(STAGE_TO_TASK).map(([k, v]) => [v, parseInt(k)])
+  ),
+  // All 4 social platform tasks map to stage 8
+  social_instagram: 8,
+  social_twitter: 8,
+  social_linkedin: 8,
+  social_facebook: 8,
+};
 
 /**
  * Gets the stage number for a task (for DB storage).

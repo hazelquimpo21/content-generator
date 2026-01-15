@@ -128,6 +128,7 @@ export async function outlineParagraphs(context) {
       stageNumber: 4,
       functionCall: 'paragraph_outlines',
       temperature: 0.6,
+      maxTokens: 8192, // Increased from 4096 - paragraph outlines need more space
     }
   );
 

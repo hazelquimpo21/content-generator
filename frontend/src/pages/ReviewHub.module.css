@@ -346,9 +346,28 @@
  * SOCIAL TAB
  * ============================================================================ */
 
+.socialPlatform {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.socialPostItem {
+  padding: var(--space-4);
+  background-color: var(--color-bg-tertiary);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--color-primary);
+}
+
+.postType {
+  margin-bottom: var(--space-2);
+  text-transform: capitalize;
+}
+
 .socialPost {
   line-height: var(--leading-relaxed);
   white-space: pre-wrap;
+  margin: 0;
 }
 
 .hashtags {

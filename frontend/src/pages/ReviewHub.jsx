@@ -169,7 +169,8 @@ function ReviewHub() {
    * Start editing the episode title
    */
   function handleStartEditTitle() {
-    const currentTitle = episode?.episode_context?.title || '';
+    // Pre-populate with user-provided title or AI-generated title
+    const currentTitle = episode?.episode_context?.title || episode?.title || '';
     setEditedTitle(currentTitle);
     setIsEditingTitle(true);
   }
@@ -363,7 +364,8 @@ function ReviewHub() {
   }
 
   const currentTab = TABS.find((t) => t.id === activeTab);
-  const episodeTitle = episode.episode_context?.title || 'Untitled Episode';
+  // Check title from multiple sources: user-provided (episode_context.title), AI-generated (episode.title)
+  const episodeTitle = episode.episode_context?.title || episode.title || 'Untitled Episode';
 
   return (
     <div className={styles.page}>

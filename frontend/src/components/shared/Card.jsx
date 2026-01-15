@@ -25,10 +25,16 @@ function Card({
   className,
   ...props
 }) {
-  const Component = onClick ? 'button' : 'div';
+  // Handle keyboard events for accessibility when card is clickable
+  const handleKeyDown = (e) => {
+    if (onClick && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      onClick(e);
+    }
+  };
 
   return (
-    <Component
+    <div
       className={clsx(
         styles.card,
         styles[`padding-${padding}`],
@@ -37,6 +43,9 @@ function Card({
         className
       )}
       onClick={onClick}
+      onKeyDown={handleKeyDown}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
       {...props}
     >
       {/* Header */}
@@ -57,7 +66,7 @@ function Card({
 
       {/* Footer */}
       {footer && <div className={styles.footer}>{footer}</div>}
-    </Component>
+    </div>
   );
 }
 

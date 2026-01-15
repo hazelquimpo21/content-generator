@@ -37,7 +37,17 @@ import styles from './Dashboard.module.css';
 // ============================================================================
 
 const POLL_INTERVAL_PROCESSING = 3000; // Poll every 3 seconds when processing
-const ESTIMATED_DURATION_SECONDS = 70; // Average processing time
+const ESTIMATED_DURATION_SECONDS = 210; // Average processing time (~3.5 minutes)
+const TOTAL_PHASES = 5; // 5-phase architecture
+
+// Stage to phase mapping for progress calculation
+const STAGE_TO_PHASE = {
+  0: 1, // pregate
+  1: 2, 2: 2, // extract
+  3: 3, 4: 3, 5: 3, // plan
+  6: 4, 7: 4, // write
+  8: 5, 9: 5, // distribute
+};
 
 // Status filter options
 const STATUS_OPTIONS = [
@@ -354,9 +364,11 @@ function EpisodeCard({ episode, onClick, onDelete }) {
     ? format(new Date(episode.created_at), 'MMM d, yyyy')
     : '';
 
-  const progress = episode.current_stage
-    ? Math.round((episode.current_stage / 9) * 100)
+  // Calculate phase progress based on current stage
+  const currentPhase = episode.current_stage !== undefined
+    ? STAGE_TO_PHASE[episode.current_stage] || 1
     : 0;
+  const progress = Math.round((currentPhase / TOTAL_PHASES) * 100);
 
   // Calculate time estimate for processing episodes
   const getProcessingTimeInfo = () => {
@@ -368,6 +380,9 @@ function EpisodeCard({ episode, onClick, onDelete }) {
     const elapsed = Math.floor((Date.now() - startTime.getTime()) / 1000);
     const remaining = Math.max(0, ESTIMATED_DURATION_SECONDS - elapsed);
 
+    if (remaining > 60) {
+      return `~${Math.ceil(remaining / 60)}m remaining`;
+    }
     if (remaining > 0) {
       return `~${remaining}s remaining`;
     }
@@ -403,7 +418,7 @@ function EpisodeCard({ episode, onClick, onDelete }) {
               />
             </div>
             <span className={styles.progressText}>
-              {episode.current_stage}/9
+              Phase {currentPhase}/{TOTAL_PHASES}
             </span>
           </div>
           <p className={styles.timeEstimate}>

@@ -271,8 +271,32 @@ const handleSave = async () => {
 
 ## 3. New Episode (Upload)
 
-**Route:** `/new`  
+**Route:** `/new`
 **Purpose:** Upload transcript and start processing
+
+### Auto-Population Feature
+
+When a user enters a transcript (minimum 200 characters), the system automatically
+analyzes it using Claude 3.5 Haiku to extract metadata for auto-populating form fields.
+
+**How it works:**
+1. User pastes/uploads transcript
+2. After 1.5s of no typing (debounced), analysis starts
+3. Claude Haiku extracts: title, guest name, credentials, topics, summary
+4. Fields are auto-populated (only empty fields, respects user edits)
+5. Visual feedback shows which fields were auto-populated
+
+**Cost & Performance:**
+- Model: Claude 3.5 Haiku (fastest, most affordable Claude model)
+- Cost: ~$0.001-0.003 per analysis
+- Duration: ~2-3 seconds
+- Minimum transcript: 200 characters
+
+**UX Behavior:**
+- "Generate Content" button is disabled while analysis is running
+- Fields show brief highlight animation when auto-populated
+- User edits are preserved (won't overwrite manual changes)
+- Analysis status shown below transcript textarea
 
 ### Layout
 

@@ -293,6 +293,15 @@ const episodes = {
   list: (params = {}) => get('/episodes', params),
 
   /**
+   * Quickly analyze a transcript to extract metadata for auto-populating fields.
+   * Uses Claude 3.5 Haiku for fast (~2-3s), affordable (~$0.001-0.003) analysis.
+   *
+   * @param {string} transcript - The podcast transcript to analyze (min 200 chars)
+   * @returns {Promise<Object>} - { metadata, usage, estimate }
+   */
+  analyzeTranscript: (transcript) => post('/episodes/analyze-transcript', { transcript }),
+
+  /**
    * Get single episode by ID
    * @param {string} id - Episode UUID
    */

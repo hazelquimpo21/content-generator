@@ -139,6 +139,83 @@
 }
 
 /* ============================================================================
+ * TRANSCRIPT FOOTER (word count + analysis status)
+ * ============================================================================ */
+
+.transcriptFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.analyzingStatus {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-primary);
+}
+
+.analyzingSpinner {
+  animation: spin 1s linear infinite;
+}
+
+.analysisComplete {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-success);
+}
+
+.analysisCost {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.analyzeError {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-warning);
+}
+
+/* ============================================================================
+ * AUTO-POPULATED FIELD HIGHLIGHT
+ * ============================================================================ */
+
+.autoPopulated {
+  animation: highlightField 2s ease-out;
+}
+
+@keyframes highlightField {
+  0% {
+    background-color: var(--color-primary-light);
+    box-shadow: 0 0 0 2px var(--color-primary);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
+/* ============================================================================
+ * SPINNING ANIMATION (for section icon)
+ * ============================================================================ */
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
  * CONTEXT GRID
  * ============================================================================ */
 

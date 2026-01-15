@@ -15,8 +15,10 @@ import {
   Loader2,
   AlertCircle,
   ChevronRight,
+  ArrowLeft,
+  Info,
 } from 'lucide-react';
-import { Button, Card, ProgressBar, Spinner } from '@components/shared';
+import { Button, Card, ProgressBar, Spinner, useToast } from '@components/shared';
 import api from '@utils/api-client';
 import styles from './ProcessingScreen.module.css';
 
@@ -39,16 +41,22 @@ const TOTAL_STAGES = 10;
 /**
  * ProcessingScreen page component
  */
+// Estimated duration in seconds
+const ESTIMATED_DURATION_SECONDS = 70;
+
 function ProcessingScreen() {
   const { id: episodeId } = useParams();
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const pollInterval = useRef(null);
+  const hasShownCompletionToast = useRef(false);
 
   // State
   const [loading, setLoading] = useState(true);
   const [episode, setEpisode] = useState(null);
   const [stages, setStages] = useState([]);
   const [error, setError] = useState(null);
+  const [startTime] = useState(Date.now());
 
   // Fetch initial data and start polling
   useEffect(() => {
@@ -69,6 +77,18 @@ function ProcessingScreen() {
     if (episode?.status === 'completed' || episode?.status === 'error') {
       if (pollInterval.current) {
         clearInterval(pollInterval.current);
+      }
+
+      // Show completion toast (only once)
+      if (episode?.status === 'completed' && !hasShownCompletionToast.current) {
+        hasShownCompletionToast.current = true;
+        const title = episode.title || episode.episode_context?.title || 'Episode';
+        showToast({
+          message: 'Processing complete!',
+          description: `"${title}" is ready to review.`,
+          variant: 'success',
+          duration: 5000,
+        });
       }
     }
   }, [episode?.status]);
@@ -110,6 +130,16 @@ function ProcessingScreen() {
   const completedStages = stages.filter((s) => s.status === 'completed').length;
   const progress = Math.round((completedStages / TOTAL_STAGES) * 100);
 
+  // Calculate time estimate
+  const getTimeEstimate = () => {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const remaining = Math.max(0, ESTIMATED_DURATION_SECONDS - elapsed);
+    if (remaining > 0) {
+      return `~${remaining}s remaining`;
+    }
+    return 'Finishing up...';
+  };
+
   if (loading) {
     return <Spinner centered text="Loading processing status..." />;
   }
@@ -127,6 +157,12 @@ function ProcessingScreen() {
 
   return (
     <div className={styles.page}>
+      {/* Back button */}
+      <button className={styles.backButton} onClick={() => navigate('/')}>
+        <ArrowLeft size={18} />
+        <span>Back to Episodes</span>
+      </button>
+
       {/* Header */}
       <header className={styles.header}>
         <h1 className={styles.title}>
@@ -137,9 +173,20 @@ function ProcessingScreen() {
             : 'Processing Episode...'}
         </h1>
         <p className={styles.subtitle}>
-          {episode.episode_context?.title || 'Untitled Episode'}
+          {episode.title || episode.episode_context?.title || 'Untitled Episode'}
         </p>
       </header>
+
+      {/* Info banner - only show during processing */}
+      {episode.status === 'processing' && (
+        <div className={styles.infoBanner}>
+          <Info size={18} />
+          <p>
+            You don't need to stay on this page. Processing continues in the background
+            and we'll update the episode when it's ready. {getTimeEstimate()}
+          </p>
+        </div>
+      )}
 
       {/* Progress bar */}
       <Card className={styles.progressCard}>

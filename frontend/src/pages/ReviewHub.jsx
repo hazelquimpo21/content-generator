@@ -25,7 +25,6 @@ import {
   Share2,
   Mail,
   Copy,
-  RefreshCw,
   Check,
   AlertCircle,
   Trash2,
@@ -86,7 +85,6 @@ function ReviewHub() {
 
   // UI interaction states
   const [copied, setCopied] = useState(null);
-  const [regenerating, setRegenerating] = useState(null);
 
   // Delete confirmation dialog
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -367,59 +365,6 @@ function ReviewHub() {
       document.body.removeChild(textarea);
       setCopied(id);
       setTimeout(() => setCopied(null), 2000);
-    }
-  }
-
-  // ============================================================================
-  // STAGE HANDLERS
-  // ============================================================================
-
-  /**
-   * Regenerate a specific stage
-   * @param {number} stageNumber - Stage number to regenerate
-   */
-  async function handleRegenerate(stageNumber) {
-    try {
-      setRegenerating(stageNumber);
-      console.log('[ReviewHub] Regenerating stage:', stageNumber);
-
-      // Find the stage by number to get its ID
-      const stage = getStage(stageNumber);
-      if (!stage) {
-        throw new Error(`Stage ${stageNumber} not found`);
-      }
-
-      await api.stages.regenerate(stage.id);
-      await fetchEpisode();
-
-      console.log('[ReviewHub] Stage regenerated successfully');
-    } catch (err) {
-      console.error('[ReviewHub] Failed to regenerate stage:', err);
-      setError(err.message || 'Failed to regenerate');
-    } finally {
-      setRegenerating(null);
-    }
-  }
-
-  /**
-   * Regenerate a specific social platform (Stage 8 sub-stage)
-   * @param {string} platform - Platform name (instagram, twitter, linkedin, facebook)
-   * @param {string} stageId - Stage record ID
-   */
-  async function handleRegeneratePlatform(platform, stageId) {
-    try {
-      setRegenerating(`8-${platform}`);
-      console.log('[ReviewHub] Regenerating platform:', platform);
-
-      await api.stages.regenerate(stageId);
-      await fetchEpisode();
-
-      console.log('[ReviewHub] Platform regenerated successfully:', platform);
-    } catch (err) {
-      console.error('[ReviewHub] Failed to regenerate platform:', err);
-      setError(err.message || 'Failed to regenerate');
-    } finally {
-      setRegenerating(null);
     }
   }
 
@@ -1170,9 +1115,7 @@ function ReviewHub() {
             draftStage={getStage(6)}
             editedStage={getStage(7)}
             onCopy={copyToClipboard}
-            onRegenerate={handleRegenerate}
             copied={copied}
-            regenerating={regenerating}
             // Blog editing props
             isEditing={isEditingBlog}
             editedContent={editedBlogContent}
@@ -1199,8 +1142,6 @@ function ReviewHub() {
             platformStages={getStage8Platforms()}
             onCopy={copyToClipboard}
             copied={copied}
-            onRegeneratePlatform={handleRegeneratePlatform}
-            regenerating={regenerating}
             // Library & schedule props
             onSaveToLibrary={handleOpenSaveLibrary}
             onSchedule={handleOpenSchedule}
@@ -1670,7 +1611,7 @@ function TitlesTab({ stage, onCopy, copied, onUpdateTitleItem, onDeleteTitleItem
   }
 
   if (!stage.output_data) {
-    return <EmptyState message="No titles generated" details="Stage 5 completed but has no output data. Try regenerating this stage." />;
+    return <EmptyState message="No titles generated" details="Stage 5 completed but has no output data." />;
   }
 
   const { headlines = [], subheadings = [], taglines = [], social_hooks = [] } = stage.output_data;
@@ -1837,7 +1778,7 @@ function TitlesTab({ stage, onCopy, copied, onUpdateTitleItem, onDeleteTitleItem
 
 /**
  * BlogTab component with inline editing support
- * Allows viewing, copying, regenerating, and editing the blog post content
+ * Allows viewing, copying, and editing the blog post content
  *
  * Stage Data Used:
  * - outlineStage (Stage 3): High-level blog outline with sections
@@ -1851,9 +1792,7 @@ function BlogTab({
   draftStage,
   editedStage,
   onCopy,
-  onRegenerate,
   copied,
-  regenerating,
   // Editing props
   isEditing,
   editedContent,
@@ -1955,15 +1894,6 @@ function BlogTab({
                     onClick={() => onStartEdit(blogPost)}
                   >
                     Edit
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    leftIcon={RefreshCw}
-                    loading={regenerating === 7}
-                    onClick={() => onRegenerate(7)}
-                  >
-                    Regenerate
                   </Button>
                   <Button
                     variant="ghost"
@@ -2075,13 +2005,11 @@ function BlogTab({
  *
  * Props:
  * - platformStages: Object map of platform -> stage record (e.g., { instagram: {...}, twitter: {...} })
- * - onRegeneratePlatform: Function(platform, stageId) to regenerate a specific platform
- * - regenerating: Currently regenerating identifier (e.g., '8-instagram')
  * - onUpdateSocialPost: Function(stage, platform, index, updatedPost) to save edited post
  * - onDeleteSocialPost: Function(stage, platform, index) to delete a post
  * - savingState: Object tracking save state by key
  */
-function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regenerating, onSaveToLibrary, onSchedule, onReschedule, onUnschedule, unscheduling, episodeTitle, getLibraryStatus, getCalendarStatus, onUpdateSocialPost, onDeleteSocialPost, savingState }) {
+function SocialTab({ platformStages, onCopy, copied, onSaveToLibrary, onSchedule, onReschedule, onUnschedule, unscheduling, episodeTitle, getLibraryStatus, getCalendarStatus, onUpdateSocialPost, onDeleteSocialPost, savingState }) {
   const [activePlatform, setActivePlatform] = useState('instagram');
   const [editingIndex, setEditingIndex] = useState(null);
 
@@ -2128,7 +2056,6 @@ function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regen
   const currentPlatform = platforms.find((p) => p.id === activePlatform) || platforms[0];
   const currentPosts = currentPlatform?.posts || [];
   const isCurrentPlatformReady = currentPlatform?.status === 'completed';
-  const isRegenerating = regenerating === `8-${currentPlatform?.id}`;
 
   return (
     <div className={styles.tabContent}>
@@ -2161,19 +2088,6 @@ function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regen
             ? `${currentPosts.length} post${currentPosts.length !== 1 ? 's' : ''} ready to share`
             : `Status: ${currentPlatform?.status}`
         }
-        action={
-          currentPlatform?.stage && (
-            <Button
-              variant="secondary"
-              size="sm"
-              leftIcon={isRegenerating ? Spinner : RefreshCw}
-              disabled={isRegenerating}
-              onClick={() => onRegeneratePlatform(currentPlatform.id, currentPlatform.stage.id)}
-            >
-              {isRegenerating ? 'Regenerating...' : 'Regenerate'}
-            </Button>
-          )
-        }
         padding="lg"
       >
         {!isCurrentPlatformReady ? (
@@ -2184,7 +2098,7 @@ function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regen
         ) : currentPosts.length === 0 ? (
           <EmptyState
             message="No posts generated"
-            details="Try regenerating this platform"
+            details="Content generation may still be in progress"
           />
         ) : (
           <div className={styles.socialPlatform}>

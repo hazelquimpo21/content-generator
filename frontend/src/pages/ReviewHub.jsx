@@ -36,6 +36,8 @@ import {
   Bookmark,
   Calendar,
   CheckCircle,
+  MoreVertical,
+  CalendarX,
 } from 'lucide-react';
 import { Button, Card, Spinner, Badge, ConfirmDialog, useToast } from '@components/shared';
 import ScheduleModal from '@components/shared/ScheduleModal';
@@ -108,6 +110,10 @@ function ReviewHub() {
   // Schedule modal state
   const [scheduleData, setScheduleData] = useState(null);
   const [scheduling, setScheduling] = useState(false);
+  const [editingCalendarItem, setEditingCalendarItem] = useState(null); // For rescheduling
+
+  // Unschedule state
+  const [unscheduling, setUnscheduling] = useState(null); // calendarItemId being unscheduled
 
   // Library and calendar status tracking
   const [libraryItems, setLibraryItems] = useState([]);
@@ -535,11 +541,22 @@ function ReviewHub() {
    * @param {Object} data - Content data to schedule
    */
   function handleOpenSchedule(data) {
+    setEditingCalendarItem(null);
     setScheduleData(data);
   }
 
   /**
-   * Schedule content on calendar
+   * Open schedule modal for rescheduling existing item
+   * @param {Object} calendarItem - Existing calendar item to reschedule
+   * @param {Object} contentData - Original content data
+   */
+  function handleOpenReschedule(calendarItem, contentData) {
+    setEditingCalendarItem(calendarItem);
+    setScheduleData(contentData);
+  }
+
+  /**
+   * Schedule or reschedule content on calendar
    * @param {Object} scheduleFormData - Form data from modal (scheduled_date, scheduled_time, status, notes)
    */
   async function handleScheduleContent(scheduleFormData) {
@@ -547,39 +564,92 @@ function ReviewHub() {
 
     try {
       setScheduling(true);
-      console.log('[ReviewHub] Scheduling content:', scheduleData.content_type);
 
-      await api.calendar.create({
-        title: scheduleData.title,
-        content_type: scheduleData.content_type,
-        platform: scheduleData.platform || null,
-        full_content: scheduleData.content,
-        episode_id: episodeId,
-        metadata: scheduleData.metadata || {},
-        ...scheduleFormData,
-      });
+      if (editingCalendarItem) {
+        // Rescheduling existing item
+        console.log('[ReviewHub] Rescheduling content:', editingCalendarItem.id);
 
-      showToast({
-        message: 'Content scheduled!',
-        description: `Scheduled for ${scheduleFormData.scheduled_date}`,
-        variant: 'success',
-        action: () => navigate('/calendar'),
-        actionLabel: 'View calendar',
-      });
+        await api.calendar.update(editingCalendarItem.id, {
+          scheduled_date: scheduleFormData.scheduled_date,
+          scheduled_time: scheduleFormData.scheduled_time,
+          status: scheduleFormData.status,
+          notes: scheduleFormData.notes,
+        });
+
+        showToast({
+          message: 'Content rescheduled!',
+          description: `Now scheduled for ${scheduleFormData.scheduled_date}`,
+          variant: 'success',
+          action: () => navigate('/calendar'),
+          actionLabel: 'View calendar',
+        });
+      } else {
+        // Creating new schedule
+        console.log('[ReviewHub] Scheduling content:', scheduleData.content_type);
+
+        await api.calendar.create({
+          title: scheduleData.title,
+          content_type: scheduleData.content_type,
+          platform: scheduleData.platform || null,
+          full_content: scheduleData.content,
+          episode_id: episodeId,
+          metadata: scheduleData.metadata || {},
+          ...scheduleFormData,
+        });
+
+        showToast({
+          message: 'Content scheduled!',
+          description: `Scheduled for ${scheduleFormData.scheduled_date}`,
+          variant: 'success',
+          action: () => navigate('/calendar'),
+          actionLabel: 'View calendar',
+        });
+      }
 
       setScheduleData(null);
+      setEditingCalendarItem(null);
 
       // Refresh status to show updated indicators
       fetchContentStatus();
     } catch (err) {
       console.error('[ReviewHub] Failed to schedule content:', err);
       showToast({
-        message: 'Failed to schedule content',
+        message: editingCalendarItem ? 'Failed to reschedule' : 'Failed to schedule content',
         description: err.message,
         variant: 'error',
       });
     } finally {
       setScheduling(false);
+    }
+  }
+
+  /**
+   * Remove content from calendar (unschedule)
+   * @param {string} calendarItemId - Calendar item to remove
+   */
+  async function handleUnschedule(calendarItemId) {
+    try {
+      setUnscheduling(calendarItemId);
+      console.log('[ReviewHub] Unscheduling content:', calendarItemId);
+
+      await api.calendar.delete(calendarItemId);
+
+      showToast({
+        message: 'Removed from schedule',
+        variant: 'success',
+      });
+
+      // Refresh status to update indicators
+      fetchContentStatus();
+    } catch (err) {
+      console.error('[ReviewHub] Failed to unschedule:', err);
+      showToast({
+        message: 'Failed to remove from schedule',
+        description: err.message,
+        variant: 'error',
+      });
+    } finally {
+      setUnscheduling(null);
     }
   }
 
@@ -746,6 +816,9 @@ function ReviewHub() {
             // Library & schedule props
             onSaveToLibrary={handleOpenSaveLibrary}
             onSchedule={handleOpenSchedule}
+            onReschedule={handleOpenReschedule}
+            onUnschedule={handleUnschedule}
+            unscheduling={unscheduling}
             episodeTitle={episodeTitle}
             // Status tracking
             getLibraryStatus={getLibraryStatus}
@@ -763,6 +836,9 @@ function ReviewHub() {
             // Library & schedule props
             onSaveToLibrary={handleOpenSaveLibrary}
             onSchedule={handleOpenSchedule}
+            onReschedule={handleOpenReschedule}
+            onUnschedule={handleUnschedule}
+            unscheduling={unscheduling}
             episodeTitle={episodeTitle}
             // Status tracking
             getLibraryStatus={getLibraryStatus}
@@ -778,6 +854,9 @@ function ReviewHub() {
             // Library & schedule props
             onSaveToLibrary={handleOpenSaveLibrary}
             onSchedule={handleOpenSchedule}
+            onReschedule={handleOpenReschedule}
+            onUnschedule={handleUnschedule}
+            unscheduling={unscheduling}
             episodeTitle={episodeTitle}
             // Status tracking
             getLibraryStatus={getLibraryStatus}
@@ -822,10 +901,19 @@ function ReviewHub() {
       {/* Schedule Modal */}
       <ScheduleModal
         isOpen={!!scheduleData}
-        onClose={() => setScheduleData(null)}
+        onClose={() => {
+          setScheduleData(null);
+          setEditingCalendarItem(null);
+        }}
         onSchedule={handleScheduleContent}
         loading={scheduling}
-        title={`Schedule: ${scheduleData?.title || 'Content'}`}
+        title={editingCalendarItem ? `Reschedule: ${scheduleData?.title || 'Content'}` : `Schedule: ${scheduleData?.title || 'Content'}`}
+        initialData={editingCalendarItem ? {
+          scheduled_date: editingCalendarItem.scheduled_date,
+          scheduled_time: editingCalendarItem.scheduled_time || '',
+          status: editingCalendarItem.status,
+          notes: editingCalendarItem.notes || '',
+        } : undefined}
       />
     </div>
   );
@@ -1081,6 +1169,9 @@ function BlogTab({
   // Library & schedule props
   onSaveToLibrary,
   onSchedule,
+  onReschedule,
+  onUnschedule,
+  unscheduling,
   episodeTitle,
   // Status tracking
   getLibraryStatus,
@@ -1102,6 +1193,12 @@ function BlogTab({
     content: blogPost,
     source_stage: 7,
   } : null;
+
+  // Format scheduled date for display
+  const formatScheduledDate = (dateStr) => {
+    const date = new Date(dateStr + 'T00:00:00');
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
 
   return (
     <div className={styles.tabContent}>
@@ -1190,36 +1287,67 @@ function BlogTab({
                   >
                     {libraryItem ? 'In Library' : 'Save'}
                   </Button>
-                  <Button
-                    variant={calendarItem ? 'secondary' : 'ghost'}
-                    size="sm"
-                    leftIcon={calendarItem ? CheckCircle : Calendar}
-                    onClick={() => !calendarItem && onSchedule(blogData)}
-                    title={calendarItem ? `Scheduled for ${calendarItem.scheduled_date}` : 'Schedule content'}
-                  >
-                    {calendarItem ? `Scheduled ${calendarItem.scheduled_date}` : 'Schedule'}
-                  </Button>
+                  {calendarItem ? (
+                    <div className={styles.scheduledActions}>
+                      <Badge variant="primary" className={styles.scheduledBadge}>
+                        <Calendar size={12} />
+                        {formatScheduledDate(calendarItem.scheduled_date)}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={Calendar}
+                        onClick={() => onReschedule(calendarItem, blogData)}
+                        title="Change scheduled date"
+                      >
+                        Reschedule
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={CalendarX}
+                        onClick={() => onUnschedule(calendarItem.id)}
+                        loading={unscheduling === calendarItem.id}
+                        title="Remove from schedule"
+                      >
+                        Unschedule
+                      </Button>
+                      {!libraryItem && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          leftIcon={Bookmark}
+                          onClick={() => onSaveToLibrary(blogData)}
+                          title="Also save to library"
+                        >
+                          Save to Library
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={Calendar}
+                      onClick={() => onSchedule(blogData)}
+                      title="Schedule content"
+                    >
+                      Schedule
+                    </Button>
+                  )}
                 </>
               )}
             </div>
           }
           padding="lg"
         >
-          {/* Status indicators */}
-          {(libraryItem || calendarItem) && !isEditing && (
+          {/* Library status indicator - scheduled shown in actions */}
+          {libraryItem && !isEditing && (
             <div className={styles.statusIndicators}>
-              {libraryItem && (
-                <Badge variant="success" className={styles.statusBadge}>
-                  <CheckCircle size={12} />
-                  In Library
-                </Badge>
-              )}
-              {calendarItem && (
-                <Badge variant="primary" className={styles.statusBadge}>
-                  <Calendar size={12} />
-                  Scheduled: {calendarItem.scheduled_date}
-                </Badge>
-              )}
+              <Badge variant="success" className={styles.statusBadge}>
+                <CheckCircle size={12} />
+                In Library
+              </Badge>
             </div>
           )}
           <div className={styles.blogPost}>
@@ -1253,8 +1381,14 @@ function BlogTab({
  * - onRegeneratePlatform: Function(platform, stageId) to regenerate a specific platform
  * - regenerating: Currently regenerating identifier (e.g., '8-instagram')
  */
-function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regenerating, onSaveToLibrary, onSchedule, episodeTitle, getLibraryStatus, getCalendarStatus }) {
+function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regenerating, onSaveToLibrary, onSchedule, onReschedule, onUnschedule, unscheduling, episodeTitle, getLibraryStatus, getCalendarStatus }) {
   const [activePlatform, setActivePlatform] = useState('instagram');
+
+  // Format scheduled date for display
+  const formatScheduledDate = (dateStr) => {
+    const date = new Date(dateStr + 'T00:00:00');
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
 
   console.log('[SocialTab] Platform stages:', {
     platforms: Object.keys(platformStages || {}),
@@ -1358,6 +1492,24 @@ function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regen
               const libraryItem = getLibraryStatus('social', currentPlatform?.id, postContent);
               const calendarItem = getCalendarStatus('social', currentPlatform?.id, postContent);
 
+              const postData = {
+                title: `${episodeTitle} - ${currentPlatform?.label}`,
+                content_type: 'social',
+                platform: currentPlatform?.id,
+                content: postContent,
+                metadata: { type: post.type, hashtags: post.hashtags },
+              };
+
+              const libraryData = {
+                title: `${currentPlatform?.label} - ${post.type || 'Post'}`,
+                content_type: 'social',
+                platform: currentPlatform?.id,
+                content: postContent,
+                source_stage: 8,
+                source_sub_stage: currentPlatform?.id,
+                metadata: { type: post.type, hashtags: post.hashtags },
+              };
+
               return (
                 <div
                   key={i}
@@ -1370,17 +1522,11 @@ function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regen
                         {post.type}
                       </Badge>
                     )}
-                    {/* Status badges */}
+                    {/* Library status badge only - scheduled shown in actions */}
                     {libraryItem && (
                       <Badge variant="success" className={styles.statusBadge}>
                         <CheckCircle size={10} />
                         In Library
-                      </Badge>
-                    )}
-                    {calendarItem && (
-                      <Badge variant="primary" className={styles.statusBadge}>
-                        <Calendar size={10} />
-                        {calendarItem.scheduled_date}
                       </Badge>
                     )}
                   </div>
@@ -1401,35 +1547,49 @@ function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regen
                       variant={libraryItem ? 'secondary' : 'ghost'}
                       size="sm"
                       leftIcon={libraryItem ? CheckCircle : Bookmark}
-                      onClick={() => !libraryItem && onSaveToLibrary({
-                        title: `${currentPlatform?.label} - ${post.type || 'Post'}`,
-                        content_type: 'social',
-                        platform: currentPlatform?.id,
-                        content: postContent,
-                        source_stage: 8,
-                        source_sub_stage: currentPlatform?.id,
-                        metadata: { type: post.type, hashtags: post.hashtags },
-                      })}
+                      onClick={() => !libraryItem && onSaveToLibrary(libraryData)}
                       disabled={!!libraryItem}
                       title={libraryItem ? 'Already in library' : 'Save to library'}
                     >
                       {libraryItem ? 'Saved' : 'Save'}
                     </Button>
-                    <Button
-                      variant={calendarItem ? 'secondary' : 'ghost'}
-                      size="sm"
-                      leftIcon={calendarItem ? CheckCircle : Calendar}
-                      onClick={() => !calendarItem && onSchedule({
-                        title: `${episodeTitle} - ${currentPlatform?.label}`,
-                        content_type: 'social',
-                        platform: currentPlatform?.id,
-                        content: postContent,
-                        metadata: { type: post.type, hashtags: post.hashtags },
-                      })}
-                      title={calendarItem ? `Scheduled for ${calendarItem.scheduled_date}` : 'Schedule content'}
-                    >
-                      {calendarItem ? 'Scheduled' : 'Schedule'}
-                    </Button>
+                    {calendarItem ? (
+                      <div className={styles.scheduledActions}>
+                        <Badge variant="primary" className={styles.scheduledBadge}>
+                          <Calendar size={10} />
+                          {formatScheduledDate(calendarItem.scheduled_date)}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          leftIcon={Calendar}
+                          onClick={() => onReschedule(calendarItem, postData)}
+                          title="Change scheduled date"
+                        >
+                          Reschedule
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          leftIcon={CalendarX}
+                          onClick={() => onUnschedule(calendarItem.id)}
+                          loading={unscheduling === calendarItem.id}
+                          title="Remove from schedule"
+                        >
+                          Unschedule
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={Calendar}
+                        onClick={() => onSchedule(postData)}
+                        title="Schedule content"
+                      >
+                        Schedule
+                      </Button>
+                    )}
                   </div>
                 </div>
               );
@@ -1450,7 +1610,7 @@ function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regen
  * - email_body: string (full email body in markdown, 200-350 words)
  * - followup_email: string (optional follow-up email, 100-150 words)
  */
-function EmailTab({ stage, onCopy, copied, onSaveToLibrary, onSchedule, episodeTitle, getLibraryStatus, getCalendarStatus }) {
+function EmailTab({ stage, onCopy, copied, onSaveToLibrary, onSchedule, onReschedule, onUnschedule, unscheduling, episodeTitle, getLibraryStatus, getCalendarStatus }) {
   console.log('[EmailTab] Stage 9 data:', {
     hasStage: !!stage,
     stageStatus: stage?.status,
@@ -1463,6 +1623,12 @@ function EmailTab({ stage, onCopy, copied, onSaveToLibrary, onSchedule, episodeT
   const emailContent = email?.email_body || '';
   const libraryItem = emailContent ? getLibraryStatus('email', null, emailContent) : null;
   const calendarItem = emailContent ? getCalendarStatus('email', null, emailContent) : null;
+
+  // Format scheduled date for display
+  const formatScheduledDate = (dateStr) => {
+    const date = new Date(dateStr + 'T00:00:00');
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
 
   if (!stage) {
     return <EmptyState message="No email content generated" details="Stage 9 (Email Campaign) not found." />;
@@ -1521,76 +1687,102 @@ function EmailTab({ stage, onCopy, copied, onSaveToLibrary, onSchedule, episodeT
       )}
 
       {/* Email Body - Note: field is email_body, not body_content */}
-      {email.email_body && (
-        <Card title="Email Body" subtitle="Main newsletter content" padding="lg">
-          {/* Status indicators */}
-          {(libraryItem || calendarItem) && (
-            <div className={styles.statusIndicators}>
-              {libraryItem && (
+      {email.email_body && (() => {
+        const emailData = {
+          title: `${episodeTitle} - Email Campaign`,
+          content_type: 'email',
+          platform: null,
+          content: email.email_body,
+          metadata: {
+            subject_lines: email.subject_lines,
+            preview_text: email.preview_text,
+          },
+        };
+
+        const libraryData = {
+          title: `${episodeTitle} - Email`,
+          content_type: 'email',
+          platform: null,
+          content: email.email_body,
+          source_stage: 9,
+          metadata: {
+            subject_lines: email.subject_lines,
+            preview_text: email.preview_text,
+          },
+        };
+
+        return (
+          <Card title="Email Body" subtitle="Main newsletter content" padding="lg">
+            {/* Library status indicator - scheduled shown in actions */}
+            {libraryItem && (
+              <div className={styles.statusIndicators}>
                 <Badge variant="success" className={styles.statusBadge}>
                   <CheckCircle size={12} />
                   In Library
                 </Badge>
-              )}
-              {calendarItem && (
-                <Badge variant="primary" className={styles.statusBadge}>
-                  <Calendar size={12} />
-                  Scheduled: {calendarItem.scheduled_date}
-                </Badge>
+              </div>
+            )}
+            <pre className={styles.emailBody}>{email.email_body}</pre>
+            <div className={styles.postActions}>
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={copied === 'body' ? Check : Copy}
+                onClick={() => onCopy(email.email_body, 'body')}
+              >
+                {copied === 'body' ? 'Copied!' : 'Copy'}
+              </Button>
+              <Button
+                variant={libraryItem ? 'secondary' : 'ghost'}
+                size="sm"
+                leftIcon={libraryItem ? CheckCircle : Bookmark}
+                onClick={() => !libraryItem && onSaveToLibrary(libraryData)}
+                disabled={!!libraryItem}
+                title={libraryItem ? 'Already in library' : 'Save to library'}
+              >
+                {libraryItem ? 'In Library' : 'Save'}
+              </Button>
+              {calendarItem ? (
+                <div className={styles.scheduledActions}>
+                  <Badge variant="primary" className={styles.scheduledBadge}>
+                    <Calendar size={12} />
+                    {formatScheduledDate(calendarItem.scheduled_date)}
+                  </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={Calendar}
+                    onClick={() => onReschedule(calendarItem, emailData)}
+                    title="Change scheduled date"
+                  >
+                    Reschedule
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={CalendarX}
+                    onClick={() => onUnschedule(calendarItem.id)}
+                    loading={unscheduling === calendarItem.id}
+                    title="Remove from schedule"
+                  >
+                    Unschedule
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={Calendar}
+                  onClick={() => onSchedule(emailData)}
+                  title="Schedule content"
+                >
+                  Schedule
+                </Button>
               )}
             </div>
-          )}
-          <pre className={styles.emailBody}>{email.email_body}</pre>
-          <div className={styles.postActions}>
-            <Button
-              variant="ghost"
-              size="sm"
-              leftIcon={copied === 'body' ? Check : Copy}
-              onClick={() => onCopy(email.email_body, 'body')}
-            >
-              {copied === 'body' ? 'Copied!' : 'Copy'}
-            </Button>
-            <Button
-              variant={libraryItem ? 'secondary' : 'ghost'}
-              size="sm"
-              leftIcon={libraryItem ? CheckCircle : Bookmark}
-              onClick={() => !libraryItem && onSaveToLibrary({
-                title: `${episodeTitle} - Email`,
-                content_type: 'email',
-                platform: null,
-                content: email.email_body,
-                source_stage: 9,
-                metadata: {
-                  subject_lines: email.subject_lines,
-                  preview_text: email.preview_text,
-                },
-              })}
-              disabled={!!libraryItem}
-              title={libraryItem ? 'Already in library' : 'Save to library'}
-            >
-              {libraryItem ? 'In Library' : 'Save'}
-            </Button>
-            <Button
-              variant={calendarItem ? 'secondary' : 'ghost'}
-              size="sm"
-              leftIcon={calendarItem ? CheckCircle : Calendar}
-              onClick={() => !calendarItem && onSchedule({
-                title: `${episodeTitle} - Email Campaign`,
-                content_type: 'email',
-                platform: null,
-                content: email.email_body,
-                metadata: {
-                  subject_lines: email.subject_lines,
-                  preview_text: email.preview_text,
-                },
-              })}
-              title={calendarItem ? `Scheduled for ${calendarItem.scheduled_date}` : 'Schedule content'}
-            >
-              {calendarItem ? `Scheduled ${calendarItem.scheduled_date}` : 'Schedule'}
-            </Button>
-          </div>
-        </Card>
-      )}
+          </Card>
+        );
+      })()}
 
       {/* Follow-up Email (optional) */}
       {email.followup_email && (

@@ -8,23 +8,37 @@
  * Features:
  * - Transcript upload (paste or file)
  * - Auto-population of fields using Claude Haiku analysis
+ * - Editable generated title with regeneration capability
  * - Cost and time estimates
  * - Validation before submission
- *
- * Auto-Population:
- * When a transcript is entered (min 200 chars), the system automatically
- * analyzes it using Claude 3.5 Haiku (~$0.001-0.003, ~2-3 seconds) to
- * extract suggested metadata like title, guest info, and topics.
  * ============================================================================
  */
 
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, FileText, Sparkles, AlertCircle, Loader2, Wand2, Check } from 'lucide-react';
+import {
+  Upload,
+  FileText,
+  Sparkles,
+  AlertCircle,
+  Loader2,
+  Wand2,
+  Check,
+  RefreshCw,
+  Edit3,
+} from 'lucide-react';
 import { Button, Card, Input } from '@components/shared';
 import api from '@utils/api-client';
 import { useTranscriptAutoPopulate } from '@hooks/useTranscriptAutoPopulate';
 import styles from './NewEpisode.module.css';
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+// Spam protection for title regeneration
+const REGENERATE_COOLDOWN_SECONDS = 5;
+const MAX_REGENERATIONS = 5;
 
 // ============================================================================
 // COMPONENT
@@ -51,6 +65,16 @@ function NewEpisode() {
 
   // Track which fields were auto-populated (for visual feedback)
   const [autoPopulatedFields, setAutoPopulatedFields] = useState(new Set());
+
+  // Title editing state
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editingTitleValue, setEditingTitleValue] = useState('');
+  const titleInputRef = useRef(null);
+
+  // Regeneration spam protection
+  const [regenerationCount, setRegenerationCount] = useState(0);
+  const [regenerateCooldown, setRegenerateCooldown] = useState(0);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   // Auto-populate hook
   const {
@@ -81,9 +105,6 @@ function NewEpisode() {
 
   /**
    * Auto-populate fields when metadata is available
-   * Only populates fields that:
-   * - Have metadata available
-   * - Are currently empty OR haven't been manually edited by user
    */
   useEffect(() => {
     if (!metadata) return;
@@ -94,7 +115,6 @@ function NewEpisode() {
       const updates = { ...prev };
 
       // Auto-populate title if not manually edited by user
-      // Always use AI-suggested title over filename-based defaults
       if (metadata.suggested_title && !userEditedFieldsRef.current.has('title')) {
         updates.title = metadata.suggested_title;
         newAutoPopulated.add('title');
@@ -146,12 +166,95 @@ function NewEpisode() {
   }, [metadata]);
 
   // ============================================================================
-  // HANDLERS
+  // COOLDOWN TIMER
   // ============================================================================
 
-  /**
-   * Handle field change - track user edits
-   */
+  useEffect(() => {
+    if (regenerateCooldown <= 0) return;
+
+    const timer = setInterval(() => {
+      setRegenerateCooldown((prev) => Math.max(0, prev - 1));
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [regenerateCooldown]);
+
+  // ============================================================================
+  // TITLE EDITING HANDLERS
+  // ============================================================================
+
+  function handleStartEditTitle() {
+    setEditingTitleValue(episodeContext.title);
+    setIsEditingTitle(true);
+    // Focus input after render
+    setTimeout(() => titleInputRef.current?.focus(), 0);
+  }
+
+  function handleSaveTitle() {
+    if (editingTitleValue.trim()) {
+      userEditedFieldsRef.current.add('title');
+      setEpisodeContext((prev) => ({ ...prev, title: editingTitleValue.trim() }));
+    }
+    setIsEditingTitle(false);
+  }
+
+  function handleCancelEditTitle() {
+    setIsEditingTitle(false);
+    setEditingTitleValue('');
+  }
+
+  function handleTitleKeyDown(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveTitle();
+    } else if (e.key === 'Escape') {
+      handleCancelEditTitle();
+    }
+  }
+
+  // ============================================================================
+  // REGENERATE TITLE HANDLER
+  // ============================================================================
+
+  async function handleRegenerateTitle() {
+    // Check spam protection
+    if (regenerateCooldown > 0) return;
+    if (regenerationCount >= MAX_REGENERATIONS) {
+      setError(`Maximum ${MAX_REGENERATIONS} title regenerations reached. Please edit manually.`);
+      return;
+    }
+
+    try {
+      setIsRegenerating(true);
+
+      // Call API to regenerate title
+      const response = await api.post('/episodes/analyze-transcript', {
+        transcript,
+      });
+
+      if (response.metadata?.suggested_title) {
+        setEpisodeContext((prev) => ({
+          ...prev,
+          title: response.metadata.suggested_title,
+        }));
+        // Mark as not user-edited so future analysis can update it
+        userEditedFieldsRef.current.delete('title');
+      }
+
+      // Update spam protection counters
+      setRegenerationCount((prev) => prev + 1);
+      setRegenerateCooldown(REGENERATE_COOLDOWN_SECONDS);
+    } catch (err) {
+      setError('Failed to regenerate title. Please try again.');
+    } finally {
+      setIsRegenerating(false);
+    }
+  }
+
+  // ============================================================================
+  // FIELD HANDLERS
+  // ============================================================================
+
   function handleFieldChange(fieldName, value) {
     userEditedFieldsRef.current.add(fieldName);
     setEpisodeContext((prev) => ({ ...prev, [fieldName]: value }));
@@ -162,9 +265,6 @@ function NewEpisode() {
     });
   }
 
-  /**
-   * Handle file upload
-   */
   async function handleFileUpload(event) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -173,23 +273,16 @@ function NewEpisode() {
       const text = await file.text();
       setTranscript(text);
 
-      // Reset user edits when new transcript is uploaded
+      // Reset user edits and regeneration counter when new transcript is uploaded
       userEditedFieldsRef.current.clear();
       resetAnalysis();
-
-      // Try to extract title from filename if no title yet
-      const filename = file.name.replace(/\.[^/.]+$/, '');
-      if (!episodeContext.title) {
-        setEpisodeContext((prev) => ({ ...prev, title: filename }));
-      }
+      setRegenerationCount(0);
+      setRegenerateCooldown(0);
     } catch {
       setError('Failed to read file. Please try again or paste the transcript directly.');
     }
   }
 
-  /**
-   * Handle transcript change
-   */
   function handleTranscriptChange(e) {
     const newTranscript = e.target.value;
     setTranscript(newTranscript);
@@ -198,12 +291,11 @@ function NewEpisode() {
     if (!newTranscript || newTranscript.length < minTranscriptLength) {
       userEditedFieldsRef.current.clear();
       resetAnalysis();
+      setRegenerationCount(0);
+      setRegenerateCooldown(0);
     }
   }
 
-  /**
-   * Handle form submission
-   */
   async function handleSubmit(event) {
     event.preventDefault();
 
@@ -215,6 +307,11 @@ function NewEpisode() {
 
     if (transcript.length < 500) {
       setError('Transcript seems too short. Please provide the full episode transcript.');
+      return;
+    }
+
+    if (!episodeContext.title.trim()) {
+      setError('Please provide an episode title');
       return;
     }
 
@@ -250,11 +347,15 @@ function NewEpisode() {
   // COMPUTED VALUES
   // ============================================================================
 
-  // Disable submit while analyzing (user should wait for auto-populate)
-  const isSubmitDisabled = loading || analyzing;
-
-  // Show analysis status
+  const isSubmitDisabled = loading || analyzing || !episodeContext.title.trim();
   const showAnalyzingStatus = analyzing && transcript.length >= minTranscriptLength;
+  const canRegenerate =
+    !isRegenerating &&
+    !analyzing &&
+    regenerateCooldown === 0 &&
+    regenerationCount < MAX_REGENERATIONS &&
+    transcript.length >= minTranscriptLength;
+  const hasTitle = episodeContext.title.trim().length > 0;
 
   // ============================================================================
   // RENDER
@@ -336,7 +437,7 @@ function NewEpisode() {
               {metadata && !analyzing && (
                 <div className={styles.analysisComplete}>
                   <Check size={14} />
-                  <span>Fields auto-populated</span>
+                  <span>Analysis complete</span>
                   {usage && (
                     <span className={styles.analysisCost}>
                       (${usage.cost.toFixed(4)}, {(usage.durationMs / 1000).toFixed(1)}s)
@@ -351,19 +452,103 @@ function NewEpisode() {
                 </div>
               )}
             </div>
-
-            {/* Show detected title prominently after analysis */}
-            {metadata?.suggested_title && !analyzing && (
-              <div className={styles.suggestedTitle}>
-                <Wand2 size={16} />
-                <span className={styles.suggestedTitleLabel}>Suggested Title:</span>
-                <span className={styles.suggestedTitleText}>{metadata.suggested_title}</span>
-              </div>
-            )}
           </div>
         </Card>
 
-        {/* Episode context section */}
+        {/* Generated Title Section - Only shows after analysis or when title exists */}
+        {(hasTitle || metadata) && (
+          <Card
+            title="Episode Title"
+            subtitle="AI-generated title based on your transcript"
+            headerAction={<Wand2 className={styles.sectionIcon} />}
+            className={styles.titleCard}
+          >
+            <div className={styles.generatedTitleSection}>
+              {isEditingTitle ? (
+                /* Editing mode */
+                <div className={styles.titleEditMode}>
+                  <input
+                    ref={titleInputRef}
+                    type="text"
+                    value={editingTitleValue}
+                    onChange={(e) => setEditingTitleValue(e.target.value)}
+                    onKeyDown={handleTitleKeyDown}
+                    className={styles.titleEditInput}
+                    placeholder="Enter episode title..."
+                  />
+                  <div className={styles.titleEditActions}>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      onClick={handleSaveTitle}
+                      disabled={!editingTitleValue.trim()}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCancelEditTitle}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                /* Display mode */
+                <div className={styles.titleDisplayMode}>
+                  <div className={styles.generatedTitleText}>
+                    {episodeContext.title || 'No title generated yet'}
+                  </div>
+                  <div className={styles.titleActions}>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={Edit3}
+                      onClick={handleStartEditTitle}
+                      disabled={!hasTitle}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={isRegenerating ? Loader2 : RefreshCw}
+                      onClick={handleRegenerateTitle}
+                      disabled={!canRegenerate}
+                      title={
+                        regenerationCount >= MAX_REGENERATIONS
+                          ? 'Maximum regenerations reached'
+                          : regenerateCooldown > 0
+                            ? `Wait ${regenerateCooldown}s`
+                            : 'Generate a new title'
+                      }
+                    >
+                      {isRegenerating
+                        ? 'Generating...'
+                        : regenerateCooldown > 0
+                          ? `Wait ${regenerateCooldown}s`
+                          : 'Regenerate'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Regeneration limit info */}
+              {regenerationCount > 0 && (
+                <p className={styles.regenerationInfo}>
+                  {regenerationCount} of {MAX_REGENERATIONS} regenerations used
+                </p>
+              )}
+            </div>
+          </Card>
+        )}
+
+        {/* Episode Details section (without title) */}
         <Card
           title="Episode Details"
           subtitle={
@@ -383,19 +568,18 @@ function NewEpisode() {
         >
           <div className={styles.contextGrid}>
             <Input
-              label="Episode Title"
-              placeholder="The Art of Active Listening"
-              value={episodeContext.title}
-              onChange={(e) => handleFieldChange('title', e.target.value)}
-              containerClassName={autoPopulatedFields.has('title') ? styles.autoPopulated : ''}
-            />
-
-            <Input
               label="Episode Number"
               type="number"
               placeholder="42"
               value={episodeContext.episode_number}
               onChange={(e) => handleFieldChange('episode_number', e.target.value)}
+            />
+
+            <Input
+              label="Recording Date"
+              type="date"
+              value={episodeContext.recording_date}
+              onChange={(e) => handleFieldChange('recording_date', e.target.value)}
             />
 
             <Input
@@ -412,13 +596,6 @@ function NewEpisode() {
               value={episodeContext.guest_credentials}
               onChange={(e) => handleFieldChange('guest_credentials', e.target.value)}
               containerClassName={autoPopulatedFields.has('guest_credentials') ? styles.autoPopulated : ''}
-            />
-
-            <Input
-              label="Recording Date"
-              type="date"
-              value={episodeContext.recording_date}
-              onChange={(e) => handleFieldChange('recording_date', e.target.value)}
             />
 
             <Input
@@ -448,7 +625,9 @@ function NewEpisode() {
           <p className={styles.actionsHint}>
             {analyzing
               ? 'Please wait while we analyze your transcript'
-              : 'This will process your transcript through our AI pipeline'}
+              : !hasTitle
+                ? 'A title is required to continue'
+                : 'This will process your transcript through our AI pipeline'}
           </p>
         </div>
       </form>

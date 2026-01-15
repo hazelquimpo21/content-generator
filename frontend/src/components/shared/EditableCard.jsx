@@ -76,23 +76,24 @@ function EditableCard({
   const [generalError, setGeneralError] = useState(null);
   const firstInputRef = useRef(null);
 
-  // Initialize edit values when entering edit mode
+  // Sync edit values if item prop changes while in edit mode (edge case)
   useEffect(() => {
-    if (isEditing) {
-      const initialValues = {};
-      fields.forEach((field) => {
-        initialValues[field.key] = item?.[field.key] || '';
-      });
-      setEditValues(initialValues);
-      setErrors({});
-      setGeneralError(null);
-
-      console.log(`${LOG_PREFIX} Edit mode started for item: ${itemId}`, {
-        fieldCount: fields.length,
-        fieldKeys: fields.map((f) => f.key),
+    if (isEditing && item) {
+      // Only update fields that haven't been modified by the user
+      setEditValues((prev) => {
+        const updated = { ...prev };
+        let hasChanges = false;
+        fields.forEach((field) => {
+          // Only sync if value is still at its original state
+          if (prev[field.key] === '' && item[field.key]) {
+            updated[field.key] = item[field.key];
+            hasChanges = true;
+          }
+        });
+        return hasChanges ? updated : prev;
       });
     }
-  }, [isEditing, item, fields, itemId]);
+  }, [item, fields, isEditing]);
 
   // Focus first input when entering edit mode
   useEffect(() => {
@@ -109,6 +110,21 @@ function EditableCard({
       console.log(`${LOG_PREFIX} Edit blocked - component is disabled (item: ${itemId})`);
       return;
     }
+
+    // Initialize values synchronously to avoid blank state on first render
+    const initialValues = {};
+    fields.forEach((field) => {
+      initialValues[field.key] = item?.[field.key] || '';
+    });
+    setEditValues(initialValues);
+    setErrors({});
+    setGeneralError(null);
+
+    console.log(`${LOG_PREFIX} Edit mode started for item: ${itemId}`, {
+      fieldCount: fields.length,
+      fieldKeys: fields.map((f) => f.key),
+    });
+
     setIsEditing(true);
   }
 

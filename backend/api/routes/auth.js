@@ -161,7 +161,9 @@ router.post('/magic-link', async (req, res, next) => {
  *       id: "uuid",
  *       email: "user@example.com",
  *       role: "user" | "superadmin",
- *       display_name: "John"
+ *       display_name: "John",
+ *       onboarding_complete: boolean,
+ *       onboarding_percent: number
  *     }
  *   }
  */
@@ -171,6 +173,21 @@ router.get('/me', requireAuth, async (req, res, next) => {
       userId: req.user.id,
     });
 
+    // Fetch brand discovery status to determine onboarding completion
+    const supabase = getSupabase();
+    const { data: brandDiscovery } = await supabase
+      .from('brand_discovery')
+      .select('overall_completion_percent, brand_dna')
+      .eq('user_id', req.user.id)
+      .single();
+
+    // Consider onboarding complete if:
+    // - At least 2 modules are done (50% with weighted scoring means roughly 2 modules)
+    // - OR brand_dna has been generated
+    const completionPercent = brandDiscovery?.overall_completion_percent || 0;
+    const hasBrandDna = !!brandDiscovery?.brand_dna;
+    const onboardingComplete = hasBrandDna || completionPercent >= 50;
+
     // User info is already attached by requireAuth middleware
     res.json({
       user: {
@@ -179,6 +196,8 @@ router.get('/me', requireAuth, async (req, res, next) => {
         role: req.user.role,
         display_name: req.user.display_name,
         is_superadmin: req.user.role === 'superadmin',
+        onboarding_complete: onboardingComplete,
+        onboarding_percent: completionPercent,
       },
     });
   } catch (error) {

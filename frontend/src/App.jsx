@@ -18,6 +18,7 @@ import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProcessingProvider } from './contexts/ProcessingContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import OnboardingRoute from './components/auth/OnboardingRoute';
 
 // Global UI
 import { ToastProvider } from './components/shared';
@@ -38,6 +39,7 @@ import ProcessingScreen from './pages/ProcessingScreen';
 import ReviewHub from './pages/ReviewHub';
 import ContentLibrary from './pages/ContentLibrary';
 import ContentCalendar from './pages/ContentCalendar';
+import Onboarding from './pages/Onboarding';
 
 // Admin Pages (superadmin only)
 import AdminDashboard from './pages/AdminDashboard';
@@ -69,32 +71,43 @@ function App() {
         <Route path="/auth/callback" element={<AuthCallback />} />
 
         {/* ================================================================== */}
-        {/* PROTECTED ROUTES - Authentication required */}
+        {/* ONBOARDING ROUTE - Auth required, standalone page */}
         {/* ================================================================== */}
 
         <Route element={<ProtectedRoute />}>
-          {/* Main layout wrapper for authenticated pages */}
-          <Route path="/" element={<Layout />}>
-            {/* Dashboard - default landing page */}
-            <Route index element={<Dashboard />} />
+          {/* Onboarding - standalone page (no Layout wrapper) */}
+          <Route path="/onboarding" element={<Onboarding />} />
+        </Route>
 
-            {/* Settings - configure user settings and preferences */}
-            <Route path="settings" element={<Settings />} />
+        {/* ================================================================== */}
+        {/* PROTECTED ROUTES - Authentication + onboarding required */}
+        {/* ================================================================== */}
 
-            {/* New Episode - upload and configure new episode */}
-            <Route path="episodes/new" element={<NewEpisode />} />
+        <Route element={<ProtectedRoute />}>
+          <Route element={<OnboardingRoute />}>
+            {/* Main layout wrapper for authenticated pages */}
+            <Route path="/" element={<Layout />}>
+              {/* Dashboard - default landing page */}
+              <Route index element={<Dashboard />} />
 
-            {/* Processing - watch episode being processed */}
-            <Route path="episodes/:id/processing" element={<ProcessingScreen />} />
+              {/* Settings - configure user settings and preferences */}
+              <Route path="settings" element={<Settings />} />
 
-            {/* Review Hub - view and edit generated content */}
-            <Route path="episodes/:id/review" element={<ReviewHub />} />
+              {/* New Episode - upload and configure new episode */}
+              <Route path="episodes/new" element={<NewEpisode />} />
 
-            {/* Content Library - saved content pieces */}
-            <Route path="library" element={<ContentLibrary />} />
+              {/* Processing - watch episode being processed */}
+              <Route path="episodes/:id/processing" element={<ProcessingScreen />} />
 
-            {/* Content Calendar - scheduled content */}
-            <Route path="calendar" element={<ContentCalendar />} />
+              {/* Review Hub - view and edit generated content */}
+              <Route path="episodes/:id/review" element={<ReviewHub />} />
+
+              {/* Content Library - saved content pieces */}
+              <Route path="library" element={<ContentLibrary />} />
+
+              {/* Content Calendar - scheduled content */}
+              <Route path="calendar" element={<ContentCalendar />} />
+            </Route>
           </Route>
         </Route>
 

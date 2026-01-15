@@ -7,7 +7,7 @@
  *
  * Input: Stage 1-2 outputs + evergreen content
  * Output: Blog structure with sections (JSON)
- * Model: GPT-4o-mini (OpenAI)
+ * Model: GPT-5 mini (OpenAI)
  * ============================================================================
  */
 
@@ -26,6 +26,10 @@ const BLOG_OUTLINE_SCHEMA = {
   parameters: {
     type: 'object',
     properties: {
+      // NOTE: We intentionally do NOT include a narrative_summary here.
+      // Stage 1's episode_crux already captures the "big picture" message.
+      // Duplicating it here would be redundant and waste tokens.
+      // The blog-content-compiler uses episode_crux from Stage 1 directly.
       post_structure: {
         type: 'object',
         properties: {
@@ -50,6 +54,11 @@ const BLOG_OUTLINE_SCHEMA = {
                 purpose: {
                   type: 'string',
                   description: 'What this section accomplishes',
+                },
+                key_points: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: '2-3 key points this section should cover',
                 },
                 word_count_target: {
                   type: 'number',
@@ -81,8 +90,15 @@ const BLOG_OUTLINE_SCHEMA = {
 // VALIDATION
 // ============================================================================
 
-function validateOutput(data) {
+function validateOutput(data, episodeId) {
+  logger.debug('🔍 Validating Stage 3 outline output', { episodeId });
+
+  // NOTE: We no longer require narrative_summary here.
+  // Stage 1's episode_crux serves as the canonical "big picture" summary.
+  // This avoids duplicate summarization across stages.
+
   if (!data.post_structure) {
+    logger.error('❌ Missing post_structure', { episodeId });
     throw new ValidationError('post_structure', 'Missing post structure');
   }
 
@@ -117,7 +133,8 @@ function validateOutput(data) {
 
   // Check total word count is reasonable
   if (estimated_total_words < 600 || estimated_total_words > 900) {
-    logger.warn('Word count estimate outside expected range', {
+    logger.warn('⚠️ Word count estimate outside expected range', {
+      episodeId,
       estimated: estimated_total_words,
       calculated: totalWords,
     });
@@ -127,6 +144,12 @@ function validateOutput(data) {
   if (!post_structure.cta || post_structure.cta.length < 10) {
     throw new ValidationError('cta', 'CTA description is too short');
   }
+
+  logger.info('✅ Stage 3 outline validation passed', {
+    episodeId,
+    sectionCount: sections.length,
+    estimatedWords: estimated_total_words,
+  });
 
   return true;
 }
@@ -163,7 +186,7 @@ export async function outlineHighLevel(context) {
     throw new ValidationError('response', 'No function call output returned');
   }
 
-  validateOutput(outputData);
+  validateOutput(outputData, episodeId);
 
   logger.stageComplete(3, 'Blog Outline - High Level', episodeId, response.durationMs, response.cost);
 

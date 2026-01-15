@@ -2,7 +2,7 @@
 
 ## Overview
 
-This application uses Supabase (PostgreSQL) with four main tables plus RLS policies for security.
+This application uses Supabase (PostgreSQL) with eight main tables plus RLS policies for security. The database supports multi-user authentication with user-scoped data isolation.
 
 ## Tables
 
@@ -80,20 +80,111 @@ CREATE TRIGGER episodes_updated_at
 - `error_message`: If status='error', description of failure
 - `processing_started_at`: When processing began
 - `processing_completed_at`: When all 9 stages finished
+- `user_id`: Foreign key to user_profiles (links episode to creating user)
+
+---
+
+### `user_profiles`
+
+Stores user profile information linked to Supabase auth.users.
+
+```sql
+CREATE TABLE user_profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  display_name TEXT,
+  role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'superadmin')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  last_login_at TIMESTAMP WITH TIME ZONE
+);
+
+-- Indexes
+CREATE INDEX idx_user_profiles_role ON user_profiles(role);
+CREATE INDEX idx_user_profiles_email ON user_profiles(email);
+```
+
+**Field Descriptions:**
+
+- `id`: UUID matching Supabase auth.users.id
+- `email`: User's email address (denormalized from auth.users)
+- `display_name`: User's display name (optional)
+- `role`: Either 'user' (default) or 'superadmin'
+- `created_at`: When profile was created
+- `updated_at`: Last update timestamp
+- `last_login_at`: Most recent login timestamp
+
+**Auto-Creation Trigger:**
+
+A trigger automatically creates a user_profile when a new user signs up via Supabase Auth. The superadmin role is assigned if email matches `hazel@theclever.io`.
+
+---
+
+### `user_settings`
+
+Stores per-user settings (therapist profile, podcast info, etc.) for content generation.
+
+```sql
+CREATE TABLE user_settings (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+  therapist_profile JSONB NOT NULL DEFAULT '{}'::jsonb,
+  podcast_info JSONB NOT NULL DEFAULT '{}'::jsonb,
+  voice_guidelines JSONB NOT NULL DEFAULT '{}'::jsonb,
+  seo_defaults JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(user_id)
+);
+
+-- Index
+CREATE INDEX idx_user_settings_user_id ON user_settings(user_id);
+```
+
+**Field Descriptions:**
+
+- `id`: Unique identifier (UUID v4)
+- `user_id`: Foreign key to user_profiles
+- `therapist_profile`: JSON containing therapist/creator profile info
+  ```json
+  {
+    "name": "Dr. Jane Smith",
+    "credentials": "PhD, LMFT",
+    "bio": "Licensed therapist...",
+    "website": "drjanesmith.com"
+  }
+  ```
+- `podcast_info`: JSON containing podcast details
+  ```json
+  {
+    "name": "The Mindful Therapist",
+    "tagline": "Real conversations about mental health",
+    "target_audience": "Adults seeking mental health insights"
+  }
+  ```
+- `voice_guidelines`: JSON containing writing style preferences
+- `seo_defaults`: JSON containing SEO/marketing settings
+
+**Auto-Creation Trigger:**
+
+A trigger automatically creates user_settings when a new user_profile is created, optionally copying defaults from evergreen_content.
 
 ---
 
 ### `stage_outputs`
 
-Stores the output and metadata for each of the 9 stages of processing.
+Stores the output and metadata for each of the 10 stages of processing (Stage 0-9).
 
 ```sql
 CREATE TABLE stage_outputs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   episode_id UUID NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
-  
+
   -- Stage identification
-  stage_number INTEGER NOT NULL CHECK (stage_number >= 1 AND stage_number <= 9),
+  -- NOTE: Stage 0 = Transcript Preprocessing (Claude Haiku, skipped for short transcripts)
+  -- Stages 1-6 = Analysis & Drafting (GPT-5 mini)
+  -- Stages 7-9 = Refinement & Distribution (Claude Sonnet)
+  stage_number INTEGER NOT NULL CHECK (stage_number >= 0 AND stage_number <= 9),
   stage_name TEXT NOT NULL,
   
   -- Status tracking
@@ -135,24 +226,25 @@ CREATE INDEX idx_stage_outputs_created_at ON stage_outputs(created_at DESC);
 **Field Descriptions:**
 
 - `episode_id`: Foreign key to episodes table
-- `stage_number`: 1-9 (which stage this represents)
+- `stage_number`: 0-9 (which stage this represents, 10 stages total)
 - `stage_name`: Human-readable name
-  - 1: "Transcript Analysis"
-  - 2: "Quote Extraction"
-  - 3: "Blog Outline - High Level"
-  - 4: "Paragraph-Level Outlines"
-  - 5: "Headlines & Copy Options"
-  - 6: "Draft Generation"
-  - 7: "Refinement Pass"
-  - 8: "Social Content"
-  - 9: "Email Campaign"
+  - 0: "Transcript Preprocessing" (Claude Haiku - skipped for short transcripts)
+  - 1: "Transcript Analysis" (GPT-5 mini)
+  - 2: "Quote Extraction" (GPT-5 mini)
+  - 3: "Blog Outline - High Level" (GPT-5 mini)
+  - 4: "Paragraph-Level Outlines" (GPT-5 mini)
+  - 5: "Headlines & Copy Options" (GPT-5 mini)
+  - 6: "Draft Generation" (GPT-5 mini)
+  - 7: "Refinement Pass" (Claude Sonnet)
+  - 8: "Social Content" (Claude Sonnet)
+  - 9: "Email Campaign" (Claude Sonnet)
 - `status`: Current status of this stage
-- `model_used`: e.g., "gpt-4o-mini-2024-07-18" or "claude-sonnet-4-20250514"
+- `model_used`: e.g., "gpt-5-mini", "claude-3-5-haiku-20241022", or "claude-sonnet-4-20250514"
 - `provider`: "openai" or "anthropic"
 - `input_tokens`: Tokens sent to AI
 - `output_tokens`: Tokens received from AI
 - `cost_usd`: Cost in USD (calculated from tokens + pricing)
-- `output_data`: Structured JSON from function calling (for stages 1-5)
+- `output_data`: Structured JSON from function calling (for stages 0-5)
 - `output_text`: Markdown or text output (for stages 6-9)
 - `error_message`: If status='failed', error description
 - `error_details`: Full error object as JSON
@@ -310,7 +402,7 @@ CREATE INDEX idx_api_usage_date ON api_usage_log(DATE(timestamp));
 **Field Descriptions:**
 
 - `provider`: "openai" or "anthropic"
-- `model`: Full model name (e.g., "gpt-4o-mini-2024-07-18")
+- `model`: Full model name (e.g., "gpt-5-mini")
 - `endpoint`: API endpoint called (e.g., "/v1/chat/completions")
 - `input_tokens`: Tokens sent
 - `output_tokens`: Tokens received
@@ -324,55 +416,370 @@ CREATE INDEX idx_api_usage_date ON api_usage_log(DATE(timestamp));
 
 ---
 
+### `content_library`
+
+Stores saved content pieces from episodes for later use or scheduling.
+
+```sql
+CREATE TABLE content_library (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+  episode_id UUID REFERENCES episodes(id) ON DELETE SET NULL,
+
+  -- Content details
+  title TEXT NOT NULL,
+  content_type TEXT NOT NULL CHECK (content_type IN ('blog', 'social', 'email', 'headline', 'quote')),
+  platform TEXT CHECK (platform IN ('generic', 'instagram', 'twitter', 'linkedin', 'facebook')),
+  content TEXT NOT NULL,
+  metadata JSONB DEFAULT '{}'::jsonb,
+
+  -- Source reference (which stage this came from)
+  source_stage INTEGER CHECK (source_stage >= 0 AND source_stage <= 9),
+  source_sub_stage TEXT CHECK (source_sub_stage IN ('instagram', 'twitter', 'linkedin', 'facebook') OR source_sub_stage IS NULL),
+
+  -- Organization
+  tags TEXT[] DEFAULT '{}',
+  is_favorite BOOLEAN DEFAULT FALSE,
+
+  -- Timestamps
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_content_library_user ON content_library(user_id);
+CREATE INDEX idx_content_library_type ON content_library(content_type);
+CREATE INDEX idx_content_library_platform ON content_library(platform) WHERE platform IS NOT NULL;
+CREATE INDEX idx_content_library_episode ON content_library(episode_id) WHERE episode_id IS NOT NULL;
+CREATE INDEX idx_content_library_favorite ON content_library(user_id, is_favorite) WHERE is_favorite = TRUE;
+CREATE INDEX idx_content_library_created ON content_library(created_at DESC);
+CREATE INDEX idx_content_library_tags ON content_library USING GIN(tags);
+
+-- Trigger to update updated_at
+CREATE TRIGGER content_library_updated_at
+  BEFORE UPDATE ON content_library
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at();
+```
+
+**Field Descriptions:**
+
+- `id`: Unique identifier (UUID v4)
+- `user_id`: Foreign key to user_profiles (data owner)
+- `episode_id`: Optional reference to source episode (null if episode deleted)
+- `title`: User-provided title for the content piece
+- `content_type`: Type of content
+  - `blog`: Full blog post
+  - `social`: Social media post
+  - `email`: Email campaign content
+  - `headline`: Title/headline options
+  - `quote`: Extracted quotes
+- `platform`: For social content, the target platform
+- `content`: The actual content text
+- `metadata`: Additional JSON data (hashtags, character counts, etc.)
+- `source_stage`: Which pipeline stage generated this (0-9)
+- `source_sub_stage`: For social content, which platform variant
+- `tags`: User-defined tags for organization (array)
+- `is_favorite`: Whether user marked as favorite
+- `created_at`: When saved to library
+- `updated_at`: Last modification timestamp
+
+**Example `metadata` for social content:**
+```json
+{
+  "hashtags": ["#anxiety", "#mentalhealth", "#therapy"],
+  "character_count": 142,
+  "post_type": "short"
+}
+```
+
+---
+
+### `content_calendar`
+
+Stores scheduled content items with dates for organized publishing.
+
+```sql
+CREATE TABLE content_calendar (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+
+  -- Content reference (optional - can link to library item or episode)
+  library_item_id UUID REFERENCES content_library(id) ON DELETE SET NULL,
+  episode_id UUID REFERENCES episodes(id) ON DELETE SET NULL,
+
+  -- Scheduling
+  scheduled_date DATE NOT NULL,
+  scheduled_time TIME,
+
+  -- Content details (copied at schedule time for independence)
+  title TEXT NOT NULL,
+  content_type TEXT NOT NULL CHECK (content_type IN ('blog', 'social', 'email')),
+  platform TEXT CHECK (platform IN ('generic', 'instagram', 'twitter', 'linkedin', 'facebook')),
+  content_preview TEXT,
+  full_content TEXT,
+
+  -- Status workflow
+  status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('draft', 'scheduled', 'published', 'cancelled')),
+
+  -- Publishing tracking
+  published_at TIMESTAMP WITH TIME ZONE,
+  publish_url TEXT,
+  notes TEXT,
+
+  -- Metadata for platform-specific info
+  metadata JSONB DEFAULT '{}'::jsonb,
+
+  -- Timestamps
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_content_calendar_user ON content_calendar(user_id);
+CREATE INDEX idx_content_calendar_date ON content_calendar(scheduled_date);
+CREATE INDEX idx_content_calendar_user_date ON content_calendar(user_id, scheduled_date);
+CREATE INDEX idx_content_calendar_status ON content_calendar(status);
+CREATE INDEX idx_content_calendar_type ON content_calendar(content_type);
+CREATE INDEX idx_content_calendar_platform ON content_calendar(platform) WHERE platform IS NOT NULL;
+CREATE INDEX idx_content_calendar_library ON content_calendar(library_item_id) WHERE library_item_id IS NOT NULL;
+CREATE INDEX idx_content_calendar_episode ON content_calendar(episode_id) WHERE episode_id IS NOT NULL;
+
+-- Trigger to update updated_at
+CREATE TRIGGER content_calendar_updated_at
+  BEFORE UPDATE ON content_calendar
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at();
+```
+
+**Field Descriptions:**
+
+- `id`: Unique identifier (UUID v4)
+- `user_id`: Foreign key to user_profiles (data owner)
+- `library_item_id`: Optional reference to source library item
+- `episode_id`: Optional reference to source episode
+- `scheduled_date`: Target publication date (required)
+- `scheduled_time`: Target publication time (optional)
+- `title`: Content title for calendar display
+- `content_type`: Type of content (blog, social, email)
+- `platform`: For social content, target platform
+- `content_preview`: Short preview (first 200 chars) for calendar view
+- `full_content`: Complete content text (copied for independence)
+- `status`: Publishing workflow status
+  - `draft`: Not finalized, needs work
+  - `scheduled`: Ready to publish at scheduled time
+  - `published`: Successfully published
+  - `cancelled`: Skipped/cancelled
+- `published_at`: Actual publication timestamp
+- `publish_url`: Link to published content
+- `notes`: User notes about this scheduled item
+- `metadata`: Platform-specific data (hashtags, etc.)
+- `created_at`: When scheduled
+- `updated_at`: Last modification timestamp
+
+**Example scheduled item:**
+```json
+{
+  "id": "abc123...",
+  "scheduled_date": "2025-01-20",
+  "scheduled_time": "10:00:00",
+  "title": "Understanding Anxiety - Instagram",
+  "content_type": "social",
+  "platform": "instagram",
+  "content_preview": "Anxiety doesn't announce itself politely...",
+  "status": "scheduled",
+  "metadata": {
+    "hashtags": ["#anxiety", "#mentalhealth"]
+  }
+}
+```
+
+---
+
 ## Relationships
 
 ```
-episodes (1) ─────< (many) stage_outputs
-                     │
-                     │ (logs each stage)
-                     │
-                     └─────< (many) api_usage_log
+auth.users (1) ─────< (1) user_profiles
+                           │
+                           ├───< (1) user_settings
+                           │
+                           ├───< (many) content_library ─────> (optional) episodes
+                           │         │
+                           │         └───< (many) content_calendar
+                           │
+                           ├───< (many) content_calendar ─────> (optional) episodes
+                           │
+                           └───< (many) episodes (1) ─────< (many) stage_outputs
+                                                              │
+                                                              │ (logs each stage)
+                                                              │
+                                                              └─────< (many) api_usage_log
 
-evergreen_content (singleton) ──> (used by all episodes)
+evergreen_content (singleton) ──> (system defaults, used as seed for user_settings)
 ```
+
+### Content Library & Calendar Relationships
+
+- `content_library.user_id` → `user_profiles.id` (owner)
+- `content_library.episode_id` → `episodes.id` (optional source)
+- `content_calendar.user_id` → `user_profiles.id` (owner)
+- `content_calendar.library_item_id` → `content_library.id` (optional source)
+- `content_calendar.episode_id` → `episodes.id` (optional source)
+
+### User Data Isolation
+
+- Each user can only see and modify their own episodes
+- User settings are scoped to individual users
+- Superadmin (hazel@theclever.io) can view all users' episodes
+- The `user_id` column on episodes enforces data ownership
 
 ---
 
 ## Row-Level Security (RLS)
 
-Since this is a single-user app, RLS is simplified. If deploying to Supabase, enable RLS but allow all operations for authenticated users.
+RLS policies enforce multi-user data isolation at the database level. Users can only access their own data, while superadmins can view all data.
+
+### Helper Functions
 
 ```sql
--- Enable RLS on all tables
-ALTER TABLE episodes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE stage_outputs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE evergreen_content ENABLE ROW LEVEL SECURITY;
-ALTER TABLE api_usage_log ENABLE ROW LEVEL SECURITY;
+-- Check if current user is superadmin
+CREATE OR REPLACE FUNCTION is_superadmin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM user_profiles
+    WHERE id = auth.uid()
+    AND role = 'superadmin'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Allow all operations for authenticated users
-CREATE POLICY "Allow all for authenticated users" ON episodes
-  FOR ALL USING (auth.role() = 'authenticated');
+-- Get current user's ID
+CREATE OR REPLACE FUNCTION get_user_id()
+RETURNS UUID AS $$
+BEGIN
+  RETURN auth.uid();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+```
 
-CREATE POLICY "Allow all for authenticated users" ON stage_outputs
-  FOR ALL USING (auth.role() = 'authenticated');
+### User Profiles Policies
 
-CREATE POLICY "Allow all for authenticated users" ON evergreen_content
-  FOR ALL USING (auth.role() = 'authenticated');
+```sql
+-- Users can view their own profile
+CREATE POLICY "Users can view own profile" ON user_profiles
+  FOR SELECT USING (auth.uid() = id);
 
-CREATE POLICY "Allow all for authenticated users" ON api_usage_log
-  FOR ALL USING (auth.role() = 'authenticated');
+-- Users can update their own profile (except role)
+CREATE POLICY "Users can update own profile" ON user_profiles
+  FOR UPDATE USING (auth.uid() = id);
 
--- Allow service role to bypass RLS (for backend operations)
+-- Superadmin can view all profiles
+CREATE POLICY "Superadmin can view all profiles" ON user_profiles
+  FOR SELECT USING (is_superadmin());
+```
+
+### User Settings Policies
+
+```sql
+-- Users can view their own settings
+CREATE POLICY "Users can view own settings" ON user_settings
+  FOR SELECT USING (auth.uid() = user_id);
+
+-- Users can update their own settings
+CREATE POLICY "Users can update own settings" ON user_settings
+  FOR UPDATE USING (auth.uid() = user_id);
+```
+
+### Episodes Policies
+
+```sql
+-- Users can view their own episodes (superadmin can view all)
+CREATE POLICY "Users can view own episodes" ON episodes
+  FOR SELECT USING (auth.uid() = user_id OR is_superadmin());
+
+-- Users can insert their own episodes
+CREATE POLICY "Users can insert own episodes" ON episodes
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- Users can update their own episodes
+CREATE POLICY "Users can update own episodes" ON episodes
+  FOR UPDATE USING (auth.uid() = user_id);
+
+-- Users can delete their own episodes
+CREATE POLICY "Users can delete own episodes" ON episodes
+  FOR DELETE USING (auth.uid() = user_id);
+```
+
+### Stage Outputs Policies
+
+```sql
+-- Users can view stages for their own episodes
+CREATE POLICY "Users can view own stage outputs" ON stage_outputs
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM episodes
+      WHERE episodes.id = stage_outputs.episode_id
+      AND (episodes.user_id = auth.uid() OR is_superadmin())
+    )
+  );
+```
+
+### Content Library Policies
+
+```sql
+-- Users can view their own library items
+CREATE POLICY "Users can view own library items" ON content_library
+  FOR SELECT USING (auth.uid() = user_id OR is_superadmin());
+
+-- Users can insert their own library items
+CREATE POLICY "Users can insert own library items" ON content_library
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- Users can update their own library items
+CREATE POLICY "Users can update own library items" ON content_library
+  FOR UPDATE USING (auth.uid() = user_id);
+
+-- Users can delete their own library items
+CREATE POLICY "Users can delete own library items" ON content_library
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Service role bypass for backend operations
+CREATE POLICY "Service role full access to library" ON content_library
+  FOR ALL USING (auth.role() = 'service_role');
+```
+
+### Content Calendar Policies
+
+```sql
+-- Users can view their own calendar items
+CREATE POLICY "Users can view own calendar items" ON content_calendar
+  FOR SELECT USING (auth.uid() = user_id OR is_superadmin());
+
+-- Users can insert their own calendar items
+CREATE POLICY "Users can insert own calendar items" ON content_calendar
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- Users can update their own calendar items
+CREATE POLICY "Users can update own calendar items" ON content_calendar
+  FOR UPDATE USING (auth.uid() = user_id);
+
+-- Users can delete their own calendar items
+CREATE POLICY "Users can delete own calendar items" ON content_calendar
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Service role bypass for backend operations
+CREATE POLICY "Service role full access to calendar" ON content_calendar
+  FOR ALL USING (auth.role() = 'service_role');
+```
+
+### Service Role Bypass
+
+The backend uses a service role key that bypasses RLS for administrative operations:
+
+```sql
+-- Service role bypasses all RLS policies
 CREATE POLICY "Allow all for service role" ON episodes
-  FOR ALL USING (auth.role() = 'service_role');
-
-CREATE POLICY "Allow all for service role" ON stage_outputs
-  FOR ALL USING (auth.role() = 'service_role');
-
-CREATE POLICY "Allow all for service role" ON evergreen_content
-  FOR ALL USING (auth.role() = 'service_role');
-
-CREATE POLICY "Allow all for service role" ON api_usage_log
   FOR ALL USING (auth.role() = 'service_role');
 ```
 
@@ -486,6 +893,81 @@ WHERE so.status = 'failed'
 ORDER BY so.created_at DESC
 LIMIT 20;
 ```
+
+### `content_pillars`
+
+High-level brand themes for organizing content strategy. User-scoped.
+
+```sql
+CREATE TABLE content_pillars (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+
+  -- Pillar details
+  name TEXT NOT NULL,
+  description TEXT,
+  color TEXT DEFAULT '#6B7280', -- For UI badges
+
+  -- Timestamps
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+  -- Ensure unique pillar names per user
+  UNIQUE(user_id, name)
+);
+
+-- Indexes
+CREATE INDEX idx_content_pillars_user ON content_pillars(user_id);
+CREATE INDEX idx_content_pillars_name ON content_pillars(user_id, name);
+```
+
+### `topics`
+
+Granular content tags. User-scoped. Topics can belong to multiple pillars (many-to-many).
+
+```sql
+CREATE TABLE topics (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+
+  -- Topic details
+  name TEXT NOT NULL,
+
+  -- Timestamps
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+  -- Ensure unique topic names per user
+  UNIQUE(user_id, name)
+);
+
+-- Indexes
+CREATE INDEX idx_topics_user ON topics(user_id);
+CREATE INDEX idx_topics_name ON topics(user_id, name);
+```
+
+### `topic_pillar_associations`
+
+Junction table for many-to-many relationship between topics and pillars.
+
+```sql
+CREATE TABLE topic_pillar_associations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  topic_id UUID NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+  pillar_id UUID NOT NULL REFERENCES content_pillars(id) ON DELETE CASCADE,
+
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+  -- Ensure unique associations
+  UNIQUE(topic_id, pillar_id)
+);
+
+-- Indexes for efficient lookups in both directions
+CREATE INDEX idx_topic_pillar_topic ON topic_pillar_associations(topic_id);
+CREATE INDEX idx_topic_pillar_pillar ON topic_pillar_associations(pillar_id);
+```
+
+**Note:** The `content_library` and `content_calendar` tables have a `topic_ids UUID[]` column to store which topics are associated with each content item. This enables filtering content by topic.
 
 ---
 

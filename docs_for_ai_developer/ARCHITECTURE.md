@@ -1,5 +1,55 @@
 # System Architecture
 
+## Design Philosophy: Focused Analyzers
+
+> **Core Principle: Analyzers work best when they don't have too many jobs.**
+
+This is the foundational principle behind the pipeline architecture. Each analyzer does ONE focused thing well. When a task can be split into independent work, split it and run in parallel.
+
+### Why This Matters
+
+AI analyzers produce better results when they have a clear, focused task. A single prompt asking an AI to "generate Instagram, Twitter, LinkedIn, AND Facebook content" produces worse results than four specialized prompts.
+
+### Stage 8: The Case Study
+
+Stage 8 (Social Content) demonstrates this philosophy:
+
+```
+WRONG (avoided):                    RIGHT (implemented):
+┌─────────────────────┐             ┌─────────────────┐
+│ generateSocial()    │             │ generateInstagram() │ ← focused
+│ • Instagram logic   │             └─────────────────┘
+│ • Twitter logic     │             ┌─────────────────┐
+│ • LinkedIn logic    │     ───►    │ generateTwitter()   │ ← focused
+│ • Facebook logic    │             └─────────────────┘
+│ (400+ lines)        │             ┌─────────────────┐
+└─────────────────────┘             │ generateLinkedIn()  │ ← focused
+                                    └─────────────────┘
+                                    ┌─────────────────┐
+                                    │ generateFacebook()  │ ← focused
+                                    └─────────────────┘
+                                    (All 4 run in PARALLEL)
+```
+
+**Benefits:**
+- Better quality (specialized prompts per platform)
+- ~30% faster (parallel execution)
+- Easier to test (isolated modules)
+- Clearer code (single responsibility)
+
+### Canonical Data Sources
+
+No duplicate work across stages:
+
+| Data | Canonical Source | Rule |
+|------|------------------|------|
+| Episode Summary | Stage 1 `episode_crux` | Only Stage 1 creates the summary |
+| Verbatim Quotes | Stage 2 `quotes[]` | Only Stage 2 extracts quotes |
+
+> **See [PIPELINE-REFERENCE.md](./PIPELINE-REFERENCE.md) for complete pipeline documentation.**
+
+---
+
 ## Architectural Principles
 
 ### Modularity Requirements
@@ -16,7 +66,8 @@ When a file approaches 400 lines:
 
 ```
 backend/
-├── analyzers/                    # AI analysis modules (one per stage)
+├── analyzers/                    # AI analysis modules (one per stage, 0-9)
+│   ├── stage-00-preprocess-transcript.js    (~300 lines - Claude Haiku)
 │   ├── stage-01-analyze-transcript.js       (~300 lines)
 │   ├── stage-02-extract-quotes.js           (~300 lines)
 │   ├── stage-03-outline-high-level.js       (~300 lines)
@@ -24,7 +75,7 @@ backend/
 │   ├── stage-05-generate-headlines.js       (~300 lines)
 │   ├── stage-06-draft-blog-post.js          (~350 lines - two API calls)
 │   ├── stage-07-refine-with-claude.js       (~300 lines)
-│   ├── stage-08-generate-social.js          (~300 lines)
+│   ├── stage-08-social-platform.js          (~255 lines - 4 platform exports)
 │   └── stage-09-generate-email.js           (~300 lines)
 │
 ├── parsers/                      # Response validators (one per stage)
@@ -53,6 +104,8 @@ backend/
 │   │   ├── episodes.js                      (~350 lines)
 │   │   ├── stages.js                        (~250 lines)
 │   │   ├── evergreen.js                     (~200 lines)
+│   │   ├── library.js                       (~350 lines - content library)
+│   │   ├── calendar.js                      (~400 lines - content calendar)
 │   │   └── admin.js                         (~300 lines)
 │   ├── middleware/
 │   │   ├── error-handler.js                 (~150 lines)
@@ -81,8 +134,10 @@ backend/
 │   └── database.ts                          (~300 lines)
 │
 └── orchestrator/                 # Pipeline coordination
-    ├── episode-processor.js                 (~400 lines)
-    └── stage-runner.js                      (~300 lines)
+    ├── episode-processor.js                 (~450 lines - main orchestrator)
+    ├── stage-runner.js                      (~300 lines - stage execution)
+    ├── phase-config.js                      (~400 lines - phase definitions)
+    └── phase-executor.js                    (~350 lines - parallel execution)
 
 frontend/
 ├── components/
@@ -94,7 +149,9 @@ frontend/
 │   │   ├── Toast.jsx                        (~150 lines)
 │   │   ├── LoadingSpinner.jsx               (~80 lines)
 │   │   ├── ProgressBar.jsx                  (~100 lines)
-│   │   └── Badge.jsx                        (~80 lines)
+│   │   ├── Badge.jsx                        (~80 lines)
+│   │   ├── ScheduleModal.jsx                (~300 lines - content scheduling)
+│   │   └── SaveToLibraryModal.jsx           (~250 lines - save to library)
 │   │
 │   ├── episode/                  # Episode-specific components
 │   │   ├── EpisodeCard.jsx                  (~200 lines)
@@ -115,6 +172,8 @@ frontend/
 │   ├── NewEpisode.jsx                       (~350 lines)
 │   ├── ProcessingScreen.jsx                 (~400 lines)
 │   ├── ReviewHub.jsx                        (~400 lines - tab orchestration)
+│   ├── ContentLibrary.jsx                   (~350 lines - saved content)
+│   ├── ContentCalendar.jsx                  (~400 lines - publishing schedule)
 │   └── AdminDashboard.jsx                   (~400 lines)
 │
 ├── hooks/                        # Custom React hooks
@@ -135,7 +194,180 @@ frontend/
     └── validation.js                        (~150 lines)
 ```
 
+## Phase-Based Execution Model
+
+The pipeline is organized into **4 phases** with parallel execution where possible:
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 🚪 PRE-GATE: Preprocessing (Conditional)                                  │
+│    Stage 0: preprocessTranscript (Claude Haiku)                          │
+│    Only runs if transcript > 8000 tokens                                 │
+└──────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 📤 PHASE 1: EXTRACT (Parallel) ⚡                                         │
+│    Stage 1: analyzeTranscript + Stage 2: extractQuotes                   │
+│    Both run in PARALLEL - they only need the transcript                  │
+└──────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 📋 PHASE 2: PLAN (Grouped)                                                │
+│    Stage 3: outline (first, sequential)                                  │
+│    Stage 4: paragraphs + Stage 5: headlines (then, PARALLEL) ⚡          │
+└──────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ ✍️ PHASE 3: WRITE (Sequential)                                            │
+│    Stage 6: draft → Stage 7: refine                                      │
+│    Must be sequential - refine needs the draft                           │
+└──────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 📣 PHASE 4: DISTRIBUTE (5 tasks in PARALLEL) ⚡                           │
+│    Stage 8a: Instagram  ─┐                                               │
+│    Stage 8b: Twitter/X   │                                               │
+│    Stage 8c: LinkedIn    ├─ All 5 run PARALLEL (focused analyzer design) │
+│    Stage 8d: Facebook    │                                               │
+│    Stage 9:  Email      ─┘                                               │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Performance Benefits
+
+| Phase | Tasks | Execution | Time Saved |
+|-------|-------|-----------|------------|
+| Phase 1 | 2 | Parallel | ~7 sec |
+| Phase 2 | 3 | 1 sequential + 2 parallel | ~5 sec |
+| Phase 3 | 2 | Sequential | 0 sec |
+| Phase 4 | 5 | Parallel (focused analyzers) | ~6 sec |
+| **Total** | **12** | | **~18 sec (~30%)** |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `phase-config.js` | Phase definitions, task dependencies |
+| `phase-executor.js` | Parallel execution, timeout handling |
+| `episode-processor.js` | Main orchestrator, phase coordination |
+| `stage-runner.js` | Individual stage execution |
+
+### Design Principles
+
+1. **Atomic Phases**: A phase either fully succeeds or fully fails
+2. **Phase-Level Retry**: If any task fails, retry the entire phase
+3. **Isolated Results**: Parallel tasks write to isolated results, merged after
+4. **Fail Fast**: Cancel remaining tasks on first failure
+
+## Stage-to-Model Mapping
+
+Each stage uses the most appropriate AI model for its task:
+
+| Stage | Name | Model | Provider | Phase | Purpose |
+|-------|------|-------|----------|-------|---------|
+| 0 | Preprocessing | Claude Haiku | Anthropic | pregate | Compress long transcripts (200K context) |
+| 1 | Analysis | GPT-5 mini | OpenAI | extract | Extract metadata, themes, `episode_crux` ⭐ |
+| 2 | Quote Extraction | Claude Haiku | Anthropic | extract | Extract verbatim `quotes[]` ⭐ |
+| 3 | Blog Outline | GPT-5 mini | OpenAI | plan | High-level post structure |
+| 4 | Paragraph Outlines | GPT-5 mini | OpenAI | plan | Detailed section plans |
+| 5 | Headlines | GPT-5 mini | OpenAI | plan | Title and copy options |
+| 6 | Draft Generation | GPT-5 mini | OpenAI | write | Write the blog post |
+| 7 | Refinement | Claude Sonnet | Anthropic | write | Polish and improve |
+| 8a | Instagram | Claude Sonnet | Anthropic | distribute | Instagram-specific posts |
+| 8b | Twitter/X | Claude Sonnet | Anthropic | distribute | Twitter-specific posts |
+| 8c | LinkedIn | Claude Sonnet | Anthropic | distribute | LinkedIn-specific posts |
+| 8d | Facebook | Claude Sonnet | Anthropic | distribute | Facebook-specific posts |
+| 9 | Email Campaign | Claude Sonnet | Anthropic | distribute | Newsletter content |
+
+⭐ = Canonical data source (all downstream stages reference this)
+
+## Quote Architecture
+
+**IMPORTANT:** Stage 2 is the SOLE source of quotes for the entire pipeline.
+
+### Quote Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ ORIGINAL TRANSCRIPT (always used for Stage 2, never the summary)   │
+└─────────────────────────────────┬───────────────────────────────────┘
+                                  │
+                                  ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ STAGE 2: Quote Extraction (Claude Haiku)                            │
+│ ────────────────────────────────────────────────────────────────────│
+│ Extracts 8-12 verbatim quotes with standardized structure:          │
+│                                                                     │
+│ {                                                                   │
+│   quotes: [                                                         │
+│     {                                                               │
+│       text: "Exact verbatim quote...",  // Required                │
+│       speaker: "Dr. Jane Smith",         // Required                │
+│       context: "Why significant...",     // Optional                │
+│       usage: "headline|pullquote|social|key_point" // Optional     │
+│     }                                                               │
+│   ]                                                                 │
+│ }                                                                   │
+└─────────────────────────────────┬───────────────────────────────────┘
+                                  │
+            ┌─────────────────────┼─────────────────────┐
+            ▼                     ▼                     ▼
+┌───────────────────┐ ┌───────────────────┐ ┌───────────────────┐
+│ Stage 6: Blog     │ │ Stage 8: Social   │ │ Frontend UI       │
+│ Draft Generation  │ │ Content           │ │ (ReviewHub)       │
+│ ─────────────────│ │ ─────────────────│ │ ─────────────────│
+│ Integrates quotes │ │ Uses quotes for   │ │ Displays quotes   │
+│ into blog post    │ │ social media      │ │ with copy button  │
+└───────────────────┘ └───────────────────┘ └───────────────────┘
+```
+
+### Accessing Quotes in Code
+
+**In Analyzers:**
+```javascript
+const quotes = previousStages[2]?.quotes;
+```
+
+**In Prompt Templates:**
+```
+{{STAGE_2_QUOTES}}
+```
+
+### Why Stage 2 Uses Haiku
+
+1. **Extraction Task** - Not creative generation, just finding verbatim text
+2. **200K Context** - Handles very long transcripts without truncation
+3. **Cost Effective** - Much cheaper than GPT-5 mini for this task
+4. **Fast** - Quicker response times for the extraction task
+5. **Accuracy** - Excellent at precise, verbatim extraction
+
+### Stage 0 Does NOT Extract Quotes
+
+Stage 0 (preprocessing) focuses ONLY on:
+- Compressing long transcripts into summaries
+- Identifying speakers and topics
+- Extracting episode metadata (title, duration - but NOT a core_message summary)
+
+**Stage 0 does not extract quotes** to maintain single responsibility and avoid diluted output quality.
+
+### No Duplicate Summarization
+
+**IMPORTANT:** The pipeline has one canonical summary: **Stage 1's `episode_crux`**.
+
+| Stage | What it does NOT do | Why |
+|-------|---------------------|-----|
+| Stage 0 | Does NOT create a `core_message` summary | Stage 1 handles this with `episode_crux` |
+| Stage 3 | Does NOT create a `narrative_summary` | Uses `episode_crux` from Stage 1 instead |
+
+This design prevents redundant AI calls doing the same summarization work, saving tokens and money.
+
 ## Data Flow Architecture
+
+> **See also:** [STAGE-DATA-FLOW.md](./STAGE-DATA-FLOW.md) for detailed documentation on how data flows between stages, including the `previousStages` object structure and common debugging tips.
 
 ### Episode Processing Pipeline
 
@@ -159,7 +391,8 @@ frontend/
 │                    Orchestrator                              │
 │  episode-processor.js                                        │
 │  → Loads context (transcript + evergreen)                    │
-│  → For stage 1-9:                                            │
+│  → For stage 0-9:                                            │
+│    ├─ Stage 0: Preprocess (Claude Haiku, skipped for short)  │
 │    ├─ Update status to "processing"                          │
 │    ├─ Call stage analyzer                                    │
 │    ├─ Parse & validate response                              │
@@ -189,6 +422,8 @@ frontend/
                │   - episodes          │
                │   - stage_outputs     │
                │   - api_usage_log     │
+               │   - content_library   │
+               │   - content_calendar  │
                └───────────┬───────────┘
                            │
                            ▼ (Real-time subscription)
@@ -258,6 +493,28 @@ async function analyzeStage(context) {
 - No database access (handled by orchestrator)
 - No side effects beyond logging
 - Comprehensive error handling
+
+**Output Structure (CRITICAL):**
+
+Every analyzer must return both `output_data` and `output_text`, even if one is null:
+
+```javascript
+return {
+  output_data: { /* structured JSON */ } || null,
+  output_text: "markdown content" || null,
+  input_tokens: number,
+  output_tokens: number,
+  cost_usd: number,
+};
+```
+
+The orchestrator merges BOTH into `previousStages[stageNum]` for downstream access:
+
+```javascript
+// Downstream stages can access either:
+previousStages[6].word_count     // from output_data
+previousStages[6].output_text    // the actual blog post
+```
 
 ### Parser Module Pattern
 
@@ -408,7 +665,7 @@ async function retryWithBackoff(fn, options = {}) {
     "tokens_input": 1500,
     "tokens_output": 800,
     "cost_usd": 0.0045,
-    "model": "gpt-4o-mini"
+    "model": "gpt-5-mini"
   }
 }
 ```

@@ -141,12 +141,32 @@ function AdminDashboard() {
             </div>
 
             <div className={styles.breakdown}>
-              <h4>By Stage</h4>
+              <h4>By Phase</h4>
+              {costs?.byPhase && Object.entries(costs.byPhase)
+                .sort(([, a], [, b]) => {
+                  // Sort by phase order: pregate, extract, plan, write, distribute
+                  const order = { pregate: 0, extract: 1, plan: 2, write: 3, distribute: 4 };
+                  return (order[a.name?.toLowerCase()] ?? 99) - (order[b.name?.toLowerCase()] ?? 99);
+                })
+                .map(([phaseId, data]) => (
+                  <div key={phaseId} className={styles.breakdownItem}>
+                    <span className={styles.breakdownLabel}>
+                      {data.emoji} {data.name}
+                    </span>
+                    <span className={styles.breakdownValue}>${data.cost.toFixed(4)}</span>
+                  </div>
+                ))}
+            </div>
+
+            <div className={styles.breakdown}>
+              <h4>By Stage (Detail)</h4>
               {costs?.byStage && Object.entries(costs.byStage)
                 .sort(([a], [b]) => Number(a) - Number(b))
                 .map(([stage, data]) => (
                   <div key={stage} className={styles.breakdownItem}>
-                    <span className={styles.breakdownLabel}>Stage {stage}</span>
+                    <span className={styles.breakdownLabel}>
+                      {stage}. {data.name || `Stage ${stage}`}
+                    </span>
                     <span className={styles.breakdownValue}>${data.cost.toFixed(4)}</span>
                   </div>
                 ))}
@@ -154,22 +174,40 @@ function AdminDashboard() {
           </div>
         </Card>
 
-        {/* Performance by stage */}
-        <Card title="Stage Performance" padding="lg">
-          <div className={styles.stagePerformance}>
-            {performance?.byStage && Object.entries(performance.byStage)
-              .sort(([a], [b]) => Number(a) - Number(b))
-              .map(([stage, data]) => (
-                <div key={stage} className={styles.stageRow}>
-                  <span className={styles.stageName}>
-                    {stage}. {data.name}
-                  </span>
-                  <span className={styles.stageDuration}>
-                    {(data.avgDurationMs / 1000).toFixed(1)}s avg
-                  </span>
-                  <span className={styles.stageCost}>
-                    ${data.avgCost.toFixed(4)}
-                  </span>
+        {/* Performance by phase */}
+        <Card title="Phase Performance" padding="lg">
+          <div className={styles.phasePerformance}>
+            {performance?.byPhase && Object.entries(performance.byPhase)
+              .sort(([a], [b]) => {
+                // Sort by phase order
+                const order = { pregate: 0, extract: 1, plan: 2, write: 3, distribute: 4 };
+                return (order[a] ?? 99) - (order[b] ?? 99);
+              })
+              .map(([phaseId, data]) => (
+                <div key={phaseId} className={styles.phaseBlock}>
+                  <div className={styles.phaseHeader}>
+                    <span className={styles.phaseName}>
+                      {data.emoji} {data.name}
+                    </span>
+                    <span className={styles.phaseTotals}>
+                      {(data.totalAvgDurationMs / 1000).toFixed(1)}s | ${data.totalAvgCost.toFixed(4)}
+                    </span>
+                  </div>
+                  <div className={styles.phaseStages}>
+                    {data.stages?.map((stage) => (
+                      <div key={stage.number} className={styles.stageRow}>
+                        <span className={styles.stageName}>
+                          {stage.number}. {stage.name}
+                        </span>
+                        <span className={styles.stageDuration}>
+                          {(stage.avgDurationMs / 1000).toFixed(1)}s
+                        </span>
+                        <span className={styles.stageCost}>
+                          ${stage.avgCost.toFixed(4)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
           </div>

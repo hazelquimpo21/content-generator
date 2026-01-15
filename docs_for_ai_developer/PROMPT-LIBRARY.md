@@ -482,6 +482,9 @@ Voice guidelines: {{VOICE_GUIDELINES}}
 ```
 Create a blog post outline with:
 
+NOTE: You do NOT need to create a narrative summary. The {{EPISODE_CRUX}} provided
+in the context is the canonical "big picture" for the post. Focus only on structure.
+
 1. HOOK (75-100 words)
    - How to open the post
    - NOT a rhetorical question

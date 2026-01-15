@@ -33,10 +33,17 @@ import { requestLogger, correlationId } from './middleware/logger-middleware.js'
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 
 // Import routes
+import authRouter from './routes/auth.js';
+import settingsRouter from './routes/settings.js';
 import episodesRouter from './routes/episodes.js';
 import stagesRouter from './routes/stages.js';
 import evergreenRouter from './routes/evergreen.js';
 import adminRouter from './routes/admin.js';
+import libraryRouter from './routes/library.js';
+import calendarRouter from './routes/calendar.js';
+import topicsRouter from './routes/topics.js';
+import pillarsRouter from './routes/pillars.js';
+import brandDiscoveryRouter from './routes/brand-discovery.js';
 
 // ============================================================================
 // APP CONFIGURATION
@@ -107,10 +114,17 @@ app.get('/', (req, res) => {
     description: 'Transform podcast transcripts into polished content',
     endpoints: {
       health: '/health',
+      auth: '/api/auth',
+      settings: '/api/settings',
       episodes: '/api/episodes',
       stages: '/api/stages',
       evergreen: '/api/evergreen',
       admin: '/api/admin',
+      library: '/api/library',
+      calendar: '/api/calendar',
+      topics: '/api/topics',
+      pillars: '/api/pillars',
+      brandDiscovery: '/api/brand-discovery',
     },
     documentation: 'See /docs for API documentation',
   });
@@ -121,10 +135,32 @@ app.get('/', (req, res) => {
 // ============================================================================
 
 // Mount route handlers
+// Auth routes (no authentication required for magic link)
+app.use('/api/auth', authRouter);
+
+// User-scoped settings (requires authentication)
+app.use('/api/settings', settingsRouter);
+
+// Episode and content routes
 app.use('/api/episodes', episodesRouter);
 app.use('/api/stages', stagesRouter);
+
+// Legacy evergreen content (system defaults, superadmin only for updates)
 app.use('/api/evergreen', evergreenRouter);
+
+// Admin routes (superadmin only)
 app.use('/api/admin', adminRouter);
+
+// Content Library and Calendar routes (user-scoped)
+app.use('/api/library', libraryRouter);
+app.use('/api/calendar', calendarRouter);
+
+// Topics and Pillars routes (user-scoped content organization)
+app.use('/api/topics', topicsRouter);
+app.use('/api/pillars', pillarsRouter);
+
+// Brand Discovery routes (user-scoped onboarding)
+app.use('/api/brand-discovery', brandDiscoveryRouter);
 
 // ============================================================================
 // ERROR HANDLING
@@ -186,10 +222,16 @@ async function startServer() {
     logger.info('📍 Available endpoints:', {
       health: `http://localhost:${PORT}/health`,
       api: `http://localhost:${PORT}/api`,
+      auth: `http://localhost:${PORT}/api/auth`,
+      settings: `http://localhost:${PORT}/api/settings`,
       episodes: `http://localhost:${PORT}/api/episodes`,
       stages: `http://localhost:${PORT}/api/stages`,
       evergreen: `http://localhost:${PORT}/api/evergreen`,
       admin: `http://localhost:${PORT}/api/admin`,
+      library: `http://localhost:${PORT}/api/library`,
+      calendar: `http://localhost:${PORT}/api/calendar`,
+      topics: `http://localhost:${PORT}/api/topics`,
+      pillars: `http://localhost:${PORT}/api/pillars`,
     });
 
     if (NODE_ENV === 'development') {

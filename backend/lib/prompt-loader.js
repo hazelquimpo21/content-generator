@@ -245,6 +245,9 @@ export async function loadPrompt(stageName, variables = {}, options = {}) {
  * Loads a prompt with all stage context
  * Convenience method that gathers context from evergreen content
  *
+ * When Stage 0 preprocessing has been done, Stages 1-2 will use the
+ * compressed summary instead of the raw transcript to avoid token limits.
+ *
  * @param {string} stageName - Stage template name
  * @param {Object} context - Processing context
  * @param {string} context.transcript - Episode transcript
@@ -255,10 +258,71 @@ export async function loadPrompt(stageName, variables = {}, options = {}) {
 export async function loadStagePrompt(stageName, context) {
   const { transcript, evergreen, previousStages = {} } = context;
 
+  // Check if Stage 0 preprocessing was done
+  const stage0Output = previousStages[0];
+  const wasPreprocessed = stage0Output?.preprocessed === true;
+
+  // For Stage 1, use preprocessed summary if available (saves tokens)
+  // Stage 2 (quotes) ALWAYS uses original transcript for verbatim accuracy
+  let effectiveTranscript = transcript;
+  if (wasPreprocessed && stage0Output?.comprehensive_summary) {
+    // Use the compressed summary for Stage 1 analysis (preserves all key info)
+    effectiveTranscript = `[PREPROCESSED TRANSCRIPT SUMMARY - Full transcript was analyzed by Claude Haiku]\n\n${stage0Output.comprehensive_summary}`;
+
+    // Add topics if available
+    if (stage0Output.key_topics && stage0Output.key_topics.length > 0) {
+      effectiveTranscript += `\n\n[KEY TOPICS IDENTIFIED]: ${stage0Output.key_topics.join(', ')}`;
+    }
+
+    // Add speaker info if available
+    if (stage0Output.speakers) {
+      effectiveTranscript += '\n\n[SPEAKERS IDENTIFIED]:';
+      if (stage0Output.speakers.host?.name) {
+        effectiveTranscript += `\n- Host: ${stage0Output.speakers.host.name}`;
+        if (stage0Output.speakers.host.role) {
+          effectiveTranscript += ` (${stage0Output.speakers.host.role})`;
+        }
+      }
+      if (stage0Output.speakers.guest?.name) {
+        effectiveTranscript += `\n- Guest: ${stage0Output.speakers.guest.name}`;
+        if (stage0Output.speakers.guest.credentials) {
+          effectiveTranscript += `, ${stage0Output.speakers.guest.credentials}`;
+        }
+        if (stage0Output.speakers.guest.expertise) {
+          effectiveTranscript += ` - Expertise: ${stage0Output.speakers.guest.expertise}`;
+        }
+      }
+    }
+
+    // Add episode metadata if available
+    if (stage0Output.episode_metadata) {
+      effectiveTranscript += '\n\n[EPISODE METADATA FROM PREPROCESSING]:';
+      if (stage0Output.episode_metadata.inferred_title) {
+        effectiveTranscript += `\n- Suggested Title: ${stage0Output.episode_metadata.inferred_title}`;
+      }
+      if (stage0Output.episode_metadata.core_message) {
+        effectiveTranscript += `\n- Core Message: ${stage0Output.episode_metadata.core_message}`;
+      }
+      if (stage0Output.episode_metadata.estimated_duration) {
+        effectiveTranscript += `\n- Estimated Duration: ${stage0Output.episode_metadata.estimated_duration}`;
+      }
+    }
+
+    logger.debug('📝 Using preprocessed transcript for prompt', {
+      stageName,
+      originalLength: transcript?.length,
+      preprocessedLength: effectiveTranscript.length,
+      compressionRatio: transcript ? (transcript.length / effectiveTranscript.length).toFixed(1) : 'N/A',
+    });
+  }
+
   // Build variables from context
   const variables = {
-    // Transcript
-    TRANSCRIPT: transcript,
+    // Transcript (may be preprocessed summary for stages 1-2)
+    TRANSCRIPT: effectiveTranscript,
+
+    // Original transcript (always available if needed)
+    ORIGINAL_TRANSCRIPT: transcript,
 
     // Therapist info
     THERAPIST_NAME: evergreen?.therapist_profile?.name || 'the therapist',
@@ -276,18 +340,29 @@ export async function loadStagePrompt(stageName, context) {
     VOICE_GUIDELINES: JSON.stringify(evergreen?.voice_guidelines || {}, null, 2),
     TONE: evergreen?.voice_guidelines?.tone?.join(', ') || '',
 
-    // Previous stage outputs
+    // Stage 0 preprocessing outputs (available for all subsequent stages)
+    // NOTE: Quotes are NOT from Stage 0 - they come from Stage 2 (dedicated quote extraction)
+    STAGE_0_OUTPUT: JSON.stringify(previousStages[0] || {}, null, 2),
+    PREPROCESSED_SUMMARY: stage0Output?.comprehensive_summary || '',
+    PREPROCESSED_TOPICS: stage0Output?.key_topics?.join(', ') || '',
+    WAS_PREPROCESSED: wasPreprocessed ? 'true' : 'false',
+
+    // Previous stage outputs (1-9)
     STAGE_1_OUTPUT: JSON.stringify(previousStages[1] || {}, null, 2),
     STAGE_2_OUTPUT: JSON.stringify(previousStages[2] || {}, null, 2),
+
+    // Stage 2 quotes in standardized format: { text, speaker, context, usage }
+    // This is the CANONICAL source of quotes for all downstream stages
+    STAGE_2_QUOTES: JSON.stringify(previousStages[2]?.quotes || [], null, 2),
     STAGE_3_OUTPUT: JSON.stringify(previousStages[3] || {}, null, 2),
     STAGE_4_OUTPUT: JSON.stringify(previousStages[4] || {}, null, 2),
     STAGE_5_OUTPUT: JSON.stringify(previousStages[5] || {}, null, 2),
     STAGE_6_OUTPUT: previousStages[6]?.output_text || '',
     STAGE_7_OUTPUT: previousStages[7]?.output_text || '',
 
-    // Episode crux (from stage 1)
-    EPISODE_CRUX: previousStages[1]?.episode_crux || '',
-    EPISODE_TITLE: previousStages[1]?.episode_basics?.title || 'Untitled Episode',
+    // Episode crux (from stage 1, or stage 0 if available)
+    EPISODE_CRUX: previousStages[1]?.episode_crux || stage0Output?.episode_metadata?.core_message || '',
+    EPISODE_TITLE: previousStages[1]?.episode_basics?.title || stage0Output?.episode_metadata?.inferred_title || 'Untitled Episode',
   };
 
   return loadPrompt(stageName, variables);

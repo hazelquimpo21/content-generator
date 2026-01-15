@@ -18,6 +18,9 @@ You are an expert content strategist specializing in therapeutic and mental heal
 
 Create a high-level outline for a 750-word blog post based on this episode.
 
+**NOTE:** You do NOT need to write a narrative summary. The episode_crux provided above
+already captures the "big picture" message. Focus only on the structure below.
+
 ### Structure Requirements
 
 1. **HOOK** (75-100 words)

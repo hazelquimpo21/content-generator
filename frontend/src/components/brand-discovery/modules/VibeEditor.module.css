@@ -39,6 +39,7 @@
 .infoBanner p {
   margin: 0;
   font-size: var(--text-sm);
+  font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   line-height: 1.6;
 }
@@ -53,11 +54,13 @@
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   background-color: var(--color-bg-tertiary);
+  background-color: var(--color-surface-hover);
   border-radius: var(--radius-md);
 }
 
 .summaryLabel {
   font-size: var(--text-sm);
+  font-size: var(--font-size-sm);
   font-weight: var(--font-medium);
   color: var(--color-text-secondary);
 }
@@ -77,6 +80,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
+  gap: var(--space-6);
 }
 
 .sliderGroup {
@@ -104,6 +108,9 @@
 .sliderLabel {
   font-family: var(--font-heading);
   font-size: var(--text-lg);
+}
+
+.sliderLabel {
   font-weight: var(--font-semibold);
   color: var(--color-text-primary);
 }
@@ -115,6 +122,9 @@
   padding: var(--space-1) var(--space-2);
   background-color: var(--color-primary-light);
   border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  font-style: italic;
 }
 
 .sliderRow {
@@ -282,6 +292,56 @@
     border-color var(--transition-fast);
   position: relative;
   z-index: 3;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.endpoint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  min-width: 140px;
+  text-align: center;
+}
+
+.endpoint:first-child {
+  text-align: right;
+}
+
+.endpoint:last-child {
+  text-align: left;
+}
+
+.sliderWrapper {
+  flex: 1;
+  position: relative;
+  padding: var(--space-2) 0;
+}
+
+/* Custom slider styling */
+.slider {
+  width: 100%;
+  height: 8px;
+  appearance: none;
+  background: linear-gradient(
+    to right,
+    var(--color-primary-light) 0%,
+    var(--color-surface-hover) 50%,
+    var(--color-primary-light) 100%
+  );
+  border-radius: var(--radius-full);
+  cursor: pointer;
+}
+
+.slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  background-color: var(--color-primary);
+  border: 3px solid var(--color-surface);
+  border-radius: 50%;
+  box-shadow: var(--shadow-md);
+  cursor: grab;
+  transition: transform var(--transition-fast);
 }
 
 .slider::-webkit-slider-thumb:hover {
@@ -306,6 +366,13 @@
   height: 26px;
   background-color: #FFFFFF;
   border: 3px solid var(--color-primary);
+}
+
+.slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  background-color: var(--color-primary);
+  border: 3px solid var(--color-surface);
   border-radius: 50%;
   box-shadow: var(--shadow-md);
   cursor: grab;
@@ -353,6 +420,16 @@
   transform: translateX(-50%);
   border: 5px solid transparent;
   border-bottom-color: var(--color-text-primary);
+/* Center indicator */
+.sliderCenter {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 12px;
+  background-color: var(--color-border);
+  pointer-events: none;
 }
 
 /* ============================================================================
@@ -362,6 +439,7 @@
 .archetypeHint {
   padding: var(--space-3);
   background-color: var(--color-bg-tertiary);
+  background-color: var(--color-surface-hover);
   border-radius: var(--radius-md);
   border-left: 3px solid var(--color-primary);
 }
@@ -369,6 +447,7 @@
 .archetypeHint p {
   margin: 0;
   font-size: var(--text-sm);
+  font-size: var(--font-size-sm);
   color: var(--color-text-tertiary);
   line-height: 1.6;
 }
@@ -383,6 +462,7 @@
   align-items: center;
   padding-top: var(--space-4);
   border-top: 1px solid var(--color-bg-accent);
+  border-top: 1px solid var(--color-border-light);
 }
 
 .footerActions {
@@ -417,6 +497,15 @@
 
   .endpointLeft {
     order: 1;
+@media (max-width: 640px) {
+  .sliderRow {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .endpoint {
+    min-width: auto;
+    text-align: center !important;
   }
 
   .sliderWrapper {

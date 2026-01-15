@@ -6,9 +6,9 @@
  *
  * Variants:
  * - default: Neutral gray
- * - primary: Terracotta accent
+ * - primary: Sage accent
  * - success: Green
- * - warning: Gold
+ * - warning: Slate
  * - error: Red
  * - info: Blue
  *

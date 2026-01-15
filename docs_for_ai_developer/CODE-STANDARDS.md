@@ -178,7 +178,7 @@ logger.info('Stage completed', { episodeId, stage, duration_ms, cost_usd });
 
 // AI API calls
 logger.info('Calling OpenAI', {
-  model: 'gpt-4o-mini',
+  model: 'gpt-5-mini',
   input_tokens: 1500,
   episodeId,
   stage
@@ -243,7 +243,7 @@ logger.info('Processing episode', {
     "tokens_input": 1500,
     "tokens_output": 800,
     "cost_usd": 0.0045,
-    "model": "gpt-4o-mini"
+    "model": "gpt-5-mini"
   }
 }
 ```

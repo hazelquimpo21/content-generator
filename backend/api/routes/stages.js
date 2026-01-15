@@ -74,6 +74,9 @@ router.put('/:id', async (req, res, next) => {
 /**
  * POST /api/stages/:id/regenerate
  * Regenerate a single stage with AI
+ *
+ * For Stage 8 (Social Content), the sub_stage is read from the database record.
+ * Each platform (instagram, twitter, linkedin, facebook) is a separate record.
  */
 router.post('/:id/regenerate', async (req, res, next) => {
   try {
@@ -91,21 +94,88 @@ router.post('/:id/regenerate', async (req, res, next) => {
       throw new ValidationError('id', 'Stage not found');
     }
 
+    // Build options for regeneration
+    const options = {};
+    if (stage.sub_stage) {
+      options.subStage = stage.sub_stage;
+    }
+
     // Return immediately
     res.status(202).json({
       stage_id: id,
       status: 'processing',
-      message: 'Stage regeneration started',
+      message: `Stage regeneration started${stage.sub_stage ? ` (${stage.sub_stage})` : ''}`,
+      subStage: stage.sub_stage || null,
     });
 
     // Regenerate in background
-    regenerateStage(stage.episode_id, stage.stage_number)
+    regenerateStage(stage.episode_id, stage.stage_number, options)
       .catch(err => {
         logger.error('Stage regeneration failed', {
           stageId: id,
+          stageNumber: stage.stage_number,
+          subStage: stage.sub_stage,
           error: err.message,
         });
       });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/stages/episode/:episodeId/regenerate-all-social
+ * Regenerate all Stage 8 social platforms in parallel
+ *
+ * Useful for regenerating all social content at once after blog post changes.
+ */
+router.post('/episode/:episodeId/regenerate-all-social', async (req, res, next) => {
+  try {
+    const { episodeId } = req.params;
+
+    // Verify episode exists
+    const episode = await episodeRepo.findById(episodeId);
+    if (!episode) {
+      throw new ValidationError('episodeId', 'Episode not found');
+    }
+
+    // Get all Stage 8 sub-stages
+    const platforms = ['instagram', 'twitter', 'linkedin', 'facebook'];
+
+    // Return immediately
+    res.status(202).json({
+      episodeId,
+      status: 'processing',
+      message: 'Regenerating all social platforms',
+      platforms,
+    });
+
+    // Regenerate all platforms in parallel
+    const regenerations = platforms.map(platform =>
+      regenerateStage(episodeId, 8, { subStage: platform })
+        .catch(err => {
+          logger.error('Platform regeneration failed', {
+            episodeId,
+            platform,
+            error: err.message,
+          });
+          return { platform, error: err.message };
+        })
+    );
+
+    // Run in parallel (don't await - fire and forget)
+    Promise.all(regenerations).then(results => {
+      const failed = results.filter(r => r?.error);
+      if (failed.length > 0) {
+        logger.error('Some social platforms failed to regenerate', {
+          episodeId,
+          failed: failed.map(f => f.platform),
+        });
+      } else {
+        logger.info('All social platforms regenerated successfully', { episodeId });
+      }
+    });
 
   } catch (error) {
     next(error);

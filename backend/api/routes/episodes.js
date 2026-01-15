@@ -3,17 +3,22 @@
  * EPISODES ROUTES
  * ============================================================================
  * API endpoints for managing podcast episodes.
+ * All routes require authentication. Episodes are user-scoped.
  *
  * Routes:
- * GET    /api/episodes              - List all episodes
- * POST   /api/episodes              - Create new episode
- * GET    /api/episodes/:id          - Get episode with stages
+ * GET    /api/episodes              - List user's episodes
+ * POST   /api/episodes              - Create new episode (owned by user)
+ * GET    /api/episodes/:id          - Get episode with stages (owner or superadmin)
  * GET    /api/episodes/:id/stages   - Get all stages for episode (polling)
  * GET    /api/episodes/:id/status   - Get processing status
- * PUT    /api/episodes/:id          - Update episode
- * DELETE /api/episodes/:id          - Delete episode
- * POST   /api/episodes/:id/process  - Start processing
- * POST   /api/episodes/:id/pause    - Pause processing
+ * PUT    /api/episodes/:id          - Update episode (owner only)
+ * DELETE /api/episodes/:id          - Delete episode (owner or superadmin)
+ * POST   /api/episodes/:id/process  - Start processing (owner only)
+ * POST   /api/episodes/:id/pause    - Pause processing (owner only)
+ *
+ * Authorization:
+ * - Users can only access their own episodes
+ * - Superadmins can access all episodes
  * ============================================================================
  */
 
@@ -21,10 +26,51 @@ import { Router } from 'express';
 import { episodeRepo, stageRepo } from '../../lib/supabase-client.js';
 import { processEpisode, getProcessingStatus } from '../../orchestrator/episode-processor.js';
 import { estimateEpisodeCost } from '../../lib/cost-calculator.js';
-import { ValidationError } from '../../lib/errors.js';
+import { ValidationError, AuthorizationError, NotFoundError } from '../../lib/errors.js';
+import { requireAuth } from '../middleware/auth-middleware.js';
 import logger from '../../lib/logger.js';
+import { analyzeTranscriptQuick, estimateQuickAnalysisCost } from '../../lib/transcript-analyzer.js';
 
 const router = Router();
+
+// ============================================================================
+// AUTHORIZATION HELPER
+// ============================================================================
+
+/**
+ * Verifies that the authenticated user can access the specified episode.
+ * Users can only access their own episodes. Superadmins can access all.
+ *
+ * @param {Object} episode - Episode object from database
+ * @param {Object} user - Authenticated user from req.user
+ * @param {string} action - Action being performed (for error messages)
+ * @throws {AuthorizationError} If user cannot access the episode
+ */
+function checkEpisodeAccess(episode, user, action = 'access') {
+  // Superadmins can access all episodes
+  if (user.role === 'superadmin') {
+    return;
+  }
+
+  // Legacy episodes without user_id are accessible to all authenticated users
+  if (!episode.user_id) {
+    return;
+  }
+
+  // Check ownership
+  if (episode.user_id !== user.id) {
+    logger.warn('Episode access denied', {
+      episodeId: episode.id,
+      episodeOwnerId: episode.user_id,
+      requesterId: user.id,
+      action,
+    });
+    throw new AuthorizationError(
+      'episode',
+      `You do not have permission to ${action} this episode`
+    );
+  }
+}
 
 // ============================================================================
 // VALIDATION HELPERS
@@ -49,18 +95,105 @@ function validateTranscript(transcript) {
 // ============================================================================
 
 /**
- * GET /api/episodes
- * List all episodes with optional filtering
+ * POST /api/episodes/analyze-transcript
+ * Quick transcript analysis using Claude Haiku for auto-populating episode fields.
+ *
+ * This is a lightweight analysis meant for the "New Episode" form.
+ * It extracts basic metadata (title, guest info, topics) in ~2-3 seconds.
+ *
+ * Cost: ~$0.001-0.003 per analysis (very affordable)
+ *
+ * Request Body:
+ * - transcript: string (required, min 200 chars)
+ * - regenerate: boolean (optional) - if true, generates a different/creative title
+ *
+ * Response:
+ * - metadata: { suggested_title, guest_name, guest_credentials, main_topics, ... }
+ * - usage: { cost, durationMs, inputTokens, outputTokens }
  */
-router.get('/', async (req, res, next) => {
+router.post('/analyze-transcript', requireAuth, async (req, res, next) => {
   try {
-    const { status, limit = 50, offset = 0 } = req.query;
+    const { transcript, regenerate } = req.body;
 
-    const result = await episodeRepo.list({
+    // Validate transcript
+    if (!transcript || typeof transcript !== 'string') {
+      throw new ValidationError('transcript', 'Transcript is required');
+    }
+
+    if (transcript.length < 200) {
+      throw new ValidationError(
+        'transcript',
+        'Transcript must be at least 200 characters for analysis'
+      );
+    }
+
+    logger.info('Quick transcript analysis requested', {
+      userId: req.user.id,
+      transcriptLength: transcript.length,
+      regenerate: !!regenerate,
+    });
+
+    // Get cost estimate first
+    const estimate = estimateQuickAnalysisCost(transcript);
+
+    // Run the quick analysis (with regenerate flag for title variation)
+    const result = await analyzeTranscriptQuick(transcript, {
+      regenerateTitle: !!regenerate,
+    });
+
+    logger.info('Quick transcript analysis completed', {
+      userId: req.user.id,
+      durationMs: result.usage.durationMs,
+      cost: result.usage.cost,
+      confidence: result.metadata.confidence,
+      regenerate: !!regenerate,
+    });
+
+    res.json({
+      success: true,
+      metadata: result.metadata,
+      usage: result.usage,
+      estimate,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * GET /api/episodes
+ * List episodes for the authenticated user.
+ * Superadmins can see all episodes, regular users only see their own.
+ *
+ * Query params:
+ * - status: Filter by episode status
+ * - limit: Max results (default 50)
+ * - offset: Pagination offset (default 0)
+ * - all: If 'true' and user is superadmin, show all episodes
+ */
+router.get('/', requireAuth, async (req, res, next) => {
+  try {
+    const { status, limit = 50, offset = 0, all } = req.query;
+
+    logger.debug('Listing episodes', {
+      userId: req.user.id,
+      role: req.user.role,
+      showAll: all === 'true',
+    });
+
+    // Build list options
+    const listOptions = {
       status,
       limit: parseInt(limit),
       offset: parseInt(offset),
-    });
+    };
+
+    // User-scope episodes unless superadmin requesting all
+    if (req.user.role !== 'superadmin' || all !== 'true') {
+      listOptions.userId = req.user.id;
+    }
+
+    const result = await episodeRepo.list(listOptions);
 
     res.json({
       episodes: result.episodes,
@@ -75,25 +208,35 @@ router.get('/', async (req, res, next) => {
 
 /**
  * POST /api/episodes
- * Create a new episode from transcript
+ * Create a new episode from transcript.
+ * The episode is automatically owned by the authenticated user.
  */
-router.post('/', async (req, res, next) => {
+router.post('/', requireAuth, async (req, res, next) => {
   try {
     const { transcript, episode_context } = req.body;
 
     // Validate transcript
     validateTranscript(transcript);
 
-    // Create episode
+    logger.info('Creating episode', {
+      userId: req.user.id,
+      transcriptLength: transcript.length,
+    });
+
+    // Create episode with user ownership
     const episode = await episodeRepo.create({
       transcript,
       episode_context: episode_context || {},
+      user_id: req.user.id,  // Associate with authenticated user
     });
 
     // Calculate cost estimate
     const estimate = estimateEpisodeCost(transcript);
 
-    logger.info('Episode created', { episodeId: episode.id });
+    logger.info('Episode created', {
+      episodeId: episode.id,
+      userId: req.user.id,
+    });
 
     res.status(201).json({
       episode,
@@ -110,14 +253,27 @@ router.post('/', async (req, res, next) => {
 
 /**
  * GET /api/episodes/:id
- * Get a single episode with all stage outputs
+ * Get a single episode with all stage outputs.
+ * User must own the episode or be a superadmin.
  */
-router.get('/:id', async (req, res, next) => {
+router.get('/:id', requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    logger.debug('Fetching episode with stages', { episodeId: id });
+    logger.debug('Fetching episode with stages', {
+      episodeId: id,
+      userId: req.user.id,
+    });
+
     const episode = await episodeRepo.findByIdWithStages(id);
+
+    // Check authorization
+    checkEpisodeAccess(episode, req.user, 'view');
+
+    // Prevent browser caching - episode data changes during processing
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
 
     res.json({ episode, stages: episode.stages });
   } catch (error) {
@@ -127,31 +283,55 @@ router.get('/:id', async (req, res, next) => {
 
 /**
  * GET /api/episodes/:id/stages
- * Get all stage outputs for an episode (dedicated endpoint for polling)
+ * Get all stage outputs for an episode (dedicated endpoint for polling).
+ * User must own the episode or be a superadmin.
  */
-router.get('/:id/stages', async (req, res, next) => {
+router.get('/:id/stages', requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    logger.debug('Fetching stages for episode', { episodeId: id });
+    logger.debug('Fetching stages for episode', {
+      episodeId: id,
+      userId: req.user.id,
+    });
 
-    // First verify episode exists
+    // Fetch episode
     const episode = await episodeRepo.findById(id);
+
+    // Check authorization
+    checkEpisodeAccess(episode, req.user, 'view');
 
     // Then get all stages
     const stages = await stageRepo.findAllByEpisode(id);
 
-    logger.debug('Stages retrieved', {
+    // Detailed logging for debugging stage data issues
+    const stagesSummary = stages.map(s => ({
+      num: s.stage_number,
+      status: s.status,
+      hasData: !!s.output_data,
+      hasText: !!s.output_text,
+    }));
+
+    logger.info('📊 Stages retrieved for Review Hub', {
       episodeId: id,
+      episodeStatus: episode.status,
       stageCount: stages.length,
       completedCount: stages.filter(s => s.status === 'completed').length,
+      pendingCount: stages.filter(s => s.status === 'pending').length,
       processingCount: stages.filter(s => s.status === 'processing').length,
+      failedCount: stages.filter(s => s.status === 'failed').length,
+      stagesSummary,
     });
 
+    // Prevent browser caching - stages data changes during processing
+    // Without this, browser may serve stale 304 responses after processing completes
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+
+    // Return full episode object to match frontend expectations
     res.json({
-      episode_id: id,
-      status: episode.status,
-      current_stage: episode.current_stage,
+      episode,
       stages,
     });
   } catch (error) {
@@ -161,17 +341,30 @@ router.get('/:id/stages', async (req, res, next) => {
 
 /**
  * PUT /api/episodes/:id
- * Update episode metadata
+ * Update episode metadata.
+ * User must own the episode to update it.
  */
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { title, status, episode_context } = req.body;
+
+    // Fetch episode first to check ownership
+    const existingEpisode = await episodeRepo.findById(id);
+
+    // Check authorization (only owner can update)
+    checkEpisodeAccess(existingEpisode, req.user, 'update');
 
     const updates = {};
     if (title !== undefined) updates.title = title;
     if (status !== undefined) updates.status = status;
     if (episode_context !== undefined) updates.episode_context = episode_context;
+
+    logger.info('Updating episode', {
+      episodeId: id,
+      userId: req.user.id,
+      fields: Object.keys(updates),
+    });
 
     const episode = await episodeRepo.update(id, updates);
 
@@ -183,35 +376,89 @@ router.put('/:id', async (req, res, next) => {
 
 /**
  * DELETE /api/episodes/:id
- * Delete an episode and all related data
+ * Delete an episode and all related data.
+ * User must own the episode or be a superadmin.
+ *
+ * The cascade delete in the database will automatically remove
+ * all associated stage_outputs records.
  */
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
 
+    logger.debug('Delete episode request received', {
+      episodeId: id,
+      userId: req.user.id,
+    });
+
+    // Fetch episode first to check ownership and status
+    const episode = await episodeRepo.findById(id);
+
+    // Check authorization (owner or superadmin can delete)
+    checkEpisodeAccess(episode, req.user, 'delete');
+
+    // Log warning if deleting a processing episode (but allow it)
+    if (episode.status === 'processing') {
+      logger.warn('Deleting episode that is currently processing', {
+        episodeId: id,
+        userId: req.user.id,
+        currentStage: episode.current_stage,
+      });
+    }
+
+    logger.info('Deleting episode', {
+      episodeId: id,
+      userId: req.user.id,
+      deletedBy: req.user.role === 'superadmin' ? 'superadmin' : 'owner',
+      episodeStatus: episode.status,
+      totalCostUsd: episode.total_cost_usd,
+    });
+
     await episodeRepo.delete(id);
+
+    logger.info('Episode deleted successfully', {
+      episodeId: id,
+      userId: req.user.id,
+    });
 
     res.status(204).send();
   } catch (error) {
+    logger.error('Failed to delete episode', {
+      episodeId: req.params.id,
+      userId: req.user?.id,
+      error: error.message,
+    });
     next(error);
   }
 });
 
 /**
  * POST /api/episodes/:id/process
- * Start processing an episode through the 9-stage pipeline
+ * Start processing an episode through the 9-stage pipeline.
+ * User must own the episode to start processing.
  */
-router.post('/:id/process', async (req, res, next) => {
+router.post('/:id/process', requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { start_from_stage = 1 } = req.body;
+    // Default to stage 0 (preprocessing) for fresh starts
+    // Stage 0 handles long transcript preprocessing with Claude Haiku
+    const { start_from_stage = 0 } = req.body;
 
-    // Verify episode exists and is in valid state
+    // Verify episode exists
     const episode = await episodeRepo.findById(id);
+
+    // Check authorization (only owner can process)
+    checkEpisodeAccess(episode, req.user, 'process');
 
     if (!['draft', 'paused', 'error'].includes(episode.status)) {
       throw new ValidationError('status', `Cannot process episode with status: ${episode.status}`);
     }
+
+    logger.info('Starting episode processing', {
+      episodeId: id,
+      userId: req.user.id,
+      startFromStage: start_from_stage,
+    });
 
     // Get cost estimate
     const estimate = estimateEpisodeCost(episode.transcript);
@@ -230,6 +477,7 @@ router.post('/:id/process', async (req, res, next) => {
       .catch(error => {
         logger.error('Background processing failed', {
           episodeId: id,
+          userId: req.user.id,
           error: error.message,
         });
       });
@@ -241,13 +489,25 @@ router.post('/:id/process', async (req, res, next) => {
 
 /**
  * GET /api/episodes/:id/status
- * Get current processing status
+ * Get current processing status.
+ * User must own the episode or be a superadmin.
  */
-router.get('/:id/status', async (req, res, next) => {
+router.get('/:id/status', requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
 
+    // Fetch episode first to check ownership
+    const episode = await episodeRepo.findById(id);
+
+    // Check authorization
+    checkEpisodeAccess(episode, req.user, 'view');
+
     const status = await getProcessingStatus(id);
+
+    // Prevent browser caching - status changes during processing
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
 
     res.json(status);
   } catch (error) {
@@ -257,11 +517,23 @@ router.get('/:id/status', async (req, res, next) => {
 
 /**
  * POST /api/episodes/:id/pause
- * Pause processing (will complete current stage)
+ * Pause processing (will complete current stage).
+ * User must own the episode to pause it.
  */
-router.post('/:id/pause', async (req, res, next) => {
+router.post('/:id/pause', requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
+
+    // Fetch episode first to check ownership
+    const existingEpisode = await episodeRepo.findById(id);
+
+    // Check authorization (only owner can pause)
+    checkEpisodeAccess(existingEpisode, req.user, 'pause');
+
+    logger.info('Pausing episode processing', {
+      episodeId: id,
+      userId: req.user.id,
+    });
 
     const episode = await episodeRepo.update(id, { status: 'paused' });
 

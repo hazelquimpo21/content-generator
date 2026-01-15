@@ -2,7 +2,7 @@
 
 ## Overview
 
-This application has 6 main pages, each with specific states and behaviors. All pages share the design system defined in DESIGN-SYSTEM.md.
+This application has 8 main pages, each with specific states and behaviors. All pages share the design system defined in DESIGN-SYSTEM.md.
 
 ---
 
@@ -271,8 +271,32 @@ const handleSave = async () => {
 
 ## 3. New Episode (Upload)
 
-**Route:** `/new`  
+**Route:** `/new`
 **Purpose:** Upload transcript and start processing
+
+### Auto-Population Feature
+
+When a user enters a transcript (minimum 200 characters), the system automatically
+analyzes it using Claude 3.5 Haiku to extract metadata for auto-populating form fields.
+
+**How it works:**
+1. User pastes/uploads transcript
+2. After 1.5s of no typing (debounced), analysis starts
+3. Claude Haiku extracts: title, guest name, credentials, topics, summary
+4. Fields are auto-populated (only empty fields, respects user edits)
+5. Visual feedback shows which fields were auto-populated
+
+**Cost & Performance:**
+- Model: Claude 3.5 Haiku (fastest, most affordable Claude model)
+- Cost: ~$0.001-0.003 per analysis
+- Duration: ~2-3 seconds
+- Minimum transcript: 200 characters
+
+**UX Behavior:**
+- "Generate Content" button is disabled while analysis is running
+- Fields show brief highlight animation when auto-populated
+- User edits are preserved (won't overwrite manual changes)
+- Analysis status shown below transcript textarea
 
 ### Layout
 
@@ -693,6 +717,296 @@ Email Body
 │  [Table showing recent failures with retry options]         │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 7. Content Library
+
+**Route:** `/library`
+**Purpose:** Browse and manage saved content pieces
+
+### Layout
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Content Library                                             │
+│  Your saved content pieces                                   │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  Quick Stats                                        │   │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐           │   │
+│  │  │ Total    │ │ Blogs    │ │ Social   │           │   │
+│  │  │ Items    │ │   12     │ │   45     │           │   │
+│  │  │   67     │ │          │ │          │           │   │
+│  │  └──────────┘ └──────────┘ └──────────┘           │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+│  Filters                                                     │
+│  [Type ▼] [Platform ▼] [★ Favorites] [Search...       ]    │
+│                                                              │
+│  ┌──────────────────┐ ┌──────────────────┐                 │
+│  │  LibraryCard     │ │  LibraryCard     │                 │
+│  │  ┌────────────┐  │ │  ┌────────────┐  │                 │
+│  │  │ BLOG  ★    │  │ │  │ SOCIAL     │  │                 │
+│  │  └────────────┘  │ │  │ Instagram  │  │                 │
+│  │                   │ │  └────────────┘  │                 │
+│  │  Understanding    │ │                   │                 │
+│  │  Anxiety...       │ │  Anxiety doesn't  │                 │
+│  │                   │ │  announce itself..│                 │
+│  │  Tags: anxiety    │ │                   │                 │
+│  │                   │ │  Tags: social,    │                 │
+│  │  [View] [📅] [🗑] │ │  instagram        │                 │
+│  └──────────────────┘ │                   │                 │
+│                        │  [View] [📅] [🗑] │                 │
+│                        └──────────────────┘                 │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### States
+
+**Empty State:**
+```
+┌────────────────────────────────────┐
+│                                     │
+│       [Bookmark Icon]               │
+│                                     │
+│   Your library is empty             │
+│   Save content from the Review      │
+│   Hub to build your library         │
+│                                     │
+│   [Go to Dashboard]                 │
+│                                     │
+└────────────────────────────────────┘
+```
+
+**Loading State:**
+- Skeleton cards while fetching
+- Stats show loading indicators
+
+**Filter States:**
+- Active filters highlighted
+- "Clear filters" link when filters active
+- Result count updates dynamically
+
+### Components
+
+**LibraryCard.jsx** (~180 lines)
+- Props: item, onView, onSchedule, onToggleFavorite, onDelete
+- Content type badge with color coding
+- Platform indicator for social content
+- Favorite star toggle
+- Tags display (max 3 visible)
+- Content preview (truncated)
+- Action buttons: View, Schedule, Delete
+
+**Stats Display**
+- Total items count
+- Breakdown by content type
+- Favorites count
+
+### User Actions
+
+- Click "View" → Open content detail modal
+- Click calendar icon → Open ScheduleModal
+- Click star → Toggle favorite status
+- Click delete → Confirm modal → Delete item
+- Apply filters → Update displayed items
+- Search → Filter by title/content text
+
+### Filtering Logic
+
+```javascript
+const filteredItems = items.filter(item => {
+  if (typeFilter && item.content_type !== typeFilter) return false;
+  if (platformFilter && item.platform !== platformFilter) return false;
+  if (favoritesOnly && !item.is_favorite) return false;
+  if (searchQuery) {
+    const query = searchQuery.toLowerCase();
+    return item.title.toLowerCase().includes(query) ||
+           item.content.toLowerCase().includes(query);
+  }
+  return true;
+});
+```
+
+---
+
+## 8. Content Calendar
+
+**Route:** `/calendar`
+**Purpose:** View and manage scheduled content in a calendar view
+
+### Layout
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Content Calendar                                            │
+│  Plan and track your content publishing                      │
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  [<] January 2025 [>]           [Status ▼] [Type ▼] │   │
+│  └─────────────────────────────────────────────────────┘   │
+│                                                              │
+│  ┌────────────────────────────────────────────────────┐    │
+│  │ Sun  │ Mon  │ Tue  │ Wed  │ Thu  │ Fri  │ Sat  │    │
+│  ├────────────────────────────────────────────────────┤    │
+│  │  29  │  30  │  31  │   1  │   2  │   3  │   4  │    │
+│  │      │      │      │      │ ┌──┐ │      │      │    │
+│  │      │      │      │      │ │IG│ │      │      │    │
+│  │      │      │      │      │ └──┘ │      │      │    │
+│  ├────────────────────────────────────────────────────┤    │
+│  │   5  │   6  │   7  │   8  │   9  │  10  │  11  │    │
+│  │      │ ┌──┐ │      │ ┌──┐ │      │      │      │    │
+│  │      │ │TW│ │      │ │BL│ │      │      │      │    │
+│  │      │ └──┘ │      │ │LI│ │      │      │      │    │
+│  │      │ ┌──┐ │      │ └──┘ │      │      │      │    │
+│  │      │ │EM│ │      │      │      │      │      │    │
+│  │      │ └──┘ │      │      │      │      │      │    │
+│  ├────────────────────────────────────────────────────┤    │
+│  │  ... (more weeks)                                  │    │
+│  └────────────────────────────────────────────────────┘    │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Calendar Item Display
+
+```
+┌──────────────────────┐
+│ [●] Understanding... │  ← Colored dot by status
+│     9:00 AM   [IG]   │  ← Time + platform badge
+└──────────────────────┘
+```
+
+**Status Colors:**
+- Draft: Grey dot
+- Scheduled: Blue dot
+- Published: Green dot
+- Cancelled: Red dot with strikethrough
+
+**Platform Badges:**
+- IG = Instagram (pink)
+- TW = Twitter (blue)
+- LI = LinkedIn (navy)
+- FB = Facebook (blue)
+- BL = Blog (sage)
+- EM = Email (amber)
+
+### States
+
+**Empty State:**
+```
+┌────────────────────────────────────┐
+│                                     │
+│       [Calendar Icon]               │
+│                                     │
+│   No scheduled content              │
+│   Schedule content from the         │
+│   Review Hub or Library             │
+│                                     │
+│   [Go to Library]                   │
+│                                     │
+└────────────────────────────────────┘
+```
+
+**Loading State:**
+- Calendar grid with skeleton items
+- Month navigation disabled
+
+**Today Highlight:**
+- Current date cell has accent background
+- Date number in colored circle
+
+### View Content Modal
+
+When clicking a calendar item:
+
+```
+┌────────────────────────────────────────┐
+│  Understanding Anxiety          [X]    │
+│                                         │
+│  [SOCIAL] [Instagram]  [Scheduled]     │
+│                                         │
+│  📅 Jan 15, 2025 at 9:00 AM            │
+│                                         │
+│  ┌─────────────────────────────────┐   │
+│  │ Anxiety doesn't announce itself  │   │
+│  │ politely. It shows up unannounced│   │
+│  │ and makes itself at home...      │   │
+│  └─────────────────────────────────┘   │
+│                                         │
+│  Notes: Post during morning hours       │
+│                                         │
+│  ────────────────────────────────────  │
+│  [Reschedule] [Mark Published] [Delete]│
+└────────────────────────────────────────┘
+```
+
+### Components
+
+**CalendarGrid.jsx** (embedded in page)
+- 7-column grid for days
+- Rows for each week in month
+- Navigation for prev/next month
+- Today highlighting
+
+**CalendarItem (inline component)**
+- Compact display for cell
+- Click to view details
+- Status indicator dot
+- Platform badge
+- Time if set
+
+### User Actions
+
+- Navigate months → Load items for date range
+- Click item → Open detail modal
+- Click "Reschedule" → Open ScheduleModal (edit mode)
+- Click "Mark Published" → Update status
+- Click "Delete" → Confirm modal → Remove item
+- Filter by status → Show/hide items
+- Filter by type → Show/hide items
+
+### Date Range Loading
+
+```javascript
+// Fetch items when month changes
+useEffect(() => {
+  const startDate = startOfMonth(currentMonth);
+  const endDate = endOfMonth(currentMonth);
+
+  fetchCalendarItems(startDate, endDate);
+}, [currentMonth]);
+```
+
+### Calendar Grid Generation
+
+```javascript
+const generateCalendarDays = (month) => {
+  const start = startOfMonth(month);
+  const end = endOfMonth(month);
+
+  // Include days from prev/next month to fill grid
+  const startWeek = startOfWeek(start);
+  const endWeek = endOfWeek(end);
+
+  const days = [];
+  let day = startWeek;
+
+  while (day <= endWeek) {
+    days.push({
+      date: day,
+      isCurrentMonth: isSameMonth(day, month),
+      isToday: isToday(day),
+      items: getItemsForDate(day)
+    });
+    day = addDays(day, 1);
+  }
+
+  return days;
+};
 ```
 
 ---

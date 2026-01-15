@@ -216,6 +216,9 @@ function VibeEditor({ data = {}, onSave, onClose, saving }) {
                 </div>
 
                 {/* The actual range input */}
+              <span className={styles.endpoint}>{dimension.leftEnd}</span>
+
+              <div className={styles.sliderWrapper}>
                 <input
                   type="range"
                   min="0"
@@ -242,6 +245,11 @@ function VibeEditor({ data = {}, onSave, onClose, saving }) {
               <div className={styles.endpointRight}>
                 <span className={styles.endpointLabel}>{dimension.rightEnd}</span>
               </div>
+                {/* Visual indicator for center */}
+                <div className={styles.sliderCenter} />
+              </div>
+
+              <span className={styles.endpoint}>{dimension.rightEnd}</span>
             </div>
           </div>
         ))}

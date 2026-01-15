@@ -3,7 +3,11 @@
  * API CLIENT
  * ============================================================================
  * Centralized API client for all backend requests.
- * Handles errors, loading states, and provides typed endpoints.
+ * Handles authentication, errors, and provides typed endpoints.
+ *
+ * Authentication:
+ * - Automatically includes auth token from Supabase session
+ * - Handles 401 errors by redirecting to login
  *
  * Usage:
  *   import api from '@utils/api-client';
@@ -15,23 +19,90 @@
 const BASE_URL = '/api';
 
 // ============================================================================
+// AUTH TOKEN HELPERS
+// ============================================================================
+
+/**
+ * Gets the current auth token from Supabase session in localStorage.
+ * Supabase stores session data in localStorage with a key pattern.
+ *
+ * @returns {string|null} Access token or null if not authenticated
+ */
+function getAuthToken() {
+  try {
+    // Supabase stores the session in localStorage
+    // The key format is: sb-{project-ref}-auth-token
+    const keys = Object.keys(localStorage);
+    const authKey = keys.find(key => key.startsWith('sb-') && key.endsWith('-auth-token'));
+
+    if (!authKey) {
+      // No Supabase auth key found
+      return null;
+    }
+
+    const sessionData = localStorage.getItem(authKey);
+    if (!sessionData) {
+      return null;
+    }
+
+    const session = JSON.parse(sessionData);
+    return session?.access_token || null;
+  } catch (error) {
+    console.warn('api-client: Error reading auth token from storage', error);
+    return null;
+  }
+}
+
+/**
+ * Handles authentication errors by redirecting to login.
+ *
+ * @param {number} status - HTTP status code
+ */
+function handleAuthError(status) {
+  if (status === 401) {
+    console.warn('api-client: Authentication required, redirecting to login');
+    // Clear any stale session data
+    const keys = Object.keys(localStorage);
+    keys.forEach(key => {
+      if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+        localStorage.removeItem(key);
+      }
+    });
+    // Redirect to login
+    window.location.href = '/login';
+  }
+}
+
+// ============================================================================
 // HTTP HELPERS
 // ============================================================================
 
 /**
- * Makes a fetch request with standard configuration
+ * Makes a fetch request with standard configuration.
+ * Automatically includes auth token if available.
+ *
  * @param {string} endpoint - API endpoint
  * @param {Object} options - Fetch options
  * @returns {Promise<any>} Response data
  */
 async function fetchAPI(endpoint, options = {}) {
   const url = `${BASE_URL}${endpoint}`;
+  const requestId = Math.random().toString(36).substring(7);
+
+  // Build headers with auth token
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+
+  // Add auth token if available
+  const token = getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
 
   const config = {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers,
     ...options,
   };
 
@@ -40,22 +111,74 @@ async function fetchAPI(endpoint, options = {}) {
     delete config.headers['Content-Type'];
   }
 
+  // Log outgoing request (hide token in logs)
+  console.log(`[API:${requestId}] ${options.method || 'GET'} ${url}`, {
+    authenticated: !!token,
+    bodySize: config.body ? config.body.length : 0,
+  });
+
+  if (config.body && options.method !== 'GET') {
+    try {
+      const parsedBody = JSON.parse(config.body);
+      console.log(`[API:${requestId}] Request body:`, parsedBody);
+    } catch {
+      console.log(`[API:${requestId}] Request body (raw):`, config.body);
+    }
+  }
+
+  const startTime = performance.now();
+
   try {
     const response = await fetch(url, config);
+    const duration = Math.round(performance.now() - startTime);
+
+    console.log(`[API:${requestId}] Response: ${response.status} ${response.statusText} (${duration}ms)`);
 
     // Parse response as JSON
     const data = await response.json().catch(() => null);
 
+    console.log(`[API:${requestId}] Response data:`, data);
+
     // Handle HTTP errors
     if (!response.ok) {
-      const error = new Error(data?.error?.message || `HTTP ${response.status}`);
+      // Enhanced error logging for troubleshooting
+      console.error(`[API:${requestId}] HTTP Error:`, {
+        status: response.status,
+        statusText: response.statusText,
+        errorType: data?.error,
+        errorMessage: data?.message,
+        correlationId: data?.correlationId,
+        debug: data?.debug,
+        fullErrorData: data,
+      });
+
+      // Log debug info if present (from development mode backend)
+      if (data?.debug) {
+        console.error(`[API:${requestId}] Debug info from server:`, data.debug);
+      }
+
+      // Handle auth errors
+      handleAuthError(response.status);
+
+      // Create error with all available info
+      const errorMessage = data?.message || data?.error?.message || `HTTP ${response.status}`;
+      const error = new Error(errorMessage);
       error.status = response.status;
       error.data = data;
+      error.correlationId = data?.correlationId;
       throw error;
     }
 
     return data;
   } catch (error) {
+    const duration = Math.round(performance.now() - startTime);
+    console.error(`[API:${requestId}] Request failed (${duration}ms):`, {
+      name: error.name,
+      message: error.message,
+      status: error.status,
+      data: error.data,
+    });
+
     // Network errors or JSON parse errors
     if (!error.status) {
       error.status = 0;
@@ -123,14 +246,60 @@ function del(endpoint) {
 // ============================================================================
 
 /**
+ * Auth API - for authentication-related endpoints
+ */
+const auth = {
+  /**
+   * Get current user info
+   */
+  me: () => get('/auth/me'),
+
+  /**
+   * Update user profile
+   * @param {Object} data - Profile data to update
+   */
+  updateProfile: (data) => put('/auth/profile', data),
+
+  /**
+   * Logout (server-side session invalidation)
+   */
+  logout: () => post('/auth/logout'),
+};
+
+/**
+ * Settings API - for user-specific settings
+ */
+const settings = {
+  /**
+   * Get current user's settings
+   */
+  get: () => get('/settings'),
+
+  /**
+   * Update current user's settings
+   * @param {Object} data - Settings sections to update
+   */
+  update: (data) => put('/settings', data),
+};
+
+/**
  * Episodes API
  */
 const episodes = {
   /**
-   * List all episodes
-   * @param {Object} params - Query params (status, limit, offset)
+   * List user's episodes
+   * @param {Object} params - Query params (status, limit, offset, all)
    */
   list: (params = {}) => get('/episodes', params),
+
+  /**
+   * Quickly analyze a transcript to extract metadata for auto-populating fields.
+   * Uses Claude 3.5 Haiku for fast (~2-3s), affordable (~$0.001-0.003) analysis.
+   *
+   * @param {string} transcript - The podcast transcript to analyze (min 200 chars)
+   * @returns {Promise<Object>} - { metadata, usage, estimate }
+   */
+  analyzeTranscript: (transcript) => post('/episodes/analyze-transcript', { transcript }),
 
   /**
    * Get single episode by ID
@@ -185,51 +354,46 @@ const stages = {
    * Get all stages for an episode
    * @param {string} episodeId - Episode UUID
    */
-  list: (episodeId) => get('/stages', { episodeId }),
+  list: (episodeId) => get(`/stages/episode/${episodeId}`),
 
   /**
-   * Get single stage output
-   * @param {string} episodeId - Episode UUID
-   * @param {number} stageNumber - Stage number (1-9)
+   * Get single stage by ID
+   * @param {string} stageId - Stage UUID
    */
-  get: (episodeId, stageNumber) => get(`/stages/${episodeId}/${stageNumber}`),
+  get: (stageId) => get(`/stages/${stageId}`),
 
   /**
-   * Update stage output (for manual edits)
-   * @param {string} episodeId - Episode UUID
-   * @param {number} stageNumber - Stage number
-   * @param {Object} data - Updated output
+   * Update stage output by stage ID (for manual edits)
+   * @param {string} stageId - Stage UUID
+   * @param {Object} data - Updated output (output_data, output_text)
    */
-  update: (episodeId, stageNumber, data) =>
-    put(`/stages/${episodeId}/${stageNumber}`, data),
+  update: (stageId, data) => put(`/stages/${stageId}`, data),
 
   /**
-   * Regenerate a stage
-   * @param {string} episodeId - Episode UUID
-   * @param {number} stageNumber - Stage number
+   * Regenerate a stage by stage ID
+   * @param {string} stageId - Stage UUID
    */
-  regenerate: (episodeId, stageNumber) =>
-    post(`/stages/${episodeId}/${stageNumber}/regenerate`),
+  regenerate: (stageId) => post(`/stages/${stageId}/regenerate`),
 };
 
 /**
- * Evergreen Content API
+ * Evergreen Content API (system defaults - superadmin only for updates)
  */
 const evergreen = {
   /**
-   * Get all evergreen content
+   * Get all evergreen content (system defaults)
    */
   get: () => get('/evergreen'),
 
   /**
-   * Update evergreen content
+   * Update evergreen content (superadmin only)
    * @param {Object} data - Content sections to update
    */
   update: (data) => put('/evergreen', data),
 };
 
 /**
- * Admin API
+ * Admin API (superadmin only)
  */
 const admin = {
   /**
@@ -254,6 +418,236 @@ const admin = {
    * Get overall usage statistics
    */
   usage: () => get('/admin/usage'),
+
+  /**
+   * List all users (superadmin only)
+   * @param {Object} params - Query params (limit, offset)
+   */
+  users: (params = {}) => get('/auth/users', params),
+};
+
+/**
+ * Content Library API
+ */
+const library = {
+  /**
+   * List library items
+   * @param {Object} params - Query params (content_type, platform, episode_id, favorite, search, limit, offset)
+   */
+  list: (params = {}) => get('/library', params),
+
+  /**
+   * Get library statistics
+   */
+  stats: () => get('/library/stats'),
+
+  /**
+   * Save content to library
+   * @param {Object} data - Library item data (title, content_type, platform, content, metadata, episode_id, source_stage, tags)
+   */
+  create: (data) => post('/library', data),
+
+  /**
+   * Get single library item
+   * @param {string} id - Library item UUID
+   */
+  get: (id) => get(`/library/${id}`),
+
+  /**
+   * Update library item
+   * @param {string} id - Library item UUID
+   * @param {Object} data - Fields to update (title, content, metadata, tags, platform)
+   */
+  update: (id, data) => put(`/library/${id}`, data),
+
+  /**
+   * Delete library item
+   * @param {string} id - Library item UUID
+   */
+  delete: (id) => del(`/library/${id}`),
+
+  /**
+   * Toggle favorite status
+   * @param {string} id - Library item UUID
+   */
+  toggleFavorite: (id) => post(`/library/${id}/favorite`),
+};
+
+/**
+ * Topics API
+ */
+const topics = {
+  /**
+   * List all topics with pillar associations
+   */
+  list: () => get('/topics'),
+
+  /**
+   * Create a new topic
+   * @param {Object} data - Topic data (name, pillar_ids)
+   */
+  create: (data) => post('/topics', data),
+
+  /**
+   * Update a topic
+   * @param {string} id - Topic UUID
+   * @param {Object} data - Fields to update (name)
+   */
+  update: (id, data) => put(`/topics/${id}`, data),
+
+  /**
+   * Delete a topic
+   * @param {string} id - Topic UUID
+   */
+  delete: (id) => del(`/topics/${id}`),
+
+  /**
+   * Update pillar associations for a topic
+   * @param {string} id - Topic UUID
+   * @param {string[]} pillarIds - Array of pillar UUIDs
+   */
+  updatePillars: (id, pillarIds) => post(`/topics/${id}/pillars`, { pillar_ids: pillarIds }),
+};
+
+/**
+ * Content Pillars API
+ */
+const pillars = {
+  /**
+   * List all pillars with topic associations
+   */
+  list: () => get('/pillars'),
+
+  /**
+   * Create a new pillar
+   * @param {Object} data - Pillar data (name, description, color, topic_ids)
+   */
+  create: (data) => post('/pillars', data),
+
+  /**
+   * Update a pillar
+   * @param {string} id - Pillar UUID
+   * @param {Object} data - Fields to update (name, description, color)
+   */
+  update: (id, data) => put(`/pillars/${id}`, data),
+
+  /**
+   * Delete a pillar
+   * @param {string} id - Pillar UUID
+   */
+  delete: (id) => del(`/pillars/${id}`),
+
+  /**
+   * Update topic associations for a pillar
+   * @param {string} id - Pillar UUID
+   * @param {string[]} topicIds - Array of topic UUIDs
+   */
+  updateTopics: (id, topicIds) => post(`/pillars/${id}/topics`, { topic_ids: topicIds }),
+};
+
+/**
+ * Brand Discovery API - for onboarding and brand identity
+ */
+const brandDiscovery = {
+  /**
+   * Get current user's brand discovery data
+   */
+  get: () => get('/brand-discovery'),
+
+  /**
+   * Reset brand discovery to initial state (start over)
+   */
+  reset: () => del('/brand-discovery/reset'),
+
+  /**
+   * Update a specific module
+   * @param {string} moduleId - Module ID (sources, vibe, values, method, audience, channels)
+   * @param {Object} data - Module data
+   * @param {string} [status] - Optional status (not_started, partial, complete)
+   */
+  updateModule: (moduleId, data, status = null) =>
+    patch(`/brand-discovery/modules/${moduleId}`, { data, status }),
+
+  /**
+   * Analyze pasted source content
+   * @param {string} content - Content to analyze
+   */
+  analyzeSource: (content) => post('/brand-discovery/sources/analyze', { content }),
+
+  /**
+   * Confirm or reject an inference
+   * @param {string} fieldPath - Dot-notation path (e.g., 'therapist_profile.name')
+   * @param {boolean} confirmed - True to confirm, false to reject
+   */
+  confirmInference: (fieldPath, confirmed) =>
+    post('/brand-discovery/inferences/confirm', { field_path: fieldPath, confirmed }),
+
+  /**
+   * Force regenerate Brand DNA
+   */
+  regenerateBrandDna: () => post('/brand-discovery/brand-dna/regenerate'),
+
+  /**
+   * Get version history
+   * @param {Object} params - Query params (limit, offset)
+   */
+  getHistory: (params = {}) => get('/brand-discovery/history', params),
+
+  /**
+   * Generate AI nuances for a value
+   * @param {string} value - Value ID
+   */
+  generateValueNuances: (value) =>
+    post('/brand-discovery/values/generate-nuances', { value }),
+
+  /**
+   * Get reference data (values, archetypes, modalities, etc.)
+   */
+  getReferenceData: () => get('/brand-discovery/reference-data'),
+};
+
+/**
+ * Content Calendar API
+ */
+const calendar = {
+  /**
+   * List calendar items
+   * @param {Object} params - Query params (start_date, end_date, episode_id, content_type, platform, status, limit, offset)
+   *                          Note: start_date/end_date are required unless episode_id is provided
+   */
+  list: (params = {}) => get('/calendar', params),
+
+  /**
+   * Schedule content
+   * @param {Object} data - Calendar item data (title, content_type, platform, scheduled_date, scheduled_time, full_content, status, episode_id, library_item_id, notes, metadata)
+   */
+  create: (data) => post('/calendar', data),
+
+  /**
+   * Get single calendar item
+   * @param {string} id - Calendar item UUID
+   */
+  get: (id) => get(`/calendar/${id}`),
+
+  /**
+   * Update calendar item
+   * @param {string} id - Calendar item UUID
+   * @param {Object} data - Fields to update (title, scheduled_date, scheduled_time, full_content, platform, notes, metadata)
+   */
+  update: (id, data) => put(`/calendar/${id}`, data),
+
+  /**
+   * Delete calendar item
+   * @param {string} id - Calendar item UUID
+   */
+  delete: (id) => del(`/calendar/${id}`),
+
+  /**
+   * Update calendar item status
+   * @param {string} id - Calendar item UUID
+   * @param {Object} data - Status update (status, publish_url)
+   */
+  updateStatus: (id, data) => patch(`/calendar/${id}/status`, data),
 };
 
 // ============================================================================
@@ -261,10 +655,17 @@ const admin = {
 // ============================================================================
 
 const api = {
+  auth,
+  settings,
   episodes,
   stages,
   evergreen,
   admin,
+  library,
+  calendar,
+  topics,
+  pillars,
+  brandDiscovery,
   // Raw helpers for custom endpoints
   get,
   post,

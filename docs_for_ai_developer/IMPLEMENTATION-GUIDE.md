@@ -241,7 +241,7 @@ Create markdown files in `prompts/`:
      
      // 2. Call OpenAI
      const response = await callOpenAI(prompt, {
-       model: 'gpt-4o-mini',
+       model: 'gpt-5-mini',
        functions: [episodeAnalysisSchema]
      });
      
@@ -851,7 +851,7 @@ Before considering phase complete:
 ### Issue: High Costs
 
 **Solution:**
-- Use GPT-4o-mini (not GPT-4)
+- Use GPT-5 mini (not GPT-4)
 - Optimize prompt templates
 - Cache evergreen content
 

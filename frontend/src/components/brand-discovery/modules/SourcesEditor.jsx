@@ -189,12 +189,22 @@ function SourcesEditor({ data = {}, onSave, onClose, saving }) {
       <div className={styles.sourceTabs}>
         {sources.map((source, index) => (
           <button
+          <div
             key={source.id}
             className={clsx(
               styles.sourceTab,
               activeSourceIndex === index && styles.activeTab
             )}
             onClick={() => setActiveSourceIndex(index)}
+            role="tab"
+            tabIndex={0}
+            aria-selected={activeSourceIndex === index}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setActiveSourceIndex(index);
+              }
+            }}
           >
             <span className={styles.tabLabel}>
               {source.title || `Source ${index + 1}`}
@@ -210,6 +220,7 @@ function SourcesEditor({ data = {}, onSave, onClose, saving }) {
               <Trash2 className={styles.tabRemoveIcon} />
             </button>
           </button>
+          </div>
         ))}
 
         {sources.length < MAX_SOURCES && (

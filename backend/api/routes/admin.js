@@ -3,20 +3,94 @@
  * ADMIN ROUTES
  * ============================================================================
  * API endpoints for admin dashboard, analytics, and system monitoring.
+ * IMPORTANT: All routes require superadmin role (hazel@theclever.io).
  *
  * Routes:
- * GET /api/admin/costs - Get cost analytics
+ * GET /api/admin/costs       - Get cost analytics (with phase grouping)
  * GET /api/admin/performance - Get performance metrics
- * GET /api/admin/errors - Get recent errors
- * GET /api/admin/usage - Get API usage statistics
+ * GET /api/admin/errors      - Get recent errors
+ * GET /api/admin/usage       - Get API usage statistics
+ *
+ * Architecture:
+ * -------------
+ * The pipeline uses a 4-phase architecture:
+ *   PRE-GATE → PHASE 1 (Extract) → PHASE 2 (Plan) → PHASE 3 (Write) → PHASE 4 (Distribute)
+ *
+ * Stage-to-Phase Mapping:
+ * - Stage 0: Pre-Gate (conditional preprocessing)
+ * - Stages 1-2: Phase 1 - Extract (parallel)
+ * - Stages 3-5: Phase 2 - Plan (outline first, then parallel)
+ * - Stages 6-7: Phase 3 - Write (sequential)
+ * - Stages 8-9: Phase 4 - Distribute (parallel)
+ *
+ * Authorization:
+ * - All routes require authentication
+ * - All routes require superadmin role
+ * - Non-superadmins will receive 403 Forbidden
  * ============================================================================
  */
 
 import { Router } from 'express';
 import { apiLogRepo, episodeRepo, stageRepo } from '../../lib/supabase-client.js';
+import { requireAuth, requireSuperadmin } from '../middleware/auth-middleware.js';
 import logger from '../../lib/logger.js';
 
+// ============================================================================
+// PHASE CONFIGURATION (matches orchestrator/phase-config.js)
+// ============================================================================
+
+/**
+ * Stage to Phase mapping for cost aggregation.
+ * Each stage belongs to one phase.
+ */
+const STAGE_TO_PHASE = {
+  0: { phase: 'pregate', name: 'Pre-Gate' },
+  1: { phase: 'extract', name: 'Phase 1: Extract' },
+  2: { phase: 'extract', name: 'Phase 1: Extract' },
+  3: { phase: 'plan', name: 'Phase 2: Plan' },
+  4: { phase: 'plan', name: 'Phase 2: Plan' },
+  5: { phase: 'plan', name: 'Phase 2: Plan' },
+  6: { phase: 'write', name: 'Phase 3: Write' },
+  7: { phase: 'write', name: 'Phase 3: Write' },
+  8: { phase: 'distribute', name: 'Phase 4: Distribute' },
+  9: { phase: 'distribute', name: 'Phase 4: Distribute' },
+};
+
+/**
+ * Stage names matching the phase-based architecture.
+ */
+const STAGE_NAMES = {
+  0: 'Transcript Preprocessing',
+  1: 'Transcript Analysis',
+  2: 'Quote Extraction',
+  3: 'Blog Outline',
+  4: 'Paragraph Details',
+  5: 'Headlines & Copy',
+  6: 'Blog Draft',
+  7: 'Refinement',
+  8: 'Social Content',
+  9: 'Email Campaign',
+};
+
+/**
+ * Phase metadata for display.
+ */
+const PHASES = {
+  pregate: { emoji: '🚪', name: 'Pre-Gate', description: 'Preprocessing' },
+  extract: { emoji: '📤', name: 'Phase 1: Extract', description: 'Metadata & Quotes' },
+  plan: { emoji: '📋', name: 'Phase 2: Plan', description: 'Structure & Headlines' },
+  write: { emoji: '✍️', name: 'Phase 3: Write', description: 'Draft & Refine' },
+  distribute: { emoji: '📣', name: 'Phase 4: Distribute', description: 'Social & Email' },
+};
+
 const router = Router();
+
+// ============================================================================
+// MIDDLEWARE: Apply superadmin check to ALL admin routes
+// ============================================================================
+
+// All routes in this file require authentication AND superadmin role
+router.use(requireAuth, requireSuperadmin);
 
 // ============================================================================
 // COST ANALYTICS
@@ -34,6 +108,13 @@ const router = Router();
 router.get('/costs', async (req, res, next) => {
   try {
     const { period = 'week', startDate, endDate } = req.query;
+
+    logger.info('📥 GET /api/admin/costs - Fetching cost analytics', {
+      period,
+      hasCustomDateRange: !!(startDate && endDate),
+      startDate: startDate || 'auto',
+      endDate: endDate || 'auto',
+    });
 
     // Calculate date range based on period
     const now = new Date();
@@ -57,8 +138,17 @@ router.get('/costs', async (req, res, next) => {
       }
     }
 
+    logger.debug('GET /api/admin/costs - Date range calculated', {
+      start: start.toISOString(),
+      end: end.toISOString(),
+    });
+
     // Get usage logs for the period
     const usageLogs = await apiLogRepo.getByDateRange(start.toISOString(), end.toISOString());
+
+    logger.debug('GET /api/admin/costs - Usage logs fetched', {
+      logCount: usageLogs.length,
+    });
 
     // Calculate totals
     const totalCost = usageLogs.reduce((sum, log) => sum + (log.cost_usd || 0), 0);
@@ -97,12 +187,13 @@ router.get('/costs', async (req, res, next) => {
       byModel[model].cost += log.cost_usd || 0;
     }
 
-    // Group by stage
+    // Group by stage (with names)
     const byStage = {};
     for (const log of usageLogs) {
-      const stage = log.stage_number || 0;
+      const stage = log.stage_number ?? 0;
       if (!byStage[stage]) {
         byStage[stage] = {
+          name: STAGE_NAMES[stage] || `Stage ${stage}`,
           calls: 0,
           cost: 0,
         };
@@ -111,16 +202,60 @@ router.get('/costs', async (req, res, next) => {
       byStage[stage].cost += log.cost_usd || 0;
     }
 
-    // Daily breakdown
+    // Group by phase (aggregates stages into phases)
+    const byPhase = {};
+    for (const log of usageLogs) {
+      const stage = log.stage_number ?? 0;
+      const phaseInfo = STAGE_TO_PHASE[stage] || { phase: 'unknown', name: 'Unknown' };
+      const phaseId = phaseInfo.phase;
+
+      if (!byPhase[phaseId]) {
+        byPhase[phaseId] = {
+          name: PHASES[phaseId]?.name || phaseInfo.name,
+          emoji: PHASES[phaseId]?.emoji || '📦',
+          description: PHASES[phaseId]?.description || '',
+          calls: 0,
+          cost: 0,
+          stages: [],
+        };
+      }
+
+      byPhase[phaseId].calls++;
+      byPhase[phaseId].cost += log.cost_usd || 0;
+
+      // Track which stages contributed to this phase
+      if (!byPhase[phaseId].stages.includes(stage)) {
+        byPhase[phaseId].stages.push(stage);
+      }
+    }
+
+    // Sort stages within each phase
+    for (const phase of Object.values(byPhase)) {
+      phase.stages.sort((a, b) => a - b);
+    }
+
+    // Daily breakdown (using 'timestamp' column from api_usage_log table)
     const byDay = {};
     for (const log of usageLogs) {
-      const day = log.created_at.split('T')[0];
-      if (!byDay[day]) {
-        byDay[day] = { cost: 0, calls: 0 };
+      // Handle both 'timestamp' (correct) and 'created_at' (legacy) columns
+      const timestampField = log.timestamp || log.created_at;
+      if (timestampField) {
+        const day = timestampField.split('T')[0];
+        if (!byDay[day]) {
+          byDay[day] = { cost: 0, calls: 0 };
+        }
+        byDay[day].cost += log.cost_usd || 0;
+        byDay[day].calls++;
       }
-      byDay[day].cost += log.cost_usd || 0;
-      byDay[day].calls++;
     }
+
+    logger.info('📤 GET /api/admin/costs - Success', {
+      totalCost: totalCost.toFixed(4),
+      totalCalls: usageLogs.length,
+      providerCount: Object.keys(byProvider).length,
+      modelCount: Object.keys(byModel).length,
+      phaseCount: Object.keys(byPhase).length,
+    });
 
     res.json({
       period: {
@@ -137,10 +272,22 @@ router.get('/costs', async (req, res, next) => {
       },
       byProvider,
       byModel,
-      byStage,
+      byPhase,  // 🆕 Phase-level cost breakdown
+      byStage,  // Stage-level cost breakdown (for detailed view)
       byDay,
     });
   } catch (error) {
+    logger.error('❌ GET /api/admin/costs - Failed', {
+      errorName: error.name,
+      errorMessage: error.message,
+      errorCode: error.code,
+      errorDetails: error.details,
+      errorHint: error.hint,
+      operation: error.operation,
+      period: req.query.period,
+      correlationId: req.correlationId,
+      stack: error.stack,
+    });
     next(error);
   }
 });
@@ -157,13 +304,22 @@ router.get('/performance', async (req, res, next) => {
   try {
     const { limit = 100 } = req.query;
 
+    logger.info('📥 GET /api/admin/performance - Fetching performance metrics', {
+      limit: parseInt(limit, 10),
+    });
+
     // Get recent completed episodes
     const episodes = await episodeRepo.findAll({
       status: 'completed',
       limit: parseInt(limit, 10),
     });
 
+    logger.debug('GET /api/admin/performance - Episodes fetched', {
+      completedEpisodeCount: episodes.length,
+    });
+
     if (episodes.length === 0) {
+      logger.info('📤 GET /api/admin/performance - No completed episodes found');
       return res.json({
         message: 'No completed episodes yet',
         metrics: null,
@@ -195,7 +351,9 @@ router.get('/performance', async (req, res, next) => {
         if (stage.status === 'completed' && stage.duration_ms) {
           if (!stageMetrics[stage.stage_number]) {
             stageMetrics[stage.stage_number] = {
-              name: stage.stage_name,
+              // Use canonical stage names from our config
+              name: STAGE_NAMES[stage.stage_number] || stage.stage_name || `Stage ${stage.stage_number}`,
+              phase: STAGE_TO_PHASE[stage.stage_number]?.phase || 'unknown',
               durations: [],
               costs: [],
             };
@@ -213,6 +371,7 @@ router.get('/performance', async (req, res, next) => {
     for (const [stageNum, data] of Object.entries(stageMetrics)) {
       stageAverages[stageNum] = {
         name: data.name,
+        phase: data.phase,
         avgDurationMs: data.durations.reduce((a, b) => a + b, 0) / data.durations.length,
         avgCost: data.costs.length > 0
           ? data.costs.reduce((a, b) => a + b, 0) / data.costs.length
@@ -220,6 +379,42 @@ router.get('/performance', async (req, res, next) => {
         sampleSize: data.durations.length,
       };
     }
+
+    // Calculate phase-level performance (aggregate stages by phase)
+    const phaseMetrics = {};
+    for (const [stageNum, data] of Object.entries(stageAverages)) {
+      const phaseId = data.phase;
+      if (!phaseMetrics[phaseId]) {
+        phaseMetrics[phaseId] = {
+          name: PHASES[phaseId]?.name || phaseId,
+          emoji: PHASES[phaseId]?.emoji || '📦',
+          totalAvgDurationMs: 0,
+          totalAvgCost: 0,
+          stages: [],
+        };
+      }
+      phaseMetrics[phaseId].totalAvgDurationMs += data.avgDurationMs;
+      phaseMetrics[phaseId].totalAvgCost += data.avgCost;
+      phaseMetrics[phaseId].stages.push({
+        number: parseInt(stageNum),
+        name: data.name,
+        avgDurationMs: data.avgDurationMs,
+        avgCost: data.avgCost,
+      });
+    }
+
+    // Sort stages within each phase
+    for (const phase of Object.values(phaseMetrics)) {
+      phase.stages.sort((a, b) => a.number - b.number);
+    }
+
+    logger.info('📤 GET /api/admin/performance - Success', {
+      episodesAnalyzed: episodes.length,
+      avgDurationSeconds: Math.round(avgDuration),
+      avgCostUsd: avgCost.toFixed(4),
+      stageMetricsCount: Object.keys(stageAverages).length,
+      phaseMetricsCount: Object.keys(phaseMetrics).length,
+    });
 
     res.json({
       episodesAnalyzed: episodes.length,
@@ -231,9 +426,21 @@ router.get('/performance', async (req, res, next) => {
         minCost: costs.length > 0 ? Math.min(...costs) : 0,
         maxCost: costs.length > 0 ? Math.max(...costs) : 0,
       },
-      byStage: stageAverages,
+      byPhase: phaseMetrics,  // 🆕 Phase-level performance breakdown
+      byStage: stageAverages, // Stage-level performance (detailed view)
     });
   } catch (error) {
+    logger.error('❌ GET /api/admin/performance - Failed', {
+      errorName: error.name,
+      errorMessage: error.message,
+      errorCode: error.code,
+      errorDetails: error.details,
+      errorHint: error.hint,
+      operation: error.operation,
+      limit: req.query.limit,
+      correlationId: req.correlationId,
+      stack: error.stack,
+    });
     next(error);
   }
 });
@@ -249,6 +456,10 @@ router.get('/performance', async (req, res, next) => {
 router.get('/errors', async (req, res, next) => {
   try {
     const { limit = 50 } = req.query;
+
+    logger.info('📥 GET /api/admin/errors - Fetching recent errors', {
+      limit: parseInt(limit, 10),
+    });
 
     // Get episodes with errors
     const errorEpisodes = await episodeRepo.findAll({
@@ -284,6 +495,12 @@ router.get('/errors', async (req, res, next) => {
       errorsByType[type].push(error);
     }
 
+    logger.info('📤 GET /api/admin/errors - Success', {
+      totalErrors: failedStages.length,
+      errorEpisodeCount: errorEpisodes.length,
+      errorTypeCount: Object.keys(errorsByType).length,
+    });
+
     res.json({
       totalErrors: failedStages.length,
       recentErrors: failedStages.slice(0, parseInt(limit, 10)),
@@ -301,6 +518,17 @@ router.get('/errors', async (req, res, next) => {
       })),
     });
   } catch (error) {
+    logger.error('❌ GET /api/admin/errors - Failed', {
+      errorName: error.name,
+      errorMessage: error.message,
+      errorCode: error.code,
+      errorDetails: error.details,
+      errorHint: error.hint,
+      operation: error.operation,
+      limit: req.query.limit,
+      correlationId: req.correlationId,
+      stack: error.stack,
+    });
     next(error);
   }
 });
@@ -311,8 +539,14 @@ router.get('/errors', async (req, res, next) => {
  */
 router.get('/usage', async (req, res, next) => {
   try {
+    logger.info('📥 GET /api/admin/usage - Fetching usage statistics');
+
     // Get episode counts by status
     const allEpisodes = await episodeRepo.findAll({ limit: 1000 });
+
+    logger.debug('GET /api/admin/usage - Episodes fetched', {
+      totalEpisodes: allEpisodes.length,
+    });
 
     const statusCounts = {
       pending: 0,
@@ -342,6 +576,15 @@ router.get('/usage', async (req, res, next) => {
     const dailyAvgCost = daysTracked > 0 ? totalCost30Days / daysTracked : 0;
     const projectedMonthlyCost = dailyAvgCost * 30;
 
+    logger.info('📤 GET /api/admin/usage - Success', {
+      totalEpisodes: allEpisodes.length,
+      completedEpisodes: statusCounts.completed,
+      errorEpisodes: statusCounts.error,
+      totalCalls30Days,
+      totalCost30Days: totalCost30Days.toFixed(4),
+      projectedMonthlyCost: projectedMonthlyCost.toFixed(2),
+    });
+
     res.json({
       episodes: {
         total: allEpisodes.length,
@@ -364,6 +607,16 @@ router.get('/usage', async (req, res, next) => {
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {
+    logger.error('❌ GET /api/admin/usage - Failed', {
+      errorName: error.name,
+      errorMessage: error.message,
+      errorCode: error.code,
+      errorDetails: error.details,
+      errorHint: error.hint,
+      operation: error.operation,
+      correlationId: req.correlationId,
+      stack: error.stack,
+    });
     next(error);
   }
 });

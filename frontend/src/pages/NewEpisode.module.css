@@ -139,6 +139,207 @@
 }
 
 /* ============================================================================
+ * TRANSCRIPT FOOTER (word count + analysis status)
+ * ============================================================================ */
+
+.transcriptFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.analyzingStatus {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-primary);
+}
+
+.analyzingSpinner {
+  animation: spin 1s linear infinite;
+}
+
+.analysisComplete {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-success);
+}
+
+.analysisCost {
+  color: var(--color-text-tertiary);
+  font-size: var(--text-xs);
+}
+
+.analyzeError {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-warning);
+}
+
+/* ============================================================================
+ * GENERATED TITLE SECTION
+ * ============================================================================ */
+
+.titleCard {
+  animation: fadeIn var(--transition-base) ease-out;
+}
+
+.generatedTitleSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Display mode */
+.titleDisplayMode {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: linear-gradient(135deg, #f0f7ff 0%, #e8f4fd 100%);
+  border: 1px solid #c9dff2;
+  border-radius: var(--radius-lg);
+}
+
+.titleContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  text-align: center;
+}
+
+.generatedTitleText {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  line-height: 1.4;
+}
+
+.titleCounter {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+.titleNavButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-bg-accent);
+  border-radius: var(--radius-full);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.titleNavButton:hover:not(:disabled) {
+  background-color: var(--color-bg-secondary);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.titleNavButton:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.titleActionBar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
+/* Edit mode */
+.titleEditMode {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.titleEditInput {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  border: 1px solid var(--color-bg-accent);
+  border-radius: var(--radius-lg);
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.titleEditInput:focus {
+  border-color: var(--color-text-tertiary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.titleEditInput::placeholder {
+  color: var(--color-text-tertiary);
+  font-weight: var(--font-normal);
+}
+
+.titleEditActions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+/* Regeneration info */
+.regenerationInfo {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  margin: 0;
+  margin-left: auto;
+}
+
+/* ============================================================================
+ * AUTO-POPULATED FIELD HIGHLIGHT
+ * ============================================================================ */
+
+.autoPopulated {
+  animation: highlightField 2s ease-out;
+}
+
+@keyframes highlightField {
+  0% {
+    background-color: var(--color-primary-light);
+    box-shadow: 0 0 0 2px var(--color-primary);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
+/* ============================================================================
+ * SPINNING ANIMATION (for section icon)
+ * ============================================================================ */
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
  * CONTEXT GRID
  * ============================================================================ */
 

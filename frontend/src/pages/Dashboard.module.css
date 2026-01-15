@@ -106,7 +106,7 @@
   cursor: pointer;
   appearance: none;
   padding-right: var(--space-8);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236B5D4D' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23495057' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right var(--space-3) center;
 }
@@ -176,14 +176,88 @@
   overflow: hidden;
 }
 
+/* Card footer with actions */
+.cardFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: var(--space-2);
+}
+
 .cardAction {
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  margin-top: auto;
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
   color: var(--color-primary);
+}
+
+/* Delete button styling */
+.deleteButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  opacity: 0;
+}
+
+/* Show delete button on card hover */
+.episodeCard:hover .deleteButton {
+  opacity: 1;
+}
+
+.deleteButton:hover {
+  background-color: var(--color-error-light, rgba(184, 82, 74, 0.1));
+  color: var(--color-error);
+}
+
+.deleteButton:focus-visible {
+  outline: 2px solid var(--color-error);
+  outline-offset: 2px;
+  opacity: 1;
+}
+
+/* ============================================================================
+ * PROCESSING CARD
+ * ============================================================================ */
+
+.processingCard {
+  border: 1px solid var(--color-info-light);
+  background: linear-gradient(
+    135deg,
+    var(--color-bg-secondary) 0%,
+    var(--color-info-light) 100%
+  );
+}
+
+.processingStatus {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.timeEstimate {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.miniSpinner {
+  animation: spin 1s linear infinite;
+  color: var(--color-processing);
 }
 
 /* ============================================================================
@@ -211,6 +285,10 @@
   transition: width var(--transition-slow);
 }
 
+.processingCard .progressFill {
+  background-color: var(--color-processing);
+}
+
 .progressText {
   font-size: var(--text-sm);
   color: var(--color-text-secondary);
@@ -226,7 +304,7 @@
 }
 
 .statusIconProcessing {
-  color: var(--color-warning);
+  color: var(--color-processing);
   animation: spin 1s linear infinite;
 }
 

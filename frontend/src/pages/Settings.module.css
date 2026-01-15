@@ -71,6 +71,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-6);
+  margin-top: var(--space-6);
 }
 
 .sectionIcon {
@@ -87,6 +88,13 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+.helperText {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  margin: 0;
+  line-height: 1.5;
 }
 
 /* ============================================================================

@@ -9,19 +9,268 @@ Development: http://localhost:3000/api
 
 ## Authentication
 
-For MVP (single user), use Supabase service key in backend only.
+All protected routes require a valid JWT token from Supabase in the Authorization header:
 
-```javascript
-// Backend only
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+```
+Authorization: Bearer <access_token>
+```
+
+The token is obtained after successful magic link authentication via Supabase.
+
+---
+
+## Auth Endpoints
+
+### POST `/api/auth/magic-link`
+
+Send a magic link email to the provided email address.
+
+**Request Body:**
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Magic link sent! Check your email.",
+  "email": "user@example.com"
+}
+```
+
+**Error Response (400 Bad Request):**
+```json
+{
+  "error": "Validation error",
+  "message": "Invalid email format",
+  "field": "email"
+}
+```
+
+---
+
+### GET `/api/auth/me`
+
+Get current authenticated user's information. **Requires authentication.**
+
+**Response (200 OK):**
+```json
+{
+  "user": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "displayName": "John",
+    "role": "user",
+    "isSuperadmin": false,
+    "createdAt": "2025-01-12T14:30:00Z",
+    "hasCompletedProfile": true,
+    "episodeCount": 5
+  }
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "error": "Authentication required",
+  "message": "Missing authorization token"
+}
+```
+
+---
+
+### POST `/api/auth/logout`
+
+Sign out the current user. **Requires authentication.**
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Logged out successfully"
+}
+```
+
+---
+
+### PUT `/api/auth/profile`
+
+Update the current user's profile. **Requires authentication.**
+
+**Request Body:**
+```json
+{
+  "displayName": "New Display Name"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "profile": {
+    "id": "uuid",
+    "email": "user@example.com",
+    "displayName": "New Display Name",
+    "role": "user"
+  }
+}
+```
+
+---
+
+### GET `/api/auth/users`
+
+List all users. **Requires superadmin role.**
+
+**Query Parameters:**
+- `limit` (optional): Number of results (default: 50)
+- `offset` (optional): Pagination offset (default: 0)
+
+**Response (200 OK):**
+```json
+{
+  "users": [
+    {
+      "id": "uuid",
+      "email": "user@example.com",
+      "display_name": "John",
+      "role": "user",
+      "created_at": "2025-01-12T14:30:00Z",
+      "last_login_at": "2025-01-13T10:00:00Z"
+    }
+  ],
+  "total": 5,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+---
+
+## User Settings
+
+### GET `/api/settings`
+
+Get current user's settings. **Requires authentication.**
+
+**Response (200 OK):**
+```json
+{
+  "settings": {
+    "id": "uuid",
+    "user_id": "uuid",
+    "therapist_profile": {
+      "name": "Dr. Jane Smith",
+      "credentials": "PhD, LMFT"
+    },
+    "podcast_info": {
+      "name": "My Podcast",
+      "tagline": "Great conversations"
+    },
+    "voice_guidelines": {},
+    "seo_defaults": {},
+    "created_at": "2025-01-12T14:30:00Z",
+    "updated_at": "2025-01-13T10:00:00Z"
+  }
+}
+```
+
+---
+
+### PUT `/api/settings`
+
+Update current user's settings. **Requires authentication.**
+
+**Request Body:**
+```json
+{
+  "therapist_profile": {
+    "name": "Dr. Jane Smith",
+    "credentials": "PhD, LMFT",
+    "bio": "Licensed therapist..."
+  },
+  "podcast_info": {
+    "name": "The Mindful Therapist",
+    "tagline": "Real conversations about mental health"
+  }
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "settings": {
+    "id": "uuid",
+    "therapist_profile": {...},
+    "podcast_info": {...},
+    "updated_at": "2025-01-13T15:00:00Z"
+  }
+}
 ```
 
 ---
 
 ## Episodes
+
+### POST `/api/episodes/analyze-transcript`
+
+Quick transcript analysis using Claude 3.5 Haiku for auto-populating episode fields.
+This is a lightweight analysis (~2-3 seconds, ~$0.001-0.003) meant for the "New Episode" form.
+
+**Request Body:**
+```json
+{
+  "transcript": "Full transcript text... (min 200 characters)"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "metadata": {
+    "suggested_title": "Understanding Anxiety in Modern Life",
+    "guest_name": "Dr. Sarah Johnson",
+    "guest_credentials": "PhD, Clinical Psychologist",
+    "main_topics": ["anxiety", "coping strategies", "work-life balance"],
+    "brief_summary": "Explores practical strategies for managing anxiety in the workplace.",
+    "episode_type": "interview",
+    "confidence": 0.85
+  },
+  "usage": {
+    "model": "claude-3-5-haiku-20241022",
+    "inputTokens": 3500,
+    "outputTokens": 250,
+    "totalTokens": 3750,
+    "cost": 0.0018,
+    "durationMs": 2340
+  },
+  "estimate": {
+    "estimatedCost": 0.0018,
+    "formattedCost": "$0.0018",
+    "inputTokens": 3500,
+    "outputTokens": 300,
+    "model": "claude-3-5-haiku-20241022"
+  }
+}
+```
+
+**Error Response (400 Bad Request):**
+```json
+{
+  "error": "Validation failed",
+  "details": {
+    "transcript": "Must be at least 200 characters"
+  }
+}
+```
+
+---
 
 ### GET `/api/episodes`
 
@@ -138,7 +387,7 @@ Get single episode with all stage outputs.
       "started_at": "2025-01-12T14:30:05Z",
       "completed_at": "2025-01-12T14:30:17Z",
       "duration_seconds": 12,
-      "model_used": "gpt-4o-mini-2024-07-18",
+      "model_used": "gpt-5-mini",
       "provider": "openai",
       "input_tokens": 1500,
       "output_tokens": 300,
@@ -414,32 +663,73 @@ Update evergreen content.
 
 ## Admin
 
+**Note:** All admin endpoints require superadmin role (hazel@theclever.io).
+
+The pipeline uses a **4-phase architecture**:
+- **Pre-Gate (Stage 0)**: Conditional preprocessing for long transcripts
+- **Phase 1 - Extract (Stages 1-2)**: Metadata & Quotes (parallel)
+- **Phase 2 - Plan (Stages 3-5)**: Structure & Headlines (outline first, then parallel)
+- **Phase 3 - Write (Stages 6-7)**: Draft & Refine (sequential)
+- **Phase 4 - Distribute (Stages 8-9)**: Social & Email (parallel)
+
+---
+
 ### GET `/api/admin/costs`
 
-Get cost analytics.
+Get cost analytics with phase and stage breakdowns.
 
 **Query Parameters:**
-- `start_date` (optional): ISO date
-- `end_date` (optional): ISO date
-- `group_by` (optional): "day" | "week" | "month" | "provider"
+- `period` (optional): "day" | "week" | "month" (default: "week")
+- `startDate` (optional): ISO date string
+- `endDate` (optional): ISO date string
 
 **Response (200 OK):**
 ```json
 {
-  "total_cost_usd": "45.67",
-  "cost_by_provider": {
-    "openai": "28.40",
-    "anthropic": "17.27"
+  "period": {
+    "start": "2025-01-06T00:00:00Z",
+    "end": "2025-01-13T00:00:00Z",
+    "label": "week"
   },
-  "cost_by_date": [
-    {
-      "date": "2025-01-12",
-      "cost_usd": "12.45",
-      "episodes": 3
-    }
-  ],
-  "total_tokens": 1245890,
-  "total_api_calls": 127
+  "totals": {
+    "cost": 45.67,
+    "calls": 127,
+    "inputTokens": 1045890,
+    "outputTokens": 200000,
+    "averageCostPerCall": 0.36
+  },
+  "byProvider": {
+    "openai": { "calls": 85, "cost": 28.40, "inputTokens": 700000, "outputTokens": 150000 },
+    "anthropic": { "calls": 42, "cost": 17.27, "inputTokens": 345890, "outputTokens": 50000 }
+  },
+  "byModel": {
+    "gpt-5-mini": { "calls": 85, "cost": 28.40 },
+    "claude-sonnet-4-20250514": { "calls": 30, "cost": 15.00 },
+    "claude-3-5-haiku-20241022": { "calls": 12, "cost": 2.27 }
+  },
+  "byPhase": {
+    "pregate": { "name": "Pre-Gate", "emoji": "🚪", "description": "Preprocessing", "calls": 3, "cost": 0.15, "stages": [0] },
+    "extract": { "name": "Phase 1: Extract", "emoji": "📤", "description": "Metadata & Quotes", "calls": 24, "cost": 5.40, "stages": [1, 2] },
+    "plan": { "name": "Phase 2: Plan", "emoji": "📋", "description": "Structure & Headlines", "calls": 36, "cost": 8.10, "stages": [3, 4, 5] },
+    "write": { "name": "Phase 3: Write", "emoji": "✍️", "description": "Draft & Refine", "calls": 24, "cost": 22.00, "stages": [6, 7] },
+    "distribute": { "name": "Phase 4: Distribute", "emoji": "📣", "description": "Social & Email", "calls": 24, "cost": 10.02, "stages": [8, 9] }
+  },
+  "byStage": {
+    "0": { "name": "Transcript Preprocessing", "calls": 3, "cost": 0.15 },
+    "1": { "name": "Transcript Analysis", "calls": 12, "cost": 2.70 },
+    "2": { "name": "Quote Extraction", "calls": 12, "cost": 2.70 },
+    "3": { "name": "Blog Outline", "calls": 12, "cost": 2.70 },
+    "4": { "name": "Paragraph Details", "calls": 12, "cost": 2.70 },
+    "5": { "name": "Headlines & Copy", "calls": 12, "cost": 2.70 },
+    "6": { "name": "Blog Draft", "calls": 12, "cost": 6.00 },
+    "7": { "name": "Refinement", "calls": 12, "cost": 16.00 },
+    "8": { "name": "Social Content", "calls": 12, "cost": 5.01 },
+    "9": { "name": "Email Campaign", "calls": 12, "cost": 5.01 }
+  },
+  "byDay": {
+    "2025-01-12": { "cost": 12.45, "calls": 32 },
+    "2025-01-13": { "cost": 8.22, "calls": 21 }
+  }
 }
 ```
 
@@ -447,26 +737,80 @@ Get cost analytics.
 
 ### GET `/api/admin/performance`
 
-Get performance metrics.
+Get performance metrics with phase and stage breakdowns.
+
+**Query Parameters:**
+- `limit` (optional): Number of episodes to analyze (default: 100)
 
 **Response (200 OK):**
 ```json
 {
-  "average_processing_time_seconds": 272,
-  "average_cost_per_episode_usd": "1.28",
-  "stage_performance": [
-    {
-      "stage_number": 1,
-      "stage_name": "Transcript Analysis",
-      "avg_duration_seconds": 12,
-      "min_duration_seconds": 8,
-      "max_duration_seconds": 18,
-      "avg_cost_usd": "0.0045",
-      "success_rate": 0.98
+  "episodesAnalyzed": 35,
+  "overall": {
+    "avgDurationSeconds": 272,
+    "avgCostUsd": 1.28,
+    "minDuration": 180,
+    "maxDuration": 420,
+    "minCost": 0.85,
+    "maxCost": 2.10
+  },
+  "byPhase": {
+    "pregate": {
+      "name": "Pre-Gate",
+      "emoji": "🚪",
+      "totalAvgDurationMs": 3200,
+      "totalAvgCost": 0.05,
+      "stages": [
+        { "number": 0, "name": "Transcript Preprocessing", "avgDurationMs": 3200, "avgCost": 0.05 }
+      ]
+    },
+    "extract": {
+      "name": "Phase 1: Extract",
+      "emoji": "📤",
+      "totalAvgDurationMs": 8500,
+      "totalAvgCost": 0.18,
+      "stages": [
+        { "number": 1, "name": "Transcript Analysis", "avgDurationMs": 5200, "avgCost": 0.09 },
+        { "number": 2, "name": "Quote Extraction", "avgDurationMs": 3300, "avgCost": 0.09 }
+      ]
+    },
+    "plan": {
+      "name": "Phase 2: Plan",
+      "emoji": "📋",
+      "totalAvgDurationMs": 12000,
+      "totalAvgCost": 0.27,
+      "stages": [
+        { "number": 3, "name": "Blog Outline", "avgDurationMs": 4500, "avgCost": 0.09 },
+        { "number": 4, "name": "Paragraph Details", "avgDurationMs": 4000, "avgCost": 0.09 },
+        { "number": 5, "name": "Headlines & Copy", "avgDurationMs": 3500, "avgCost": 0.09 }
+      ]
+    },
+    "write": {
+      "name": "Phase 3: Write",
+      "emoji": "✍️",
+      "totalAvgDurationMs": 18000,
+      "totalAvgCost": 0.55,
+      "stages": [
+        { "number": 6, "name": "Blog Draft", "avgDurationMs": 8000, "avgCost": 0.15 },
+        { "number": 7, "name": "Refinement", "avgDurationMs": 10000, "avgCost": 0.40 }
+      ]
+    },
+    "distribute": {
+      "name": "Phase 4: Distribute",
+      "emoji": "📣",
+      "totalAvgDurationMs": 9000,
+      "totalAvgCost": 0.23,
+      "stages": [
+        { "number": 8, "name": "Social Content", "avgDurationMs": 5500, "avgCost": 0.12 },
+        { "number": 9, "name": "Email Campaign", "avgDurationMs": 3500, "avgCost": 0.11 }
+      ]
     }
-  ],
-  "total_episodes_processed": 35,
-  "episodes_this_month": 10
+  },
+  "byStage": {
+    "0": { "name": "Transcript Preprocessing", "phase": "pregate", "avgDurationMs": 3200, "avgCost": 0.05, "sampleSize": 10 },
+    "1": { "name": "Transcript Analysis", "phase": "extract", "avgDurationMs": 5200, "avgCost": 0.09, "sampleSize": 20 },
+    "2": { "name": "Quote Extraction", "phase": "extract", "avgDurationMs": 3300, "avgCost": 0.09, "sampleSize": 20 }
+  }
 }
 ```
 
@@ -477,41 +821,427 @@ Get performance metrics.
 Get recent errors.
 
 **Query Parameters:**
-- `limit` (optional): Number of results (default: 20)
-- `since` (optional): ISO timestamp
+- `limit` (optional): Number of results (default: 50)
 
 **Response (200 OK):**
 ```json
 {
-  "errors": [
+  "totalErrors": 5,
+  "recentErrors": [
     {
-      "id": "uuid",
-      "timestamp": "2025-01-13T14:30:00Z",
-      "episode_id": "uuid",
-      "episode_title": "Understanding Anxiety",
-      "stage_number": 4,
-      "stage_name": "Paragraph-Level Outlines",
-      "error_message": "Rate limit exceeded",
-      "retry_count": 2,
-      "status": "failed"
+      "episodeId": "uuid",
+      "episodeTitle": "Understanding Anxiety",
+      "stageNumber": 4,
+      "stageName": "Paragraph Details",
+      "error": "Rate limit exceeded",
+      "errorDetails": { "provider": "openai", "retryCount": 2 },
+      "failedAt": "2025-01-13T14:30:00Z"
     }
   ],
-  "total": 5
+  "byType": [
+    { "type": "rate_limit", "count": 2, "recent": [...] },
+    { "type": "timeout", "count": 1, "recent": [...] }
+  ],
+  "errorEpisodes": [
+    {
+      "id": "uuid",
+      "title": "Understanding Anxiety",
+      "error": "Rate limit exceeded",
+      "failedAt": "2025-01-13T14:30:00Z",
+      "currentStage": 4
+    }
+  ]
 }
 ```
 
 ---
 
-### POST `/api/admin/errors/:id/retry`
+### GET `/api/admin/usage`
 
-Retry a failed stage.
+Get overall API usage statistics.
 
-**Response (202 Accepted):**
+**Response (200 OK):**
 ```json
 {
-  "stage_id": "uuid",
-  "status": "processing",
-  "message": "Retry started"
+  "episodes": {
+    "total": 35,
+    "byStatus": {
+      "pending": 2,
+      "processing": 1,
+      "completed": 30,
+      "error": 2
+    },
+    "successRate": 85.7
+  },
+  "apiUsage": {
+    "last30Days": {
+      "calls": 350,
+      "cost": 45.67
+    },
+    "dailyAverage": {
+      "calls": 12,
+      "cost": 1.52
+    },
+    "projectedMonthlyCost": 45.60
+  },
+  "generatedAt": "2025-01-13T16:00:00Z"
+}
+```
+
+---
+
+## Content Library
+
+### GET `/api/library`
+
+List user's saved content items. **Requires authentication.**
+
+**Query Parameters:**
+- `content_type` (optional): Filter by type (blog, social, email, headline, quote)
+- `platform` (optional): Filter by platform (instagram, twitter, linkedin, facebook)
+- `episode_id` (optional): Filter by source episode
+- `favorite` (optional): Set to "true" for favorites only
+- `search` (optional): Search in title and content
+- `limit` (optional): Number of results (default: 50)
+- `offset` (optional): Pagination offset (default: 0)
+
+**Response (200 OK):**
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "user_id": "uuid",
+      "episode_id": "uuid",
+      "title": "Understanding Anxiety - Blog Post",
+      "content_type": "blog",
+      "platform": null,
+      "content": "Full blog post content...",
+      "metadata": {},
+      "source_stage": 7,
+      "source_sub_stage": null,
+      "tags": ["anxiety", "mental-health"],
+      "is_favorite": true,
+      "created_at": "2025-01-12T14:30:00Z",
+      "updated_at": "2025-01-12T14:30:00Z"
+    }
+  ],
+  "total": 25,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+---
+
+### GET `/api/library/stats`
+
+Get library statistics for current user. **Requires authentication.**
+
+**Response (200 OK):**
+```json
+{
+  "stats": {
+    "total_items": 25,
+    "blog_count": 10,
+    "social_count": 12,
+    "email_count": 3,
+    "headline_count": 0,
+    "quote_count": 0,
+    "favorite_count": 5
+  }
+}
+```
+
+---
+
+### POST `/api/library`
+
+Save content to library. **Requires authentication.**
+
+**Request Body:**
+```json
+{
+  "title": "Understanding Anxiety - Blog Post",
+  "content_type": "blog",
+  "platform": null,
+  "content": "Full content text...",
+  "episode_id": "uuid",
+  "source_stage": 7,
+  "source_sub_stage": null,
+  "tags": ["anxiety", "mental-health"],
+  "metadata": {}
+}
+```
+
+**Validation:**
+- `title` (required): 1-500 characters
+- `content_type` (required): blog, social, email, headline, quote
+- `platform` (optional): instagram, twitter, linkedin, facebook
+- `content` (required): 1-100,000 characters
+
+**Response (201 Created):**
+```json
+{
+  "item": {
+    "id": "uuid",
+    "title": "Understanding Anxiety - Blog Post",
+    "content_type": "blog",
+    "is_favorite": false,
+    "created_at": "2025-01-13T15:00:00Z"
+  }
+}
+```
+
+---
+
+### GET `/api/library/:id`
+
+Get single library item. **Requires authentication.**
+
+**Response (200 OK):**
+```json
+{
+  "item": {
+    "id": "uuid",
+    "title": "Understanding Anxiety - Blog Post",
+    "content_type": "blog",
+    "content": "Full content...",
+    "tags": ["anxiety"],
+    "is_favorite": true
+  }
+}
+```
+
+---
+
+### PUT `/api/library/:id`
+
+Update library item. **Requires authentication.**
+
+**Request Body:**
+```json
+{
+  "title": "Updated Title",
+  "content": "Updated content...",
+  "tags": ["new-tag"],
+  "platform": "twitter"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "item": {
+    "id": "uuid",
+    "title": "Updated Title",
+    "updated_at": "2025-01-13T15:30:00Z"
+  }
+}
+```
+
+---
+
+### DELETE `/api/library/:id`
+
+Delete library item. **Requires authentication.**
+
+**Response (204 No Content)**
+
+---
+
+### POST `/api/library/:id/favorite`
+
+Toggle favorite status. **Requires authentication.**
+
+**Response (200 OK):**
+```json
+{
+  "item": { "id": "uuid", "is_favorite": true },
+  "is_favorite": true
+}
+```
+
+---
+
+## Content Calendar
+
+### GET `/api/calendar`
+
+List scheduled content items. **Requires authentication.**
+
+**Query Parameters (Required):**
+- `start_date` (required): Start of date range (YYYY-MM-DD)
+- `end_date` (required): End of date range (YYYY-MM-DD)
+
+**Query Parameters (Optional):**
+- `content_type` (optional): Filter by type (blog, social, email)
+- `platform` (optional): Filter by platform
+- `status` (optional): Filter by status (draft, scheduled, published, cancelled)
+- `limit` (optional): Number of results (default: 100)
+- `offset` (optional): Pagination offset (default: 0)
+
+**Response (200 OK):**
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "user_id": "uuid",
+      "library_item_id": "uuid",
+      "episode_id": "uuid",
+      "scheduled_date": "2025-01-15",
+      "scheduled_time": "10:00",
+      "title": "Understanding Anxiety",
+      "content_type": "blog",
+      "platform": null,
+      "content_preview": "First 200 characters...",
+      "full_content": "Full content...",
+      "status": "scheduled",
+      "published_at": null,
+      "publish_url": null,
+      "notes": "Remember to add image",
+      "metadata": {},
+      "created_at": "2025-01-12T14:30:00Z",
+      "updated_at": "2025-01-12T14:30:00Z"
+    }
+  ],
+  "total": 12,
+  "limit": 100,
+  "offset": 0
+}
+```
+
+---
+
+### POST `/api/calendar`
+
+Schedule content. **Requires authentication.**
+
+**Request Body:**
+```json
+{
+  "title": "Understanding Anxiety",
+  "content_type": "blog",
+  "platform": null,
+  "scheduled_date": "2025-01-15",
+  "scheduled_time": "10:00",
+  "full_content": "Full content text...",
+  "status": "scheduled",
+  "episode_id": "uuid",
+  "library_item_id": "uuid",
+  "notes": "Remember to add image",
+  "metadata": {}
+}
+```
+
+**Validation:**
+- `title` (required): 1-500 characters
+- `content_type` (required): blog, social, email
+- `scheduled_date` (required): YYYY-MM-DD format
+- `scheduled_time` (optional): HH:MM or HH:MM:SS format
+- `status` (optional): draft, scheduled (default: scheduled)
+
+**Response (201 Created):**
+```json
+{
+  "item": {
+    "id": "uuid",
+    "title": "Understanding Anxiety",
+    "scheduled_date": "2025-01-15",
+    "scheduled_time": "10:00",
+    "status": "scheduled",
+    "created_at": "2025-01-13T15:00:00Z"
+  }
+}
+```
+
+---
+
+### GET `/api/calendar/:id`
+
+Get single calendar item. **Requires authentication.**
+
+**Response (200 OK):**
+```json
+{
+  "item": {
+    "id": "uuid",
+    "title": "Understanding Anxiety",
+    "scheduled_date": "2025-01-15",
+    "scheduled_time": "10:00",
+    "full_content": "Full content...",
+    "status": "scheduled"
+  }
+}
+```
+
+---
+
+### PUT `/api/calendar/:id`
+
+Update calendar item. **Requires authentication.**
+
+**Request Body:**
+```json
+{
+  "title": "Updated Title",
+  "scheduled_date": "2025-01-16",
+  "scheduled_time": "14:00",
+  "full_content": "Updated content...",
+  "notes": "New note"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "item": {
+    "id": "uuid",
+    "title": "Updated Title",
+    "scheduled_date": "2025-01-16",
+    "updated_at": "2025-01-13T15:30:00Z"
+  }
+}
+```
+
+---
+
+### DELETE `/api/calendar/:id`
+
+Delete calendar item. **Requires authentication.**
+
+**Response (204 No Content)**
+
+---
+
+### PATCH `/api/calendar/:id/status`
+
+Update calendar item status. **Requires authentication.**
+
+**Request Body:**
+```json
+{
+  "status": "published",
+  "publish_url": "https://myblog.com/post-123"
+}
+```
+
+**Valid Statuses:**
+- `draft`: Not finalized
+- `scheduled`: Ready to publish
+- `published`: Already published (sets published_at timestamp)
+- `cancelled`: Skipped/cancelled
+
+**Response (200 OK):**
+```json
+{
+  "item": {
+    "id": "uuid",
+    "status": "published",
+    "published_at": "2025-01-15T10:05:00Z",
+    "publish_url": "https://myblog.com/post-123"
+  }
 }
 ```
 

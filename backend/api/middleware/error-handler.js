@@ -15,12 +15,24 @@ import {
   DatabaseError,
   NotFoundError,
   ProcessingError,
+  AuthenticationError,
+  AuthorizationError,
 } from '../../lib/errors.js';
 
 /**
  * Known API routes for suggesting alternatives when route not found
  */
 const KNOWN_ROUTES = [
+  // Authentication routes
+  'POST /api/auth/magic-link',
+  'GET /api/auth/me',
+  'POST /api/auth/logout',
+  'PUT /api/auth/profile',
+  'GET /api/auth/users',
+  // User settings routes
+  'GET /api/settings',
+  'PUT /api/settings',
+  // Episode routes
   'GET /api/episodes',
   'POST /api/episodes',
   'GET /api/episodes/:id',
@@ -28,15 +40,20 @@ const KNOWN_ROUTES = [
   'GET /api/episodes/:id/status',
   'POST /api/episodes/:id/process',
   'POST /api/episodes/:id/pause',
+  // Stage routes
   'GET /api/stages/:id',
   'PUT /api/stages/:id',
   'POST /api/stages/:id/regenerate',
   'GET /api/stages/episode/:episodeId',
+  // Evergreen content routes (system defaults)
   'GET /api/evergreen',
   'PUT /api/evergreen',
+  // Admin routes (superadmin only)
   'GET /api/admin/costs',
   'GET /api/admin/performance',
   'GET /api/admin/errors',
+  'GET /api/admin/usage',
+  // Health check
   'GET /health',
 ];
 
@@ -90,6 +107,46 @@ export function errorHandler(err, req, res, next) {
   });
 
   // Handle specific error types
+
+  // Authentication errors (401 Unauthorized)
+  if (err instanceof AuthenticationError) {
+    logger.warn('Authentication failed', {
+      reason: err.reason,
+      path: req.path,
+      method: req.method,
+      correlationId: req.correlationId,
+    });
+    return res.status(401).json({
+      error: 'Authentication Required',
+      message: err.message,
+      reason: err.reason,
+      timestamp: new Date().toISOString(),
+      correlationId: req.correlationId,
+    });
+  }
+
+  // Authorization errors (403 Forbidden)
+  if (err instanceof AuthorizationError) {
+    logger.warn('Authorization denied', {
+      resource: err.resource,
+      reason: err.reason,
+      requiredRole: err.requiredRole,
+      userId: req.user?.id,
+      userRole: req.user?.role,
+      path: req.path,
+      method: req.method,
+      correlationId: req.correlationId,
+    });
+    return res.status(403).json({
+      error: 'Access Denied',
+      message: err.message,
+      resource: err.resource,
+      requiredRole: err.requiredRole,
+      timestamp: new Date().toISOString(),
+      correlationId: req.correlationId,
+    });
+  }
+
   if (err instanceof ValidationError) {
     logger.validationError(err.field, err.message);
     return res.status(400).json({
@@ -133,13 +190,36 @@ export function errorHandler(err, req, res, next) {
   }
 
   if (err instanceof DatabaseError) {
-    logger.dbError(err.operation || 'unknown', 'unknown', err);
-    return res.status(503).json({
+    // Enhanced logging for database errors
+    logger.dbError(err.operation || 'unknown', 'unknown', err, {
+      originalMessage: err.message,
+      operation: err.operation,
+      context: err.context,
+      path: req.path,
+      method: req.method,
+      query: req.query,
+      correlationId: req.correlationId,
+    });
+
+    // Build response with optional debug info in development
+    const response = {
       error: 'Database Error',
       message: 'A database error occurred. Please try again.',
       timestamp: new Date().toISOString(),
       correlationId: req.correlationId,
-    });
+    };
+
+    // Include detailed error info in development mode for troubleshooting
+    if (process.env.NODE_ENV === 'development') {
+      response.debug = {
+        operation: err.operation,
+        originalMessage: err.message,
+        context: err.context,
+        hint: 'Check server logs for full stack trace and database error details',
+      };
+    }
+
+    return res.status(503).json(response);
   }
 
   if (err instanceof ProcessingError) {

@@ -2,14 +2,17 @@
  * ============================================================================
  * SETTINGS PAGE
  * ============================================================================
- * Configure evergreen content: therapist profile, podcast info, voice guidelines.
+ * Configure evergreen content: therapist profile, podcast info, voice guidelines,
+ * topics, and content pillars.
+ * Also includes Brand Discovery for defining brand identity and voice.
  * This content is used across all episode processing.
  * ============================================================================
  */
 
-import { useState, useEffect } from 'react';
-import { Save, RefreshCw, User, Mic, BookOpen } from 'lucide-react';
-import { Button, Card, Input, Spinner } from '@components/shared';
+import { useState, useEffect, useCallback } from 'react';
+import { Save, RefreshCw, User, Mic, BookOpen, Tag, Layers } from 'lucide-react';
+import { Button, Card, Input, Spinner, TagManager, useToast } from '@components/shared';
+import { BrandDiscoveryStudio } from '@components/brand-discovery';
 import api from '@utils/api-client';
 import styles from './Settings.module.css';
 
@@ -17,13 +20,15 @@ import styles from './Settings.module.css';
  * Settings page component
  */
 function Settings() {
+  const { showToast } = useToast();
+
   // State
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
-  // Form data
+  // Form data for evergreen content
   const [therapistProfile, setTherapistProfile] = useState({
     name: '',
     credentials: '',
@@ -35,7 +40,6 @@ function Settings() {
     name: '',
     tagline: '',
     target_audience: '',
-    content_pillars: '',
   });
 
   const [voiceGuidelines, setVoiceGuidelines] = useState({
@@ -44,20 +48,35 @@ function Settings() {
     avoid: '',
   });
 
-  // Load current settings
+  // Topics and Pillars state
+  const [topics, setTopics] = useState([]);
+  const [pillars, setPillars] = useState([]);
+  const [topicsLoading, setTopicsLoading] = useState(false);
+  const [pillarsLoading, setPillarsLoading] = useState(false);
+
+  // Load all settings on mount
   useEffect(() => {
-    loadSettings();
+    loadAllSettings();
   }, []);
 
-  async function loadSettings() {
+  /**
+   * Load all settings: evergreen, topics, and pillars
+   */
+  async function loadAllSettings() {
     try {
       setLoading(true);
       setError(null);
 
-      const data = await api.evergreen.get();
-      const evergreen = data.evergreen || {};
+      // Load evergreen settings, topics, and pillars in parallel
+      const [evergreenData, topicsData, pillarsData] = await Promise.all([
+        api.evergreen.get(),
+        api.topics.list().catch(() => ({ topics: [] })),
+        api.pillars.list().catch(() => ({ pillars: [] })),
+      ]);
 
-      // Populate form fields
+      // Populate evergreen form fields
+      const evergreen = evergreenData.evergreen || {};
+
       if (evergreen.therapist_profile) {
         setTherapistProfile({
           name: evergreen.therapist_profile.name || '',
@@ -72,7 +91,6 @@ function Settings() {
           name: evergreen.podcast_info.name || '',
           tagline: evergreen.podcast_info.tagline || '',
           target_audience: evergreen.podcast_info.target_audience || '',
-          content_pillars: (evergreen.podcast_info.content_pillars || []).join(', '),
         });
       }
 
@@ -83,30 +101,35 @@ function Settings() {
           avoid: (evergreen.voice_guidelines.avoid || []).join(', '),
         });
       }
+
+      // Set topics and pillars
+      setTopics(topicsData.topics || []);
+      setPillars(pillarsData.pillars || []);
+
+      console.log('[Settings] All settings loaded successfully');
     } catch (err) {
+      console.error('[Settings] Failed to load settings:', err);
       setError(err.message || 'Failed to load settings');
     } finally {
       setLoading(false);
     }
   }
 
+  /**
+   * Save evergreen content
+   */
   async function handleSave() {
     try {
       setSaving(true);
       setError(null);
       setSuccess(false);
 
-      // Build update payload
       const updates = {
         therapist_profile: {
           ...therapistProfile,
         },
         podcast_info: {
           ...podcastInfo,
-          content_pillars: podcastInfo.content_pillars
-            .split(',')
-            .map((s) => s.trim())
-            .filter(Boolean),
         },
         voice_guidelines: {
           tone: voiceGuidelines.tone
@@ -123,13 +146,106 @@ function Settings() {
 
       await api.evergreen.update(updates);
       setSuccess(true);
+      showToast({ message: 'Settings saved successfully', variant: 'success' });
 
       // Clear success message after delay
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
+      console.error('[Settings] Failed to save settings:', err);
       setError(err.message || 'Failed to save settings');
+      showToast({ message: 'Failed to save settings', variant: 'error' });
     } finally {
       setSaving(false);
+    }
+  }
+
+  // ============================================================================
+  // PILLAR HANDLERS
+  // ============================================================================
+
+  async function handleAddPillar(data) {
+    try {
+      setPillarsLoading(true);
+      const result = await api.pillars.create(data);
+      setPillars((prev) => [...prev, result.pillar]);
+      showToast({ message: `Pillar "${data.name}" created`, variant: 'success' });
+    } catch (err) {
+      console.error('[Settings] Failed to add pillar:', err);
+      showToast({ message: err.message || 'Failed to add pillar', variant: 'error' });
+      throw err;
+    } finally {
+      setPillarsLoading(false);
+    }
+  }
+
+  async function handleUpdatePillar(id, data) {
+    try {
+      const result = await api.pillars.update(id, data);
+      setPillars((prev) =>
+        prev.map((p) => (p.id === id ? { ...p, ...result.pillar } : p))
+      );
+      showToast({ message: 'Pillar updated', variant: 'success' });
+    } catch (err) {
+      console.error('[Settings] Failed to update pillar:', err);
+      showToast({ message: err.message || 'Failed to update pillar', variant: 'error' });
+      throw err;
+    }
+  }
+
+  async function handleDeletePillar(id) {
+    try {
+      await api.pillars.delete(id);
+      setPillars((prev) => prev.filter((p) => p.id !== id));
+      showToast({ message: 'Pillar deleted', variant: 'success' });
+    } catch (err) {
+      console.error('[Settings] Failed to delete pillar:', err);
+      showToast({ message: err.message || 'Failed to delete pillar', variant: 'error' });
+      throw err;
+    }
+  }
+
+  // ============================================================================
+  // TOPIC HANDLERS
+  // ============================================================================
+
+  async function handleAddTopic(data) {
+    try {
+      setTopicsLoading(true);
+      const result = await api.topics.create(data);
+      setTopics((prev) => [...prev, result.topic]);
+      showToast({ message: `Topic "${data.name}" created`, variant: 'success' });
+    } catch (err) {
+      console.error('[Settings] Failed to add topic:', err);
+      showToast({ message: err.message || 'Failed to add topic', variant: 'error' });
+      throw err;
+    } finally {
+      setTopicsLoading(false);
+    }
+  }
+
+  async function handleUpdateTopic(id, data) {
+    try {
+      const result = await api.topics.update(id, data);
+      setTopics((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, ...result.topic } : t))
+      );
+      showToast({ message: 'Topic updated', variant: 'success' });
+    } catch (err) {
+      console.error('[Settings] Failed to update topic:', err);
+      showToast({ message: err.message || 'Failed to update topic', variant: 'error' });
+      throw err;
+    }
+  }
+
+  async function handleDeleteTopic(id) {
+    try {
+      await api.topics.delete(id);
+      setTopics((prev) => prev.filter((t) => t.id !== id));
+      showToast({ message: 'Topic deleted', variant: 'success' });
+    } catch (err) {
+      console.error('[Settings] Failed to delete topic:', err);
+      showToast({ message: err.message || 'Failed to delete topic', variant: 'error' });
+      throw err;
     }
   }
 
@@ -144,7 +260,7 @@ function Settings() {
         <div className={styles.headerContent}>
           <h1 className={styles.title}>Settings</h1>
           <p className={styles.subtitle}>
-            Configure your profile and podcast information
+            Configure your profile, podcast information, and content organization
           </p>
         </div>
 
@@ -152,7 +268,7 @@ function Settings() {
           <Button
             variant="secondary"
             leftIcon={RefreshCw}
-            onClick={loadSettings}
+            onClick={loadAllSettings}
             disabled={saving}
           >
             Reset
@@ -180,8 +296,64 @@ function Settings() {
         </div>
       )}
 
+      {/* Brand Discovery - Onboarding for brand identity */}
+      <BrandDiscoveryStudio
+        defaultExpanded={true}
+        onBrandDnaChange={(brandDna) => {
+          console.log('[Settings] Brand DNA updated:', brandDna);
+        }}
+      />
+
       {/* Settings sections */}
       <div className={styles.sections}>
+        {/* Content Pillars */}
+        <Card
+          title="Content Pillars"
+          subtitle="High-level brand themes that organize your content strategy"
+          headerAction={<Layers className={styles.sectionIcon} />}
+        >
+          <div className={styles.form}>
+            <TagManager
+              items={pillars}
+              onAdd={handleAddPillar}
+              onUpdate={handleUpdatePillar}
+              onDelete={handleDeletePillar}
+              placeholder="Add new pillar"
+              showColors={true}
+              showCount={true}
+              emptyMessage="No content pillars yet. Add your first one!"
+              loading={pillarsLoading}
+            />
+            <p className={styles.helperText}>
+              Content pillars are the core themes of your podcast (e.g., "Anxiety", "Relationships", "Self-Care").
+            </p>
+          </div>
+        </Card>
+
+        {/* Topics */}
+        <Card
+          title="Topics"
+          subtitle="Granular tags for categorizing and filtering content"
+          headerAction={<Tag className={styles.sectionIcon} />}
+        >
+          <div className={styles.form}>
+            <TagManager
+              items={topics}
+              onAdd={handleAddTopic}
+              onUpdate={handleUpdateTopic}
+              onDelete={handleDeleteTopic}
+              placeholder="Add new topic"
+              showCount={true}
+              emptyMessage="No topics yet. Add your first one!"
+              loading={topicsLoading}
+            />
+            <p className={styles.helperText}>
+              Topics are specific tags for content (e.g., "Work Anxiety", "Boundary Setting", "CBT Techniques").
+              Topics can belong to multiple content pillars.
+            </p>
+          </div>
+        </Card>
+
         {/* Therapist Profile */}
         <Card
           title="Therapist Profile"
@@ -261,16 +433,6 @@ function Settings() {
               value={podcastInfo.target_audience}
               onChange={(e) =>
                 setPodcastInfo({ ...podcastInfo, target_audience: e.target.value })
-              }
-            />
-
-            <Input
-              label="Content Pillars"
-              placeholder="Clinical Skills, Self-Care, Practice Building"
-              helperText="Comma-separated list of main content themes"
-              value={podcastInfo.content_pillars}
-              onChange={(e) =>
-                setPodcastInfo({ ...podcastInfo, content_pillars: e.target.value })
               }
             />
           </div>

@@ -217,6 +217,61 @@ Update current user's settings. **Requires authentication.**
 
 ## Episodes
 
+### POST `/api/episodes/analyze-transcript`
+
+Quick transcript analysis using Claude 3.5 Haiku for auto-populating episode fields.
+This is a lightweight analysis (~2-3 seconds, ~$0.001-0.003) meant for the "New Episode" form.
+
+**Request Body:**
+```json
+{
+  "transcript": "Full transcript text... (min 200 characters)"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "metadata": {
+    "suggested_title": "Understanding Anxiety in Modern Life",
+    "guest_name": "Dr. Sarah Johnson",
+    "guest_credentials": "PhD, Clinical Psychologist",
+    "main_topics": ["anxiety", "coping strategies", "work-life balance"],
+    "brief_summary": "Explores practical strategies for managing anxiety in the workplace.",
+    "episode_type": "interview",
+    "confidence": 0.85
+  },
+  "usage": {
+    "model": "claude-3-5-haiku-20241022",
+    "inputTokens": 3500,
+    "outputTokens": 250,
+    "totalTokens": 3750,
+    "cost": 0.0018,
+    "durationMs": 2340
+  },
+  "estimate": {
+    "estimatedCost": 0.0018,
+    "formattedCost": "$0.0018",
+    "inputTokens": 3500,
+    "outputTokens": 300,
+    "model": "claude-3-5-haiku-20241022"
+  }
+}
+```
+
+**Error Response (400 Bad Request):**
+```json
+{
+  "error": "Validation failed",
+  "details": {
+    "transcript": "Must be at least 200 characters"
+  }
+}
+```
+
+---
+
 ### GET `/api/episodes`
 
 List all episodes with optional filtering.

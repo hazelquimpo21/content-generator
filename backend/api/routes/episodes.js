@@ -29,6 +29,7 @@ import { estimateEpisodeCost } from '../../lib/cost-calculator.js';
 import { ValidationError, AuthorizationError, NotFoundError } from '../../lib/errors.js';
 import { requireAuth } from '../middleware/auth-middleware.js';
 import logger from '../../lib/logger.js';
+import { analyzeTranscriptQuick, estimateQuickAnalysisCost } from '../../lib/transcript-analyzer.js';
 
 const router = Router();
 
@@ -92,6 +93,67 @@ function validateTranscript(transcript) {
 // ============================================================================
 // ROUTES
 // ============================================================================
+
+/**
+ * POST /api/episodes/analyze-transcript
+ * Quick transcript analysis using Claude Haiku for auto-populating episode fields.
+ *
+ * This is a lightweight analysis meant for the "New Episode" form.
+ * It extracts basic metadata (title, guest info, topics) in ~2-3 seconds.
+ *
+ * Cost: ~$0.001-0.003 per analysis (very affordable)
+ *
+ * Request Body:
+ * - transcript: string (required, min 200 chars)
+ *
+ * Response:
+ * - metadata: { suggested_title, guest_name, guest_credentials, main_topics, ... }
+ * - usage: { cost, durationMs, inputTokens, outputTokens }
+ */
+router.post('/analyze-transcript', requireAuth, async (req, res, next) => {
+  try {
+    const { transcript } = req.body;
+
+    // Validate transcript
+    if (!transcript || typeof transcript !== 'string') {
+      throw new ValidationError('transcript', 'Transcript is required');
+    }
+
+    if (transcript.length < 200) {
+      throw new ValidationError(
+        'transcript',
+        'Transcript must be at least 200 characters for analysis'
+      );
+    }
+
+    logger.info('Quick transcript analysis requested', {
+      userId: req.user.id,
+      transcriptLength: transcript.length,
+    });
+
+    // Get cost estimate first
+    const estimate = estimateQuickAnalysisCost(transcript);
+
+    // Run the quick analysis
+    const result = await analyzeTranscriptQuick(transcript);
+
+    logger.info('Quick transcript analysis completed', {
+      userId: req.user.id,
+      durationMs: result.usage.durationMs,
+      cost: result.usage.cost,
+      confidence: result.metadata.confidence,
+    });
+
+    res.json({
+      success: true,
+      metadata: result.metadata,
+      usage: result.usage,
+      estimate,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
 
 /**
  * GET /api/episodes

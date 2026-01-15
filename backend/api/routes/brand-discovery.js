@@ -9,6 +9,7 @@
 
 import express from 'express';
 import logger from '../../lib/logger.js';
+import { requireAuth } from '../middleware/auth-middleware.js';
 import * as brandDiscoveryService from '../../services/brand-discovery-service.js';
 import * as brandDnaSynthesizer from '../../services/brand-dna-synthesizer.js';
 
@@ -21,25 +22,6 @@ import { SPECIALTIES } from '../../data/specialties.js';
 import { PLATFORMS, DEFAULT_PLATFORM_ORDER } from '../../data/platforms.js';
 
 const router = express.Router();
-
-// ============================================================================
-// Middleware: Require Authentication
-// ============================================================================
-
-/**
- * Authentication middleware.
- * Extracts user from request (set by auth middleware in server.js).
- */
-function requireAuth(req, res, next) {
-  if (!req.user || !req.user.id) {
-    logger.warn('Unauthorized access attempt to brand-discovery', {
-      path: req.path,
-      method: req.method,
-    });
-    return res.status(401).json({ error: 'Authentication required' });
-  }
-  next();
-}
 
 // Apply auth middleware to all routes
 router.use(requireAuth);

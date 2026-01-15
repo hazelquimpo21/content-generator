@@ -546,6 +546,67 @@ const pillars = {
 };
 
 /**
+ * Brand Discovery API - for onboarding and brand identity
+ */
+const brandDiscovery = {
+  /**
+   * Get current user's brand discovery data
+   */
+  get: () => get('/brand-discovery'),
+
+  /**
+   * Reset brand discovery to initial state (start over)
+   */
+  reset: () => del('/brand-discovery/reset'),
+
+  /**
+   * Update a specific module
+   * @param {string} moduleId - Module ID (sources, vibe, values, method, audience, channels)
+   * @param {Object} data - Module data
+   * @param {string} [status] - Optional status (not_started, partial, complete)
+   */
+  updateModule: (moduleId, data, status = null) =>
+    patch(`/brand-discovery/modules/${moduleId}`, { data, status }),
+
+  /**
+   * Analyze pasted source content
+   * @param {string} content - Content to analyze
+   */
+  analyzeSource: (content) => post('/brand-discovery/sources/analyze', { content }),
+
+  /**
+   * Confirm or reject an inference
+   * @param {string} fieldPath - Dot-notation path (e.g., 'therapist_profile.name')
+   * @param {boolean} confirmed - True to confirm, false to reject
+   */
+  confirmInference: (fieldPath, confirmed) =>
+    post('/brand-discovery/inferences/confirm', { field_path: fieldPath, confirmed }),
+
+  /**
+   * Force regenerate Brand DNA
+   */
+  regenerateBrandDna: () => post('/brand-discovery/brand-dna/regenerate'),
+
+  /**
+   * Get version history
+   * @param {Object} params - Query params (limit, offset)
+   */
+  getHistory: (params = {}) => get('/brand-discovery/history', params),
+
+  /**
+   * Generate AI nuances for a value
+   * @param {string} value - Value ID
+   */
+  generateValueNuances: (value) =>
+    post('/brand-discovery/values/generate-nuances', { value }),
+
+  /**
+   * Get reference data (values, archetypes, modalities, etc.)
+   */
+  getReferenceData: () => get('/brand-discovery/reference-data'),
+};
+
+/**
  * Content Calendar API
  */
 const calendar = {
@@ -604,6 +665,7 @@ const api = {
   calendar,
   topics,
   pillars,
+  brandDiscovery,
   // Raw helpers for custom endpoints
   get,
   post,

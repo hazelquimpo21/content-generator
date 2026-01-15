@@ -26,6 +26,8 @@ import {
   Check,
   RefreshCw,
   Edit3,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { Button, Card, Input } from '@components/shared';
 import api from '@utils/api-client';
@@ -70,6 +72,10 @@ function NewEpisode() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editingTitleValue, setEditingTitleValue] = useState('');
   const titleInputRef = useRef(null);
+
+  // Title history for browsing generated titles
+  const [titleHistory, setTitleHistory] = useState([]);
+  const [currentTitleIndex, setCurrentTitleIndex] = useState(0);
 
   // Regeneration spam protection
   const [regenerationCount, setRegenerationCount] = useState(0);
@@ -118,6 +124,9 @@ function NewEpisode() {
       if (metadata.suggested_title && !userEditedFieldsRef.current.has('title')) {
         updates.title = metadata.suggested_title;
         newAutoPopulated.add('title');
+        // Initialize title history with first generated title
+        setTitleHistory([metadata.suggested_title]);
+        setCurrentTitleIndex(0);
       }
 
       // Auto-populate guest name if empty or not manually edited
@@ -234,9 +243,16 @@ function NewEpisode() {
       });
 
       if (response.metadata?.suggested_title) {
+        const newTitle = response.metadata.suggested_title;
+        // Add to history and navigate to the new title
+        setTitleHistory((prev) => {
+          const newHistory = [...prev, newTitle];
+          setCurrentTitleIndex(newHistory.length - 1);
+          return newHistory;
+        });
         setEpisodeContext((prev) => ({
           ...prev,
-          title: response.metadata.suggested_title,
+          title: newTitle,
         }));
         // Mark as not user-edited so future analysis can update it
         userEditedFieldsRef.current.delete('title');
@@ -249,6 +265,32 @@ function NewEpisode() {
       setError('Failed to regenerate title. Please try again.');
     } finally {
       setIsRegenerating(false);
+    }
+  }
+
+  // ============================================================================
+  // TITLE HISTORY NAVIGATION
+  // ============================================================================
+
+  function handlePreviousTitle() {
+    if (currentTitleIndex > 0) {
+      const newIndex = currentTitleIndex - 1;
+      setCurrentTitleIndex(newIndex);
+      setEpisodeContext((prev) => ({
+        ...prev,
+        title: titleHistory[newIndex],
+      }));
+    }
+  }
+
+  function handleNextTitle() {
+    if (currentTitleIndex < titleHistory.length - 1) {
+      const newIndex = currentTitleIndex + 1;
+      setCurrentTitleIndex(newIndex);
+      setEpisodeContext((prev) => ({
+        ...prev,
+        title: titleHistory[newIndex],
+      }));
     }
   }
 
@@ -274,11 +316,13 @@ function NewEpisode() {
       const text = await file.text();
       setTranscript(text);
 
-      // Reset user edits and regeneration counter when new transcript is uploaded
+      // Reset user edits, regeneration counter, and title history when new transcript is uploaded
       userEditedFieldsRef.current.clear();
       resetAnalysis();
       setRegenerationCount(0);
       setRegenerateCooldown(0);
+      setTitleHistory([]);
+      setCurrentTitleIndex(0);
     } catch {
       setError('Failed to read file. Please try again or paste the transcript directly.');
     }
@@ -288,12 +332,14 @@ function NewEpisode() {
     const newTranscript = e.target.value;
     setTranscript(newTranscript);
 
-    // If transcript is cleared, reset auto-populate state
+    // If transcript is cleared, reset auto-populate state and title history
     if (!newTranscript || newTranscript.length < minTranscriptLength) {
       userEditedFieldsRef.current.clear();
       resetAnalysis();
       setRegenerationCount(0);
       setRegenerateCooldown(0);
+      setTitleHistory([]);
+      setCurrentTitleIndex(0);
     }
   }
 
@@ -498,52 +544,88 @@ function NewEpisode() {
                   </div>
                 </div>
               ) : (
-                /* Display mode */
+                /* Display mode with navigation */
                 <div className={styles.titleDisplayMode}>
-                  <div className={styles.generatedTitleText}>
-                    {episodeContext.title || 'No title generated yet'}
-                  </div>
-                  <div className={styles.titleActions}>
-                    <Button
+                  {/* Navigation - Previous */}
+                  {titleHistory.length > 1 && (
+                    <button
                       type="button"
-                      variant="ghost"
-                      size="sm"
-                      leftIcon={Edit3}
-                      onClick={handleStartEditTitle}
-                      disabled={!hasTitle}
+                      className={styles.titleNavButton}
+                      onClick={handlePreviousTitle}
+                      disabled={currentTitleIndex === 0}
+                      title="Previous title"
                     >
-                      Edit
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      leftIcon={isRegenerating ? Loader2 : RefreshCw}
-                      onClick={handleRegenerateTitle}
-                      disabled={!canRegenerate}
-                      title={
-                        regenerationCount >= MAX_REGENERATIONS
-                          ? 'Maximum regenerations reached'
-                          : regenerateCooldown > 0
-                            ? `Wait ${regenerateCooldown}s`
-                            : 'Generate a new title'
-                      }
-                    >
-                      {isRegenerating
-                        ? 'Generating...'
-                        : regenerateCooldown > 0
-                          ? `Wait ${regenerateCooldown}s`
-                          : 'Regenerate'}
-                    </Button>
+                      <ChevronLeft size={20} />
+                    </button>
+                  )}
+
+                  {/* Title text */}
+                  <div className={styles.titleContent}>
+                    <div className={styles.generatedTitleText}>
+                      {episodeContext.title || 'No title generated yet'}
+                    </div>
+                    {titleHistory.length > 1 && (
+                      <div className={styles.titleCounter}>
+                        {currentTitleIndex + 1} of {titleHistory.length}
+                      </div>
+                    )}
                   </div>
+
+                  {/* Navigation - Next */}
+                  {titleHistory.length > 1 && (
+                    <button
+                      type="button"
+                      className={styles.titleNavButton}
+                      onClick={handleNextTitle}
+                      disabled={currentTitleIndex === titleHistory.length - 1}
+                      title="Next title"
+                    >
+                      <ChevronRight size={20} />
+                    </button>
+                  )}
                 </div>
               )}
 
-              {/* Regeneration limit info */}
-              {regenerationCount > 0 && (
-                <p className={styles.regenerationInfo}>
-                  {regenerationCount} of {MAX_REGENERATIONS} regenerations used
-                </p>
+              {/* Action buttons below the title */}
+              {!isEditingTitle && (
+                <div className={styles.titleActionBar}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={Edit3}
+                    onClick={handleStartEditTitle}
+                    disabled={!hasTitle}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={isRegenerating ? Loader2 : RefreshCw}
+                    onClick={handleRegenerateTitle}
+                    disabled={!canRegenerate}
+                    title={
+                      regenerationCount >= MAX_REGENERATIONS
+                        ? 'Maximum regenerations reached'
+                        : regenerateCooldown > 0
+                          ? `Wait ${regenerateCooldown}s`
+                          : 'Generate a new title'
+                    }
+                  >
+                    {isRegenerating
+                      ? 'Generating...'
+                      : regenerateCooldown > 0
+                        ? `Wait ${regenerateCooldown}s`
+                        : 'Regenerate'}
+                  </Button>
+                  {regenerationCount > 0 && (
+                    <span className={styles.regenerationInfo}>
+                      {regenerationCount} of {MAX_REGENERATIONS} regenerations used
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           </Card>

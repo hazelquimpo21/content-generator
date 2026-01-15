@@ -420,6 +420,8 @@
   transform: translateX(-50%);
   border: 5px solid transparent;
   border-bottom-color: var(--color-text-primary);
+}
+
 /* Center indicator */
 .sliderCenter {
   position: absolute;
@@ -497,6 +499,9 @@
 
   .endpointLeft {
     order: 1;
+  }
+}
+
 @media (max-width: 640px) {
   .sliderRow {
     flex-direction: column;

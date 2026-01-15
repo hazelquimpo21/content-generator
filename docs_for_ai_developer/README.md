@@ -2,18 +2,20 @@
 
 ## 🎯 Quick Start for Claude Code
 
-You are about to build a sophisticated AI-powered application that transforms podcast transcripts into polished blog posts, social content, and email campaigns. This documentation suite contains everything you need.
+You are about to build a sophisticated AI-powered application that transforms podcast transcripts into polished blog posts, social content, and email campaigns through a **4-phase AI pipeline** with **10 stages (0-9)**.
 
 **Start here:**
 1. Read `PROJECT-OVERVIEW.md` for the big picture
-2. Review `ARCHITECTURE.md` to understand the system design
-3. Follow `IMPLEMENTATION-GUIDE.md` step-by-step to build
+2. Review `ARCHITECTURE.md` to understand the system design and philosophy
+3. Read `PIPELINE-REFERENCE.md` for complete stage/phase documentation
+4. Follow `IMPLEMENTATION-GUIDE.md` step-by-step to build
 
-**Key Principles:**
+**Core Philosophy:**
+- ✅ **Focused Analyzers:** Each analyzer does ONE thing well; split tasks and run in parallel
 - ✅ **Modularity First:** No file over 400 lines
+- ✅ **Parallel Execution:** ~30% faster through strategic parallelization
+- ✅ **Canonical Data Sources:** Single source of truth (Stage 1 = summary, Stage 2 = quotes)
 - ✅ **Log Everything:** Structured logging for debugging and cost tracking
-- ✅ **Comment Intentions:** Why code exists, not what it does
-- ✅ **Test as You Build:** Unit tests for every module
 
 ---
 
@@ -36,22 +38,37 @@ You are about to build a sophisticated AI-powered application that transforms po
 ---
 
 #### 2. ARCHITECTURE.md
-**Purpose:** System design and technical architecture  
-**Read When:** Before writing any code  
+**Purpose:** System design, philosophy, and technical architecture
+**Read When:** Before writing any code
 **Key Content:**
+- **Design philosophy: Focused Analyzers**
 - Modularity requirements (400-line rule)
 - Code organization and file structure
-- Data flow through 9-stage pipeline
+- 4-phase pipeline with parallel execution
+- Stage-to-model mapping
 - Error handling patterns
 - Logging architecture
-- Database interaction patterns
-- Real-time updates with Supabase
 
 **Read First:** ⭐⭐⭐⭐⭐
 
 ---
 
-#### 3. DATABASE-SCHEMA.md
+#### 3. PIPELINE-REFERENCE.md ⭐ NEW
+**Purpose:** Complete pipeline documentation with philosophy
+**Read When:** Understanding how stages work and why
+**Key Content:**
+- **"Analyzers work best when they don't have too many jobs"**
+- Stage 8 case study (4 platform-specific analyzers)
+- Visual phase diagrams
+- Stage reference table with models
+- Task dependencies
+- Performance benefits
+
+**Critical:** This document explains the core design philosophy.
+
+---
+
+#### 4. DATABASE-SCHEMA.md
 **Purpose:** Complete Supabase schema and relationships  
 **Read When:** Setting up database, querying data  
 **Key Content:**
@@ -68,8 +85,8 @@ You are about to build a sophisticated AI-powered application that transforms po
 
 ### Design & UX Documents
 
-#### 4. DESIGN-SYSTEM.md
-**Purpose:** Visual design language and component patterns  
+#### 5. DESIGN-SYSTEM.md
+**Purpose:** Visual design language and component patterns
 **Read When:** Building any UI component  
 **Key Content:**
 - Color palette (warm beiges, serif elegance)
@@ -83,7 +100,7 @@ You are about to build a sophisticated AI-powered application that transforms po
 
 ---
 
-#### 5. PAGE-SPECIFICATIONS.md
+#### 6. PAGE-SPECIFICATIONS.md
 **Purpose:** Detailed specs for all 6 pages  
 **Read When:** Building frontend pages  
 **Key Content:**
@@ -100,7 +117,7 @@ You are about to build a sophisticated AI-powered application that transforms po
 
 ### Development Guidelines
 
-#### 6. CODE-STANDARDS.md
+#### 7. CODE-STANDARDS.md
 **Purpose:** Coding conventions and best practices  
 **Read When:** Before writing any code  
 **Key Content:**
@@ -120,13 +137,13 @@ You are about to build a sophisticated AI-powered application that transforms po
 
 ### AI & Prompts
 
-#### 7. PROMPT-LIBRARY.md
-**Purpose:** All AI prompts with quality frameworks  
-**Read When:** Building analyzer modules  
+#### 8. PROMPT-LIBRARY.md
+**Purpose:** All AI prompts with quality frameworks
+**Read When:** Building analyzer modules
 **Key Content:**
 - Universal "Never Use" list (therapy clichés, AI-speak)
 - Quality frameworks for each content type
-- All 9 stage prompts with:
+- All stage prompts (including 4 platform-specific Stage 8 prompts):
   - Role & context
   - Task description
   - Quality criteria
@@ -134,14 +151,14 @@ You are about to build a sophisticated AI-powered application that transforms po
   - Function calling schemas
   - Self-verification checklists
 
-**Use During:** AI pipeline phase (Days 6-10)  
+**Use During:** AI pipeline phase
 **Critical:** These prompts define output quality
 
 ---
 
 ### API & Backend
 
-#### 8. API-ENDPOINTS.md
+#### 9. API-ENDPOINTS.md
 **Purpose:** Complete REST API specification  
 **Read When:** Building backend routes  
 **Key Content:**
@@ -159,7 +176,7 @@ You are about to build a sophisticated AI-powered application that transforms po
 
 ### Implementation
 
-#### 9. IMPLEMENTATION-GUIDE.md
+#### 10. IMPLEMENTATION-GUIDE.md
 **Purpose:** Step-by-step build roadmap  
 **Read When:** Starting each new phase  
 **Key Content:**
@@ -254,15 +271,18 @@ NEVER LOG:
 ```
 project/
 ├── backend/
-│   ├── analyzers/          # 9 files, one per stage
+│   ├── analyzers/          # 10 stage files (Stage 8 has 4 platform exports)
+│   │   ├── stage-00-preprocess-transcript.js
 │   │   ├── stage-01-analyze-transcript.js
 │   │   ├── stage-02-extract-quotes.js
-│   │   └── ... (stages 3-9)
+│   │   ├── ... (stages 3-7)
+│   │   ├── stage-08-social-platform.js  # 4 exports: Instagram, Twitter, etc.
+│   │   └── stage-09-generate-email.js
 │   │
-│   ├── parsers/            # 9 files, validate stage outputs
+│   ├── parsers/            # Validate stage outputs
 │   │   ├── parse-episode-analysis.js
 │   │   ├── parse-quotes.js
-│   │   └── ... (stages 3-9)
+│   │   └── ...
 │   │
 │   ├── lib/                # Shared utilities
 │   │   ├── api-client-openai.js
@@ -274,9 +294,15 @@ project/
 │   │   └── retry-logic.js
 │   │
 │   ├── prompts/            # AI prompt templates (markdown)
+│   │   ├── stage-00-transcript-preprocessing.md
 │   │   ├── stage-01-transcript-analysis.md
 │   │   ├── stage-02-quote-extraction.md
-│   │   └── ... (all 9 stages)
+│   │   ├── ... (stages 3-7)
+│   │   ├── stage-08-instagram.md        # Platform-specific prompts
+│   │   ├── stage-08-twitter.md
+│   │   ├── stage-08-linkedin.md
+│   │   ├── stage-08-facebook.md
+│   │   └── stage-09-email-campaign.md
 │   │
 │   ├── api/
 │   │   ├── routes/
@@ -289,9 +315,11 @@ project/
 │   │   │   └── logger-middleware.js
 │   │   └── server.js
 │   │
-│   ├── orchestrator/
-│   │   ├── episode-processor.js
-│   │   └── stage-runner.js
+│   ├── orchestrator/       # Pipeline coordination
+│   │   ├── episode-processor.js   # Main orchestrator
+│   │   ├── phase-config.js        # Phase/task definitions
+│   │   ├── phase-executor.js      # Parallel execution
+│   │   └── stage-runner.js        # Stage execution bridge
 │   │
 │   └── types/              # TypeScript definitions
 │       ├── episode.ts
@@ -326,16 +354,19 @@ project/
 │   └── utils/
 │       └── api-client.js
 │
-└── docs/                   # This documentation
-    ├── PROJECT-OVERVIEW.md
-    ├── ARCHITECTURE.md
-    ├── DATABASE-SCHEMA.md
-    ├── DESIGN-SYSTEM.md
-    ├── PAGE-SPECIFICATIONS.md
-    ├── CODE-STANDARDS.md
-    ├── PROMPT-LIBRARY.md
-    ├── API-ENDPOINTS.md
-    └── IMPLEMENTATION-GUIDE.md
+└── docs_for_ai_developer/  # This documentation
+    ├── README.md              # Documentation index (this file)
+    ├── PROJECT-OVERVIEW.md    # High-level project description
+    ├── ARCHITECTURE.md        # System design + philosophy
+    ├── PIPELINE-REFERENCE.md  # Complete pipeline docs + focused analyzer philosophy
+    ├── STAGE-DATA-FLOW.md     # Data flow between stages
+    ├── DATABASE-SCHEMA.md     # Supabase schema
+    ├── DESIGN-SYSTEM.md       # UI design tokens
+    ├── PAGE-SPECIFICATIONS.md # Frontend page specs
+    ├── CODE-STANDARDS.md      # Coding conventions
+    ├── PROMPT-LIBRARY.md      # AI prompts
+    ├── API-ENDPOINTS.md       # REST API spec
+    └── IMPLEMENTATION-GUIDE.md # Build roadmap
 ```
 
 ---

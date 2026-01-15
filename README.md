@@ -12,11 +12,12 @@ Transform podcast transcripts into polished blog posts, social media content, an
 
 ## Features
 
-- **10-Stage AI Pipeline**: Systematic content generation from transcript preprocessing to final outputs
-- **Multiple AI Models**: Claude Haiku (stage 0 preprocessing) + GPT-5 mini (stages 1-6) + Claude Sonnet (stages 7-9)
-- **Real-time Progress**: Watch processing happen stage-by-stage
+- **4-Phase AI Pipeline**: 10 stages organized into parallel execution phases for 30% faster processing
+- **Focused Analyzer Philosophy**: Each analyzer does ONE thing well; Stage 8 is split into 4 platform-specific tasks
+- **Multiple AI Models**: Claude Haiku (preprocessing, quotes) + GPT-5 mini (analysis, planning, drafting) + Claude Sonnet (refinement, social, email)
+- **Real-time Progress**: Watch processing happen phase-by-phase with parallel task execution
 - **Content Review Hub**: View, edit, and copy all generated content
-- **Cost Tracking**: Monitor API usage and costs per episode
+- **Cost Tracking**: Monitor API usage and costs per episode (~$0.05-0.18 per episode)
 - **Elegant UI**: Warm, accessible design with Lora + Inter typography
 
 ## Tech Stack
@@ -150,22 +151,64 @@ Visit `http://localhost:5173` to see the app.
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### The 10-Stage Pipeline (0-9)
+### The 4-Phase Pipeline
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 🚪 PRE-GATE: Stage 0 (conditional, only for long transcripts)           │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 📤 PHASE 1: EXTRACT (parallel)                                          │
+│    Stage 1: Transcript Analysis (GPT-5 mini)                            │
+│    Stage 2: Quote Extraction (Claude Haiku)                             │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 📋 PHASE 2: PLAN (outline first, then parallel)                         │
+│    Stage 3: Blog Outline (GPT-5 mini)                                   │
+│    Stage 4: Paragraph Details (GPT-5 mini) ─┐                           │
+│    Stage 5: Headlines & Copy (GPT-5 mini) ──┴─ parallel                 │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ✍️ PHASE 3: WRITE (sequential)                                          │
+│    Stage 6: Blog Draft (GPT-5 mini)                                     │
+│    Stage 7: Refinement (Claude Sonnet)                                  │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 📣 PHASE 4: DISTRIBUTE (5 tasks parallel)                               │
+│    Stage 8a: Instagram (Claude Sonnet) ─┐                               │
+│    Stage 8b: Twitter/X (Claude Sonnet)  │                               │
+│    Stage 8c: LinkedIn (Claude Sonnet)   ├─ parallel (focused analyzers) │
+│    Stage 8d: Facebook (Claude Sonnet)   │                               │
+│    Stage 9: Email (Claude Sonnet) ──────┘                               │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Stage Reference
 
 | Stage | Name | Model | Output |
 |-------|------|-------|--------|
-| 0 | Transcript Preprocessing | Claude Haiku | Compressed summary + quotes (for long transcripts) |
-| 1 | Transcript Analysis | GPT-5 mini | Themes, structure, audiences |
-| 2 | Quote Extraction | GPT-5 mini | Key quotes with context |
-| 3 | Title Generation | GPT-5 mini | SEO-optimized titles |
-| 4 | Summary Writing | GPT-5 mini | Short/medium/long summaries |
-| 5 | Outline Creation | GPT-5 mini | Blog post structure |
-| 6 | Blog Post Draft | GPT-5 mini | Full draft content |
-| 7 | Blog Post Editing | Claude Sonnet | Polished final version |
-| 8 | Social Content | Claude Sonnet | Platform-specific posts |
-| 9 | Email Campaign | Claude Sonnet | Newsletter content |
+| 0 | Preprocessing | Claude Haiku | Summary + topics (long transcripts only) |
+| 1 | Transcript Analysis | GPT-5 mini | `episode_crux` (canonical summary), metadata |
+| 2 | Quote Extraction | Claude Haiku | `quotes[]` (canonical quotes source) |
+| 3 | Blog Outline | GPT-5 mini | `post_structure` |
+| 4 | Paragraph Details | GPT-5 mini | `section_details[]` |
+| 5 | Headlines & Copy | GPT-5 mini | `headlines[]`, `taglines[]` |
+| 6 | Blog Draft | GPT-5 mini | Full blog post (~750 words) |
+| 7 | Refinement | Claude Sonnet | Polished final version |
+| 8a-d | Social Content | Claude Sonnet | Instagram, Twitter, LinkedIn, Facebook posts |
+| 9 | Email Campaign | Claude Sonnet | Subject lines + newsletter body |
 
 > **Note:** Stage 0 is automatically skipped for short transcripts (< 8000 tokens).
+>
+> **Philosophy:** Stage 8 is split into 4 platform-specific analyzers because focused analyzers produce better results. See [PIPELINE-REFERENCE.md](docs_for_ai_developer/PIPELINE-REFERENCE.md) for details.
 
 ### Data Flow
 
@@ -178,12 +221,17 @@ Visit `http://localhost:5173` to see the app.
                     ┌──────────────────────────┘
                     ▼
      ┌──────────────────────────────────────────────────┐
-     │                 STAGE PIPELINE                   │
+     │              4-PHASE PIPELINE                    │
      │                                                  │
-     │  [0] Preprocess ──► [1] Analyze ──► [2] Quotes  │
-     │  ──► [3] Titles ──► [4] Summary ──► [5] Outline │
-     │  ──► [6] Draft ──► [7] Edit ──► [8] Social     │
-     │  ──► [9] Email                                  │
+     │  PRE-GATE: [0] Preprocess (if needed)           │
+     │                    │                             │
+     │  PHASE 1:    [1] ──┴── [2]    (parallel)        │
+     │                    │                             │
+     │  PHASE 2:   [3] ─► [4] ─┬─ [5]  (grouped)       │
+     │                    │                             │
+     │  PHASE 3:   [6] ─────► [7]    (sequential)      │
+     │                    │                             │
+     │  PHASE 4:  [8a][8b][8c][8d][9] (5 parallel)     │
      │                                                  │
      └──────────────────────────────────────────────────┘
                     │
@@ -192,7 +240,7 @@ Visit `http://localhost:5173` to see the app.
      │               GENERATED CONTENT                  │
      │  ┌────────┐  ┌─────────┐  ┌──────────────────┐  │
      │  │  Blog  │  │ Social  │  │  Email Campaign  │  │
-     │  │  Post  │  │  Posts  │  │    (Newsletter)  │  │
+     │  │  Post  │  │ (4 plat)│  │    (Newsletter)  │  │
      │  └────────┘  └─────────┘  └──────────────────┘  │
      └──────────────────────────────────────────────────┘
 ```
@@ -230,8 +278,10 @@ content-generator/
 │   │   └── supabase-client.js
 │   │
 │   ├── orchestrator/            # Pipeline coordination
-│   │   ├── episode-processor.js
-│   │   └── stage-runner.js
+│   │   ├── episode-processor.js # Main orchestrator
+│   │   ├── phase-config.js      # Phase/task definitions
+│   │   ├── phase-executor.js    # Parallel execution logic
+│   │   └── stage-runner.js      # Individual stage execution
 │   │
 │   ├── prompts/                 # AI prompt templates
 │   │   ├── shared/

@@ -233,7 +233,9 @@ export function calculateCostDetailed(model, inputTokens, outputTokens) {
  * - Uses Claude Haiku (200K context window, cheap)
  *
  * Stages 1-2: Use preprocessed summary if Stage 0 ran, otherwise raw transcript
- * Stages 3-9: Use outputs from previous stages (smaller context)
+ * Stages 3-7: Use outputs from previous stages (smaller context)
+ * Stage 8: Now runs 4 parallel platform-specific analyzers (Instagram, Twitter, LinkedIn, Facebook)
+ * Stage 9: Email campaign
  */
 const STAGE_TOKEN_ESTIMATES = {
   0: { input: 0, output: 2500 },     // Preprocessing (input varies by transcript size)
@@ -244,8 +246,18 @@ const STAGE_TOKEN_ESTIMATES = {
   5: { input: 2000, output: 1200 },  // Headlines
   6: { input: 4000, output: 1500 },  // Draft Generation
   7: { input: 3000, output: 1200 },  // Refinement (Claude)
-  8: { input: 2500, output: 2000 },  // Social Content (Claude)
   9: { input: 2000, output: 1500 },  // Email Campaign (Claude)
+};
+
+/**
+ * Stage 8 is now 4 parallel platform-specific analyzers
+ * Each generates 5 posts with platform-specific formatting
+ */
+const STAGE_8_PLATFORM_ESTIMATES = {
+  instagram: { input: 2500, output: 600 },  // 5 posts with captions + hashtags
+  twitter: { input: 2500, output: 400 },    // 5 short posts (<280 chars each)
+  linkedin: { input: 2500, output: 700 },   // 5 professional posts (longer form)
+  facebook: { input: 2500, output: 600 },   // 5 community posts
 };
 
 const STAGE_MODELS = {
@@ -257,8 +269,15 @@ const STAGE_MODELS = {
   5: 'gpt-5-mini',
   6: 'gpt-5-mini',
   7: 'claude-sonnet-4-20250514',
-  8: 'claude-sonnet-4-20250514',
   9: 'claude-sonnet-4-20250514',
+};
+
+// Stage 8 models (all use Sonnet for quality social content)
+const STAGE_8_PLATFORM_MODELS = {
+  instagram: 'claude-sonnet-4-20250514',
+  twitter: 'claude-sonnet-4-20250514',
+  linkedin: 'claude-sonnet-4-20250514',
+  facebook: 'claude-sonnet-4-20250514',
 };
 
 // Threshold for when preprocessing is needed (in estimated tokens)
@@ -311,8 +330,8 @@ export function estimateEpisodeCost(transcript) {
     });
   }
 
-  // Stages 1-9
-  for (let stage = 1; stage <= 9; stage++) {
+  // Stages 1-7 (non-social stages)
+  for (let stage = 1; stage <= 7; stage++) {
     const { input, output } = STAGE_TOKEN_ESTIMATES[stage];
     const model = STAGE_MODELS[stage];
 
@@ -326,7 +345,7 @@ export function estimateEpisodeCost(transcript) {
       // Stages 3-6: Use outputs from previous stages (not full transcript)
       adjustedInput = input + 2000; // approximate context from previous stages
     } else {
-      // Stages 7-9 (Claude): Smaller context from previous stages
+      // Stage 7 (Claude): Smaller context from previous stages
       adjustedInput = input + Math.min(transcriptTokens, 1000);
     }
 
@@ -342,8 +361,65 @@ export function estimateEpisodeCost(transcript) {
     });
   }
 
-  // Calculate estimated time (preprocessing adds ~30s for long transcripts)
-  const totalStages = needsPreprocessing ? 10 : 9;
+  // Stage 8: 4 parallel platform-specific social content generators
+  const platforms = ['instagram', 'twitter', 'linkedin', 'facebook'];
+  let stage8TotalCost = 0;
+  const stage8Platforms = [];
+
+  for (const platform of platforms) {
+    const { input, output } = STAGE_8_PLATFORM_ESTIMATES[platform];
+    const model = STAGE_8_PLATFORM_MODELS[platform];
+
+    // Each platform gets same context (blog post, summary, quotes, etc.)
+    const adjustedInput = input + Math.min(transcriptTokens, 1000);
+
+    const platformCost = calculateCost(model, adjustedInput, output);
+    stage8TotalCost += platformCost;
+
+    stage8Platforms.push({
+      platform,
+      model,
+      inputTokens: adjustedInput,
+      outputTokens: output,
+      cost: platformCost,
+    });
+  }
+
+  totalCost += stage8TotalCost;
+  stageBreakdown.push({
+    stage: 8,
+    name: 'Social Content',
+    model: 'claude-sonnet-4-20250514 (x4)',
+    inputTokens: stage8Platforms.reduce((sum, p) => sum + p.inputTokens, 0),
+    outputTokens: stage8Platforms.reduce((sum, p) => sum + p.outputTokens, 0),
+    cost: stage8TotalCost,
+    note: '4 parallel platform analyzers (Instagram, Twitter, LinkedIn, Facebook)',
+    platforms: stage8Platforms,
+  });
+
+  // Stage 9: Email Campaign
+  {
+    const { input, output } = STAGE_TOKEN_ESTIMATES[9];
+    const model = STAGE_MODELS[9];
+    const adjustedInput = input + Math.min(transcriptTokens, 1000);
+
+    const stageCost = calculateCost(model, adjustedInput, output);
+    totalCost += stageCost;
+
+    stageBreakdown.push({
+      stage: 9,
+      model,
+      inputTokens: adjustedInput,
+      outputTokens: output,
+      cost: stageCost,
+    });
+  }
+
+  // Calculate estimated time
+  // Stages 1-7 + stage 8 (parallel, counts as 1 time slot) + stage 9 = 9 stages
+  // Add 1 for preprocessing if needed
+  const baseStages = 9; // stages 1-7 + 1 for parallel stage 8 + stage 9
+  const totalStages = needsPreprocessing ? baseStages + 1 : baseStages;
   const estimatedTimeSeconds = totalStages * 30;
   const minutes = Math.ceil(estimatedTimeSeconds / 60);
 
@@ -397,4 +473,6 @@ export default {
   OPENAI_PRICING,
   ANTHROPIC_PRICING,
   STAGE_MODELS,
+  STAGE_8_PLATFORM_MODELS,
+  STAGE_8_PLATFORM_ESTIMATES,
 };

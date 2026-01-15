@@ -69,6 +69,21 @@ const STAGE_NAMES = {
   9: 'Email Campaign',
 };
 
+/**
+ * Stage 8 sub-stage names for platform-specific social content
+ */
+const STAGE_8_SUBSTAGE_NAMES = {
+  instagram: 'Social Content (Instagram)',
+  twitter: 'Social Content (Twitter/X)',
+  linkedin: 'Social Content (LinkedIn)',
+  facebook: 'Social Content (Facebook)',
+};
+
+/**
+ * Valid sub-stages for Stage 8
+ */
+const STAGE_8_SUBSTAGES = ['instagram', 'twitter', 'linkedin', 'facebook'];
+
 // ============================================================================
 // EPISODE REPOSITORY
 // ============================================================================
@@ -371,51 +386,69 @@ export const stageRepo = {
    * // stages = [{stage_number: 0, status: 'pending', ...}, ...]
    */
   async createAllStages(episodeId) {
+    // Stage 8 is now split into 4 platform-specific sub-stages
+    // Total records: 10 (stages 0-7, 9) + 4 (stage 8 platforms) = 13
+    const totalRecords = 13;
+
     // Log the batch insert operation with full context for debugging
     logger.dbQuery('insert', 'stage_outputs (batch)', {
       episodeId,
-      stageCount: 10,
-      stageRange: '0-9',
+      stageCount: totalRecords,
+      stageRange: '0-9 (with 4 Stage 8 sub-stages)',
       operation: 'createAllStages',
     });
 
     const stages = [];
 
-    // Build stage records for all 10 stages (0-9)
+    // Build stage records for stages 0-7 and 9
     for (let stageNum = 0; stageNum <= 9; stageNum++) {
       let model, provider;
 
       if (stageNum === 0) {
         // Stage 0: Preprocessing uses Claude Haiku (200K context window)
-        // This stage compresses long transcripts for downstream processing
         model = 'claude-3-5-haiku-20241022';
         provider = 'anthropic';
       } else if (stageNum <= 6) {
         // Stages 1-6: GPT-5 mini for analysis and drafting
-        // These stages extract insights and generate the blog post draft
         model = 'gpt-5-mini';
         provider = 'openai';
       } else {
         // Stages 7-9: Claude Sonnet for refinement and distribution
-        // These stages polish content and generate social/email outputs
         model = 'claude-sonnet-4-20250514';
         provider = 'anthropic';
       }
 
-      stages.push({
-        episode_id: episodeId,
-        stage_number: stageNum,
-        stage_name: STAGE_NAMES[stageNum],
-        status: 'pending',
-        model_used: model,
-        provider: provider,
-      });
+      // Stage 8 is special - create 4 platform-specific sub-stages instead of 1
+      if (stageNum === 8) {
+        for (const platform of STAGE_8_SUBSTAGES) {
+          stages.push({
+            episode_id: episodeId,
+            stage_number: 8,
+            sub_stage: platform,
+            stage_name: STAGE_8_SUBSTAGE_NAMES[platform],
+            status: 'pending',
+            model_used: model,
+            provider: provider,
+          });
+        }
+      } else {
+        stages.push({
+          episode_id: episodeId,
+          stage_number: stageNum,
+          sub_stage: null,
+          stage_name: STAGE_NAMES[stageNum],
+          status: 'pending',
+          model_used: model,
+          provider: provider,
+        });
+      }
     }
 
     // Log the stages we're about to insert for debugging constraint issues
     logger.debug('Preparing to insert stage records', {
       episodeId,
       stageNumbers: stages.map(s => s.stage_number),
+      subStages: stages.map(s => s.sub_stage).filter(Boolean),
       stageNames: stages.map(s => s.stage_name),
     });
 
@@ -477,39 +510,63 @@ export const stageRepo = {
   },
 
   /**
-   * Finds a specific stage output by episode ID and stage number
+   * Finds a specific stage output by episode ID, stage number, and optional sub-stage
    *
    * @param {string} episodeId - Episode UUID
    * @param {number} stageNumber - Stage number (0-9)
+   * @param {string|null} [subStage=null] - Sub-stage for Stage 8 (instagram, twitter, linkedin, facebook)
    * @returns {Promise<Object>} Stage record with all fields
-   * @throws {NotFoundError} If stage record doesn't exist for the given episode/stage
+   * @throws {NotFoundError} If stage record doesn't exist for the given episode/stage/subStage
    *
    * @example
+   * // Regular stage
    * const stage = await stageRepo.findByEpisodeAndStage('uuid', 0);
-   * // stage = { id, episode_id, stage_number: 0, stage_name: 'Transcript Preprocessing', ... }
+   *
+   * // Stage 8 with sub-stage
+   * const stage = await stageRepo.findByEpisodeAndStage('uuid', 8, 'instagram');
    */
-  async findByEpisodeAndStage(episodeId, stageNumber) {
+  async findByEpisodeAndStage(episodeId, stageNumber, subStage = null) {
+    const stageName = subStage
+      ? STAGE_8_SUBSTAGE_NAMES[subStage] || `Stage ${stageNumber} (${subStage})`
+      : STAGE_NAMES[stageNumber];
+
     logger.debug('Finding stage output', {
       episodeId,
       stageNumber,
-      stageName: STAGE_NAMES[stageNumber],
+      subStage,
+      stageName,
     });
 
-    const { data: stage, error } = await db
+    let query = db
       .from('stage_outputs')
       .select('*')
       .eq('episode_id', episodeId)
-      .eq('stage_number', stageNumber)
-      .single();
+      .eq('stage_number', stageNumber);
+
+    // Handle sub_stage filtering
+    if (subStage) {
+      query = query.eq('sub_stage', subStage);
+    } else if (stageNumber !== 8) {
+      // For non-Stage 8, sub_stage should be null
+      query = query.is('sub_stage', null);
+    }
+    // Note: If stageNumber is 8 and no subStage is provided, this will fail
+    // because Stage 8 always requires a subStage
+
+    const { data: stage, error } = await query.single();
 
     if (error || !stage) {
       logger.debug('Stage output not found', {
         episodeId,
         stageNumber,
-        stageName: STAGE_NAMES[stageNumber],
+        subStage,
+        stageName,
         error: error?.message,
       });
-      throw new NotFoundError('stage_output', `${episodeId}:${stageNumber}`);
+      const stageIdentifier = subStage
+        ? `${episodeId}:${stageNumber}:${subStage}`
+        : `${episodeId}:${stageNumber}`;
+      throw new NotFoundError('stage_output', stageIdentifier);
     }
 
     return stage;
@@ -537,11 +594,12 @@ export const stageRepo = {
   },
 
   /**
-   * Updates stage by episode ID and stage number
+   * Updates stage by episode ID, stage number, and optional sub-stage
    *
    * @param {string} episodeId - Episode UUID
    * @param {number} stageNumber - Stage number (0-9)
    * @param {Object} updates - Fields to update
+   * @param {string|null} [subStage=null] - Sub-stage for Stage 8 (instagram, twitter, linkedin, facebook)
    * @returns {Promise<Object>} Updated stage
    * @throws {DatabaseError} If update fails or stage record doesn't exist
    *
@@ -550,28 +608,42 @@ export const stageRepo = {
    * - Multiple rows match (data integrity issue)
    * - Database connection error
    */
-  async updateByEpisodeAndStage(episodeId, stageNumber, updates) {
+  async updateByEpisodeAndStage(episodeId, stageNumber, updates, subStage = null) {
+    const stageName = subStage
+      ? STAGE_8_SUBSTAGE_NAMES[subStage] || `Stage ${stageNumber} (${subStage})`
+      : STAGE_NAMES[stageNumber];
+
     logger.debug('Updating stage by episode and stage number', {
       episodeId,
       stageNumber,
-      stageName: STAGE_NAMES[stageNumber],
+      subStage,
+      stageName,
       updateFields: Object.keys(updates),
     });
 
-    const { data: stage, error } = await db
+    let query = db
       .from('stage_outputs')
       .update(updates)
       .eq('episode_id', episodeId)
-      .eq('stage_number', stageNumber)
-      .select()
-      .single();
+      .eq('stage_number', stageNumber);
+
+    // Handle sub_stage filtering
+    if (subStage) {
+      query = query.eq('sub_stage', subStage);
+    } else if (stageNumber !== 8) {
+      // For non-Stage 8, sub_stage should be null
+      query = query.is('sub_stage', null);
+    }
+
+    const { data: stage, error } = await query.select().single();
 
     if (error) {
       // Provide detailed error logging for debugging
       logger.error('Failed to update stage record', {
         episodeId,
         stageNumber,
-        stageName: STAGE_NAMES[stageNumber],
+        subStage,
+        stageName,
         updateFields: Object.keys(updates),
         errorCode: error.code,
         errorMessage: error.message,
@@ -583,7 +655,7 @@ export const stageRepo = {
       if (error.code === 'PGRST116' || error.message.includes('single row')) {
         throw new DatabaseError(
           'update',
-          `Failed to update stage ${stageNumber} (${STAGE_NAMES[stageNumber]}): ` +
+          `Failed to update stage ${stageNumber} (${stageName}): ` +
           `Stage record not found. Ensure stage records are created before processing. ` +
           `This usually happens when start_from_stage > 0 on a fresh episode.`
         );
@@ -596,18 +668,20 @@ export const stageRepo = {
       logger.error('Stage update returned no data', {
         episodeId,
         stageNumber,
-        stageName: STAGE_NAMES[stageNumber],
+        subStage,
+        stageName,
       });
       throw new DatabaseError(
         'update',
-        `Stage ${stageNumber} (${STAGE_NAMES[stageNumber]}) not found for episode ${episodeId}`
+        `Stage ${stageNumber} (${stageName}) not found for episode ${episodeId}`
       );
     }
 
     logger.debug('Stage updated successfully', {
       episodeId,
       stageNumber,
-      stageName: STAGE_NAMES[stageNumber],
+      subStage,
+      stageName,
       newStatus: stage.status,
     });
 
@@ -619,6 +693,7 @@ export const stageRepo = {
    *
    * @param {string} episodeId - Episode UUID
    * @param {number} stageNumber - Stage number (0-9)
+   * @param {string|null} [subStage=null] - Sub-stage for Stage 8 (instagram, twitter, linkedin, facebook)
    * @returns {Promise<Object>} Updated stage record
    * @throws {DatabaseError} If stage record doesn't exist or update fails
    *
@@ -626,25 +701,31 @@ export const stageRepo = {
    * - Stage records must exist (created via createAllStages)
    * - Stage should be in 'pending' status
    */
-  async markProcessing(episodeId, stageNumber) {
+  async markProcessing(episodeId, stageNumber, subStage = null) {
+    const stageName = subStage
+      ? STAGE_8_SUBSTAGE_NAMES[subStage] || `Stage ${stageNumber} (${subStage})`
+      : STAGE_NAMES[stageNumber];
+
     // Log the state transition for debugging and monitoring
     logger.stateChange(episodeId, 'pending', 'processing', {
       stage: stageNumber,
-      stageName: STAGE_NAMES[stageNumber],
+      subStage,
+      stageName,
     });
 
     try {
       const result = await this.updateByEpisodeAndStage(episodeId, stageNumber, {
         status: 'processing',
         started_at: new Date().toISOString(),
-      });
+      }, subStage);
       return result;
     } catch (error) {
       // Add context about which stage failed to transition
       logger.error('Failed to mark stage as processing', {
         episodeId,
         stageNumber,
-        stageName: STAGE_NAMES[stageNumber],
+        subStage,
+        stageName,
         error: error.message,
       });
       throw error;
@@ -662,14 +743,18 @@ export const stageRepo = {
    * @param {number} result.input_tokens - Number of input tokens used
    * @param {number} result.output_tokens - Number of output tokens generated
    * @param {number} result.cost_usd - API cost in USD
+   * @param {string|null} [subStage=null] - Sub-stage for Stage 8 (instagram, twitter, linkedin, facebook)
    * @returns {Promise<Object>} Updated stage record
    * @throws {DatabaseError} If stage record doesn't exist or update fails
    */
-  async markCompleted(episodeId, stageNumber, result) {
+  async markCompleted(episodeId, stageNumber, result, subStage = null) {
     const completedAt = new Date().toISOString();
+    const stageName = subStage
+      ? STAGE_8_SUBSTAGE_NAMES[subStage] || `Stage ${stageNumber} (${subStage})`
+      : STAGE_NAMES[stageNumber];
 
     // Fetch the stage to calculate duration from started_at
-    const stage = await this.findByEpisodeAndStage(episodeId, stageNumber);
+    const stage = await this.findByEpisodeAndStage(episodeId, stageNumber, subStage);
 
     // Calculate processing duration in seconds
     const durationSeconds = stage.started_at
@@ -679,7 +764,8 @@ export const stageRepo = {
     // Log the state transition with performance metrics
     logger.stateChange(episodeId, 'processing', 'completed', {
       stage: stageNumber,
-      stageName: STAGE_NAMES[stageNumber],
+      subStage,
+      stageName,
       durationSeconds,
       costUsd: result.cost_usd,
       inputTokens: result.input_tokens,
@@ -696,12 +782,13 @@ export const stageRepo = {
         input_tokens: result.input_tokens,
         output_tokens: result.output_tokens,
         cost_usd: result.cost_usd,
-      });
+      }, subStage);
 
       logger.debug('Stage marked as completed', {
         episodeId,
         stageNumber,
-        stageName: STAGE_NAMES[stageNumber],
+        subStage,
+        stageName,
         durationSeconds,
         hasOutputData: !!result.output_data,
         hasOutputText: !!result.output_text,
@@ -712,7 +799,8 @@ export const stageRepo = {
       logger.error('Failed to mark stage as completed', {
         episodeId,
         stageNumber,
-        stageName: STAGE_NAMES[stageNumber],
+        subStage,
+        stageName,
         error: error.message,
       });
       throw error;
@@ -726,6 +814,7 @@ export const stageRepo = {
    * @param {number} stageNumber - Stage number (0-9)
    * @param {string} errorMessage - Human-readable error message
    * @param {Object|null} [errorDetails] - Full error details for debugging (JSON)
+   * @param {string|null} [subStage=null] - Sub-stage for Stage 8 (instagram, twitter, linkedin, facebook)
    * @returns {Promise<Object>} Updated stage record
    * @throws {DatabaseError} If stage record doesn't exist or update fails
    *
@@ -735,15 +824,20 @@ export const stageRepo = {
    * - API response details (if applicable)
    * - Any context that would help debugging
    */
-  async markFailed(episodeId, stageNumber, errorMessage, errorDetails = null) {
+  async markFailed(episodeId, stageNumber, errorMessage, errorDetails = null, subStage = null) {
+    const stageName = subStage
+      ? STAGE_8_SUBSTAGE_NAMES[subStage] || `Stage ${stageNumber} (${subStage})`
+      : STAGE_NAMES[stageNumber];
+
     // Fetch current stage to get retry count
-    const stage = await this.findByEpisodeAndStage(episodeId, stageNumber);
+    const stage = await this.findByEpisodeAndStage(episodeId, stageNumber, subStage);
     const newRetryCount = (stage.retry_count || 0) + 1;
 
     // Log the state transition with error context
     logger.stateChange(episodeId, 'processing', 'failed', {
       stage: stageNumber,
-      stageName: STAGE_NAMES[stageNumber],
+      subStage,
+      stageName,
       error: errorMessage,
       retryCount: newRetryCount,
     });
@@ -752,7 +846,8 @@ export const stageRepo = {
     logger.error('Stage failed', {
       episodeId,
       stageNumber,
-      stageName: STAGE_NAMES[stageNumber],
+      subStage,
+      stageName,
       errorMessage,
       retryCount: newRetryCount,
       hasErrorDetails: !!errorDetails,
@@ -764,14 +859,15 @@ export const stageRepo = {
         error_message: errorMessage,
         error_details: errorDetails,
         retry_count: newRetryCount,
-      });
+      }, subStage);
       return updatedStage;
     } catch (dbError) {
       // Log if we can't even record the failure
       logger.error('Failed to mark stage as failed (database error)', {
         episodeId,
         stageNumber,
-        stageName: STAGE_NAMES[stageNumber],
+        subStage,
+        stageName,
         originalError: errorMessage,
         dbError: dbError.message,
       });
@@ -1080,4 +1176,6 @@ export default {
   evergreenRepo,
   apiLogRepo,
   STAGE_NAMES,
+  STAGE_8_SUBSTAGE_NAMES,
+  STAGE_8_SUBSTAGES,
 };

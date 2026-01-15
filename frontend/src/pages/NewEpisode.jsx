@@ -227,9 +227,10 @@ function NewEpisode() {
     try {
       setIsRegenerating(true);
 
-      // Call API to regenerate title
+      // Call API to regenerate title with regenerate flag for variation
       const response = await api.post('/episodes/analyze-transcript', {
         transcript,
+        regenerate: true,
       });
 
       if (response.metadata?.suggested_title) {

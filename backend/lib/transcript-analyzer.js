@@ -141,6 +141,7 @@ For confidence:
  * @param {string} transcript - The podcast transcript to analyze
  * @param {Object} [options] - Analysis options
  * @param {number} [options.maxLength] - Max transcript length to send
+ * @param {boolean} [options.regenerateTitle] - If true, use higher temperature for title variation
  * @returns {Promise<Object>} Extracted metadata with usage stats
  *
  * @example
@@ -149,7 +150,7 @@ For confidence:
  * console.log(result.metadata.guest_name);
  */
 export async function analyzeTranscriptQuick(transcript, options = {}) {
-  const { maxLength = MAX_TRANSCRIPT_LENGTH } = options;
+  const { maxLength = MAX_TRANSCRIPT_LENGTH, regenerateTitle = false } = options;
 
   // Validate input
   if (!transcript || typeof transcript !== 'string') {
@@ -183,14 +184,32 @@ export async function analyzeTranscriptQuick(transcript, options = {}) {
   }
 
   // Build the analysis prompt
-  const userPrompt = `Analyze this podcast transcript and extract the key metadata.
+  let userPrompt;
+  if (regenerateTitle) {
+    // When regenerating, ask for a creative alternative title
+    userPrompt = `Analyze this podcast transcript and extract the key metadata.
+
+IMPORTANT: Generate a DIFFERENT, CREATIVE title than you might have suggested before.
+Try a different angle, focus on a different aspect of the content, or use a different style
+(e.g., question format, metaphor, action-oriented, benefit-focused).
+
+TRANSCRIPT:
+${processedTranscript}
+
+Extract the metadata using the provided tool, making sure the suggested_title is fresh and unique.`;
+  } else {
+    userPrompt = `Analyze this podcast transcript and extract the key metadata.
 
 TRANSCRIPT:
 ${processedTranscript}
 
 Extract the metadata using the provided tool.`;
+  }
 
   const startTime = Date.now();
+
+  // Use higher temperature when regenerating for more variety
+  const temperature = regenerateTitle ? 0.8 : 0.2;
 
   try {
     // Call Claude with structured output
@@ -200,7 +219,7 @@ Extract the metadata using the provided tool.`;
       inputSchema: TRANSCRIPT_METADATA_SCHEMA,
       model: ANALYSIS_MODEL,
       system: ANALYSIS_SYSTEM_PROMPT,
-      temperature: 0.2, // Low temperature for consistent extraction
+      temperature, // Higher temperature for regeneration, low for initial extraction
       maxTokens: 1024, // Small output for metadata
     });
 

@@ -82,8 +82,10 @@ backend/
 │   └── database.ts                          (~300 lines)
 │
 └── orchestrator/                 # Pipeline coordination
-    ├── episode-processor.js                 (~400 lines)
-    └── stage-runner.js                      (~300 lines)
+    ├── episode-processor.js                 (~450 lines - main orchestrator)
+    ├── stage-runner.js                      (~300 lines - stage execution)
+    ├── phase-config.js                      (~400 lines - phase definitions)
+    └── phase-executor.js                    (~350 lines - parallel execution)
 
 frontend/
 ├── components/
@@ -136,22 +138,87 @@ frontend/
     └── validation.js                        (~150 lines)
 ```
 
+## Phase-Based Execution Model
+
+The pipeline is organized into **4 phases** with parallel execution where possible:
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 🚪 PRE-GATE: Preprocessing (Conditional)                                  │
+│    Stage 0: preprocessTranscript (Claude Haiku)                          │
+│    Only runs if transcript > 8000 tokens                                 │
+└──────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 📤 PHASE 1: EXTRACT (Parallel) ⚡                                         │
+│    Stage 1: analyzeTranscript + Stage 2: extractQuotes                   │
+│    Both run in PARALLEL - they only need the transcript                  │
+└──────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 📋 PHASE 2: PLAN (Grouped)                                                │
+│    Stage 3: outline (first, sequential)                                  │
+│    Stage 4: paragraphs + Stage 5: headlines (then, PARALLEL) ⚡          │
+└──────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ ✍️ PHASE 3: WRITE (Sequential)                                            │
+│    Stage 6: draft → Stage 7: refine                                      │
+│    Must be sequential - refine needs the draft                           │
+└──────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ 📣 PHASE 4: DISTRIBUTE (Parallel) ⚡                                      │
+│    Stage 8: social + Stage 9: email                                      │
+│    Both run in PARALLEL - they only need the refined post                │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+### Performance Benefits
+
+| Phase | Execution | Time Saved |
+|-------|-----------|------------|
+| Phase 1 | 2 parallel | ~7 sec |
+| Phase 2 | 1 + 2 parallel | ~5 sec |
+| Phase 4 | 2 parallel | ~6 sec |
+| **Total** | | **~18 sec (30%)** |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `phase-config.js` | Phase definitions, task dependencies |
+| `phase-executor.js` | Parallel execution, timeout handling |
+| `episode-processor.js` | Main orchestrator, phase coordination |
+| `stage-runner.js` | Individual stage execution |
+
+### Design Principles
+
+1. **Atomic Phases**: A phase either fully succeeds or fully fails
+2. **Phase-Level Retry**: If any task fails, retry the entire phase
+3. **Isolated Results**: Parallel tasks write to isolated results, merged after
+4. **Fail Fast**: Cancel remaining tasks on first failure
+
 ## Stage-to-Model Mapping
 
 Each stage uses the most appropriate AI model for its task:
 
-| Stage | Name | Model | Provider | Purpose |
-|-------|------|-------|----------|---------|
-| 0 | Preprocessing | Claude Haiku | Anthropic | Compress long transcripts (200K context) |
-| 1 | Analysis | GPT-5 mini | OpenAI | Extract metadata, themes, audience |
-| 2 | **Quote Extraction** | **Claude Haiku** | Anthropic | Extract verbatim quotes (fast, accurate) |
-| 3 | Blog Outline | GPT-5 mini | OpenAI | High-level post structure |
-| 4 | Paragraph Outlines | GPT-5 mini | OpenAI | Detailed section plans |
-| 5 | Headlines | GPT-5 mini | OpenAI | Title and copy options |
-| 6 | Draft Generation | GPT-5 mini | OpenAI | Write the blog post |
-| 7 | Refinement | Claude Sonnet | Anthropic | Polish and improve |
-| 8 | Social Content | Claude Sonnet | Anthropic | Platform-specific posts |
-| 9 | Email Campaign | Claude Sonnet | Anthropic | Newsletter content |
+| Stage | Name | Model | Provider | Phase | Purpose |
+|-------|------|-------|----------|-------|---------|
+| 0 | Preprocessing | Claude Haiku | Anthropic | pregate | Compress long transcripts (200K context) |
+| 1 | Analysis | GPT-5 mini | OpenAI | extract | Extract metadata, themes, episode_crux |
+| 2 | **Quote Extraction** | **Claude Haiku** | Anthropic | extract | Extract verbatim quotes (fast, accurate) |
+| 3 | Blog Outline | GPT-5 mini | OpenAI | plan | High-level post structure |
+| 4 | Paragraph Outlines | GPT-5 mini | OpenAI | plan | Detailed section plans |
+| 5 | Headlines | GPT-5 mini | OpenAI | plan | Title and copy options |
+| 6 | Draft Generation | GPT-5 mini | OpenAI | write | Write the blog post |
+| 7 | Refinement | Claude Sonnet 4 | Anthropic | write | Polish and improve |
+| 8 | Social Content | Claude Sonnet 4 | Anthropic | distribute | Platform-specific posts |
+| 9 | Email Campaign | Claude Sonnet 4 | Anthropic | distribute | Newsletter content |
 
 ## Quote Architecture
 

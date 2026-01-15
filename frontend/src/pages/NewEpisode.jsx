@@ -29,7 +29,8 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { Button, Card, Input } from '@components/shared';
+import { Button, Card, Input, useToast } from '@components/shared';
+import { useProcessing } from '@contexts/ProcessingContext';
 import api from '@utils/api-client';
 import { useTranscriptAutoPopulate } from '@hooks/useTranscriptAutoPopulate';
 import styles from './NewEpisode.module.css';
@@ -51,6 +52,8 @@ const MAX_REGENERATIONS = 5;
  */
 function NewEpisode() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
+  const { trackProcessing, estimatedDuration } = useProcessing();
 
   // Form state
   const [loading, setLoading] = useState(false);
@@ -378,12 +381,26 @@ function NewEpisode() {
       });
 
       const episode = response.episode;
+      const title = episodeContext.title || 'Untitled Episode';
 
       // Start processing
       await api.episodes.process(episode.id);
 
-      // Navigate to processing screen
-      navigate(`/episodes/${episode.id}/processing`);
+      // Track processing globally
+      trackProcessing(episode.id, title);
+
+      // Show toast notification with time estimate
+      showToast({
+        message: 'Processing started',
+        description: `"${title}" is being processed. This takes about ${Math.round(estimatedDuration / 60)} minute. You can navigate away - we'll update the episode when ready.`,
+        variant: 'processing',
+        duration: 8000,
+        action: () => navigate(`/episodes/${episode.id}/processing`),
+        actionLabel: 'View progress',
+      });
+
+      // Navigate to dashboard instead of processing screen
+      navigate('/');
     } catch (err) {
       setError(err.message || 'Failed to create episode');
       setLoading(false);

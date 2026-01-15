@@ -228,6 +228,39 @@
 }
 
 /* ============================================================================
+ * PROCESSING CARD
+ * ============================================================================ */
+
+.processingCard {
+  border: 1px solid var(--color-warning-light);
+  background: linear-gradient(
+    135deg,
+    var(--color-bg-secondary) 0%,
+    var(--color-warning-light) 100%
+  );
+}
+
+.processingStatus {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.timeEstimate {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.miniSpinner {
+  animation: spin 1s linear infinite;
+  color: var(--color-warning);
+}
+
+/* ============================================================================
  * PROGRESS BAR
  * ============================================================================ */
 
@@ -250,6 +283,10 @@
   background-color: var(--color-primary);
   border-radius: var(--radius-full);
   transition: width var(--transition-slow);
+}
+
+.processingCard .progressFill {
+  background-color: var(--color-warning);
 }
 
 .progressText {

@@ -13,7 +13,7 @@
  * ============================================================================
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -27,10 +27,17 @@ import {
   Trash2,
   Play,
 } from 'lucide-react';
-import { format } from 'date-fns';
-import { Button, Card, Badge, Spinner, ConfirmDialog } from '@components/shared';
+import { format, formatDistanceToNow } from 'date-fns';
+import { Button, Card, Badge, Spinner, ConfirmDialog, useToast } from '@components/shared';
 import api from '@utils/api-client';
 import styles from './Dashboard.module.css';
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+const POLL_INTERVAL_PROCESSING = 3000; // Poll every 3 seconds when processing
+const ESTIMATED_DURATION_SECONDS = 70; // Average processing time
 
 // Status filter options
 const STATUS_OPTIONS = [
@@ -46,6 +53,7 @@ const STATUS_OPTIONS = [
  */
 function Dashboard() {
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   // State for episode list
   const [episodes, setEpisodes] = useState([]);
@@ -58,10 +66,71 @@ function Dashboard() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleteError, setDeleteError] = useState(null);
 
+  // Polling ref for processing episodes
+  const pollIntervalRef = useRef(null);
+  const previousStatusRef = useRef({});
+
   // Fetch episodes on mount and filter change
   useEffect(() => {
     fetchEpisodes();
   }, [statusFilter]);
+
+  // Poll for updates when there are processing episodes
+  useEffect(() => {
+    const processingEpisodes = episodes.filter((ep) => ep.status === 'processing');
+
+    if (processingEpisodes.length === 0) {
+      // No processing episodes, stop polling
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      return;
+    }
+
+    // Start polling
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const params = {};
+        if (statusFilter !== 'all') {
+          params.status = statusFilter;
+        }
+        const data = await api.episodes.list(params);
+        const newEpisodes = data.episodes || [];
+
+        // Check for newly completed episodes and show toast
+        newEpisodes.forEach((newEp) => {
+          const prevStatus = previousStatusRef.current[newEp.id];
+          if (prevStatus === 'processing' && newEp.status === 'completed') {
+            const title = newEp.title || newEp.episode_context?.title || 'Episode';
+            showToast({
+              message: 'Processing complete!',
+              description: `"${title}" is ready to review.`,
+              variant: 'success',
+              duration: 6000,
+              action: () => navigate(`/episodes/${newEp.id}/review`),
+              actionLabel: 'View content',
+            });
+          }
+        });
+
+        // Update previous status ref
+        newEpisodes.forEach((ep) => {
+          previousStatusRef.current[ep.id] = ep.status;
+        });
+
+        setEpisodes(newEpisodes);
+      } catch (err) {
+        console.error('[Dashboard] Failed to poll episodes:', err);
+      }
+    }, POLL_INTERVAL_PROCESSING);
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, [episodes.filter((ep) => ep.status === 'processing').length, statusFilter]);
 
   /**
    * Fetch all episodes from the API
@@ -289,19 +358,35 @@ function EpisodeCard({ episode, onClick, onDelete }) {
     ? Math.round((episode.current_stage / 9) * 100)
     : 0;
 
+  // Calculate time estimate for processing episodes
+  const getProcessingTimeInfo = () => {
+    if (episode.status !== 'processing') return null;
+
+    const startTime = episode.processing_started_at
+      ? new Date(episode.processing_started_at)
+      : new Date(episode.updated_at);
+    const elapsed = Math.floor((Date.now() - startTime.getTime()) / 1000);
+    const remaining = Math.max(0, ESTIMATED_DURATION_SECONDS - elapsed);
+
+    if (remaining > 0) {
+      return `~${remaining}s remaining`;
+    }
+    return 'Finishing up...';
+  };
+
   // Allow deletion of episodes in any status
   const canDelete = true;
 
   return (
     <Card
-      className={styles.episodeCard}
+      className={`${styles.episodeCard} ${episode.status === 'processing' ? styles.processingCard : ''}`}
       hoverable
       onClick={onClick}
       padding="md"
     >
       <div className={styles.cardHeader}>
         <Badge status={episode.status} dot>
-          {episode.status}
+          {episode.status === 'processing' ? 'Processing...' : episode.status}
         </Badge>
         <span className={styles.cardDate}>{createdAt}</span>
       </div>
@@ -309,16 +394,22 @@ function EpisodeCard({ episode, onClick, onDelete }) {
       <h3 className={styles.cardTitle}>{title}</h3>
 
       {episode.status === 'processing' && (
-        <div className={styles.progressWrapper}>
-          <div className={styles.progressBar}>
-            <div
-              className={styles.progressFill}
-              style={{ width: `${progress}%` }}
-            />
+        <div className={styles.processingStatus}>
+          <div className={styles.progressWrapper}>
+            <div className={styles.progressBar}>
+              <div
+                className={styles.progressFill}
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <span className={styles.progressText}>
+              {episode.current_stage}/9
+            </span>
           </div>
-          <span className={styles.progressText}>
-            Stage {episode.current_stage}/9
-          </span>
+          <p className={styles.timeEstimate}>
+            <Loader2 className={styles.miniSpinner} size={12} />
+            {getProcessingTimeInfo()}
+          </p>
         </div>
       )}
 
@@ -336,7 +427,11 @@ function EpisodeCard({ episode, onClick, onDelete }) {
       <div className={styles.cardFooter}>
         <div className={styles.cardAction}>
           <span>
-            {episode.status === 'completed' ? 'View Content' : 'View Details'}
+            {episode.status === 'completed'
+              ? 'View Content'
+              : episode.status === 'processing'
+                ? 'View Progress'
+                : 'View Details'}
           </span>
           <ChevronRight size={16} />
         </div>

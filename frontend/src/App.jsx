@@ -16,7 +16,11 @@ import { Routes, Route } from 'react-router-dom';
 
 // Authentication
 import { AuthProvider } from './contexts/AuthContext';
+import { ProcessingProvider } from './contexts/ProcessingContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+
+// Global UI
+import { ToastProvider } from './components/shared';
 
 // Layout
 import Layout from './components/layout/Layout';
@@ -46,10 +50,12 @@ import NotFound from './pages/NotFound';
 function App() {
   return (
     <AuthProvider>
-      {/* Admin bar - only visible to superadmins */}
-      <AdminBar />
+      <ProcessingProvider>
+        <ToastProvider>
+          {/* Admin bar - only visible to superadmins */}
+          <AdminBar />
 
-      <Routes>
+          <Routes>
         {/* ================================================================== */}
         {/* PUBLIC ROUTES - No authentication required */}
         {/* ================================================================== */}
@@ -100,7 +106,9 @@ function App() {
         {/* ================================================================== */}
 
         <Route path="*" element={<NotFound />} />
-      </Routes>
+          </Routes>
+        </ToastProvider>
+      </ProcessingProvider>
     </AuthProvider>
   );
 }

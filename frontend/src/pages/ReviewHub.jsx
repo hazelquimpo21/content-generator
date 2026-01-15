@@ -916,55 +916,90 @@ function SocialTab({ stage, onCopy, copied }) {
   );
 }
 
+/**
+ * EmailTab - Displays email campaign content from Stage 9
+ *
+ * Stage 9 output structure:
+ * - subject_lines: array of strings (5 email subject options, <50 chars)
+ * - preview_text: array of strings (3 preview text options, 40-90 chars)
+ * - email_body: string (full email body in markdown, 200-350 words)
+ * - followup_email: string (optional follow-up email, 100-150 words)
+ */
 function EmailTab({ stage, onCopy, copied }) {
   const email = stage?.output_data;
 
-  if (!email) return <EmptyState message="No email content" />;
+  if (!email) return <EmptyState message="No email content generated" />;
 
   return (
     <div className={styles.tabContent}>
-      <Card title="Subject Lines" padding="lg">
-        <div className={styles.subjectLines}>
-          {email.subject_lines?.map((subject, i) => (
-            <div key={i} className={styles.subjectItem}>
-              <span>{subject}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                leftIcon={copied === `subject-${i}` ? Check : Copy}
-                onClick={() => onCopy(subject, `subject-${i}`)}
-              >
-                Copy
-              </Button>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {email.preview_text && (
-        <Card title="Preview Text" padding="lg">
-          <p>{email.preview_text}</p>
-          <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={copied === 'preview' ? Check : Copy}
-            onClick={() => onCopy(email.preview_text, 'preview')}
-          >
-            Copy
-          </Button>
+      {/* Subject Lines */}
+      {email.subject_lines && email.subject_lines.length > 0 && (
+        <Card title="Subject Lines" subtitle="Email subject options" padding="lg">
+          <div className={styles.subjectLines}>
+            {email.subject_lines.map((subject, i) => (
+              <div key={i} className={styles.subjectItem}>
+                <span>{subject}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={copied === `subject-${i}` ? Check : Copy}
+                  onClick={() => onCopy(subject, `subject-${i}`)}
+                >
+                  {copied === `subject-${i}` ? 'Copied!' : 'Copy'}
+                </Button>
+              </div>
+            ))}
+          </div>
         </Card>
       )}
 
-      {email.body_content && (
-        <Card title="Email Body" padding="lg">
-          <pre className={styles.emailBody}>{email.body_content}</pre>
+      {/* Preview Text - Now an array */}
+      {email.preview_text && email.preview_text.length > 0 && (
+        <Card title="Preview Text" subtitle="Email preview line options" padding="lg">
+          <div className={styles.previewTextList}>
+            {email.preview_text.map((text, i) => (
+              <div key={i} className={styles.previewItem}>
+                <span>{text}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={copied === `preview-${i}` ? Check : Copy}
+                  onClick={() => onCopy(text, `preview-${i}`)}
+                >
+                  {copied === `preview-${i}` ? 'Copied!' : 'Copy'}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Email Body - Note: field is email_body, not body_content */}
+      {email.email_body && (
+        <Card title="Email Body" subtitle="Main newsletter content" padding="lg">
+          <pre className={styles.emailBody}>{email.email_body}</pre>
           <Button
             variant="ghost"
             size="sm"
             leftIcon={copied === 'body' ? Check : Copy}
-            onClick={() => onCopy(email.body_content, 'body')}
+            onClick={() => onCopy(email.email_body, 'body')}
           >
-            Copy
+            {copied === 'body' ? 'Copied!' : 'Copy'}
+          </Button>
+        </Card>
+      )}
+
+      {/* Follow-up Email (optional) */}
+      {email.followup_email && (
+        <Card title="Follow-up Email" subtitle="Optional follow-up content" padding="lg">
+          <pre className={styles.emailBody}>{email.followup_email}</pre>
+          <Button
+            variant="ghost"
+            size="sm"
+            leftIcon={copied === 'followup' ? Check : Copy}
+            onClick={() => onCopy(email.followup_email, 'followup')}
+          >
+            {copied === 'followup' ? 'Copied!' : 'Copy'}
           </Button>
         </Card>
       )}

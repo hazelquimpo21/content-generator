@@ -22,9 +22,9 @@ Transform raw podcast transcripts into publication-ready content across multiple
 - **Framework**: Express.js (lightweight REST API)
 - **Database**: Supabase (PostgreSQL + real-time subscriptions)
 - **AI Providers**:
-  - Anthropic Claude 3.5 Haiku (Stage 0: preprocessing long transcripts)
-  - OpenAI GPT-5 mini (Stages 1-6: analysis, outlining, drafting)
-  - Anthropic Claude Sonnet 4 (Stages 7-9: refinement, social, email)
+  - Anthropic Claude Haiku (Stage 0: preprocessing, Stage 2: quote extraction)
+  - OpenAI GPT-5 mini (Stages 1, 3-6: analysis, outlining, drafting)
+  - Anthropic Claude Sonnet (Stages 7-9: refinement, social, email)
 
 ### Frontend
 - **Framework**: React 18+ with Vite
@@ -53,59 +53,72 @@ Transform raw podcast transcripts into publication-ready content across multiple
 
 ## Pipeline Overview
 
-### The 10 Stages (0-9)
+### Design Philosophy: Focused Analyzers
 
-0. **Transcript Preprocessing** (Claude Haiku)
-   - Compress long transcripts for downstream processing
-   - Extract key quotes, themes, speaker info
-   - *Automatically skipped for short transcripts (<8000 tokens)*
+> **Analyzers work best when they don't have too many jobs.**
 
-1. **Transcript Analysis** (GPT-5 mini)
-   - Extract episode metadata, guest info, main topics
+Each analyzer does ONE focused thing well. When a task can be split into independent work, split it and run in parallel. This is why Stage 8 is split into 4 platform-specific analyzers.
 
-2. **Quote Extraction** (GPT-5 mini)
-   - Find 5-8 key verbatim quotes with context
+### The 4-Phase Pipeline (10 Stages)
 
-3. **Blog Outline - High Level** (GPT-5 mini)
-   - Structure 750-word post with sections and hooks
+**PRE-GATE: Preprocessing** (conditional)
+- Stage 0: Transcript Preprocessing (Claude Haiku)
+  - Compress long transcripts for downstream processing
+  - *Automatically skipped for short transcripts (<8000 tokens)*
 
-4. **Paragraph-Level Outlines** (GPT-5 mini)
-   - Detail each paragraph's content and flow
+**PHASE 1: EXTRACT** (2 tasks in parallel)
+- Stage 1: Transcript Analysis (GPT-5 mini)
+  - Extract episode metadata, guest info, `episode_crux` (canonical summary)
+- Stage 2: Quote Extraction (Claude Haiku)
+  - Find 8-12 verbatim `quotes[]` (canonical quotes source)
 
-5. **Headlines & Copy Options** (GPT-5 mini)
-   - Generate 10-15 headlines, subheads, taglines, hooks
+**PHASE 2: PLAN** (3 tasks, grouped execution)
+- Stage 3: Blog Outline (GPT-5 mini) - runs first
+- Stage 4: Paragraph Details (GPT-5 mini) - then parallel with Stage 5
+- Stage 5: Headlines & Copy (GPT-5 mini) - then parallel with Stage 4
 
-6. **Draft Generation** (GPT-5 mini)
-   - Write first half, then second half of blog post
+**PHASE 3: WRITE** (2 tasks, sequential)
+- Stage 6: Draft Generation (GPT-5 mini)
+  - Write the complete 750-word blog post
+- Stage 7: Refinement Pass (Claude Sonnet)
+  - Polish prose, ensure voice consistency
 
-7. **Refinement Pass** (Claude Sonnet)
-   - Polish prose, ensure voice consistency, check clinical accuracy
-
-8. **Social Content** (Claude Sonnet)
-   - Create Instagram, Twitter, LinkedIn, Facebook posts
-
-9. **Email Campaign** (Claude Sonnet)
-   - Generate subject lines, email body, follow-up
+**PHASE 4: DISTRIBUTE** (5 tasks in parallel)
+- Stage 8a: Instagram (Claude Sonnet)
+- Stage 8b: Twitter/X (Claude Sonnet)
+- Stage 8c: LinkedIn (Claude Sonnet)
+- Stage 8d: Facebook (Claude Sonnet)
+- Stage 9: Email Campaign (Claude Sonnet)
 
 ### Data Flow
 
 ```
-Transcript → Stage 0 → Stage 1 → Stage 2 → ... → Stage 8 → Stage 9
-              ↓         ↓         ↓                ↓         ↓
-            [Save]    [Save]    [Save]           [Save]    [Save]
-                                                             ↓
-                                                   [Complete Episode]
-
-Note: Stage 0 (preprocessing) is skipped for short transcripts.
+┌─────────────────────────────────────────────────────────────────┐
+│                      4-PHASE PIPELINE                           │
+│                                                                 │
+│  PRE-GATE: [0] Preprocess (if needed)                          │
+│                      │                                          │
+│  PHASE 1:      [1] ──┴── [2]     (parallel)                    │
+│                      │                                          │
+│  PHASE 2:     [3] ─► [4] ─┬─ [5]  (grouped)                    │
+│                      │                                          │
+│  PHASE 3:     [6] ─────► [7]     (sequential)                  │
+│                      │                                          │
+│  PHASE 4:   [8a][8b][8c][8d][9]  (5 tasks parallel)            │
+│                      │                                          │
+│                [GENERATED CONTENT]                              │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 Each stage:
-- Reads previous stage outputs from database
+- Reads previous stage outputs from context
 - Calls appropriate AI API with carefully crafted prompt
 - Parses and validates response
 - Saves structured output to database
 - Updates real-time status for frontend
 - Logs tokens, cost, duration
+
+**Performance:** Parallel execution saves ~30% time compared to sequential processing.
 
 ## Success Metrics
 
@@ -132,10 +145,10 @@ Each stage:
 - Design system implementation
 
 ### Phase 2: AI Pipeline (Week 2)
-- All 9 analyzer modules with prompts
+- All 10 stage analyzers with prompts (Stage 8 has 4 platform-specific exports)
 - Parser and validator modules
 - API endpoint for episode processing
-- Real-time status updates
+- Real-time status updates with parallel execution
 
 ### Phase 3: User Interface (Week 3)
 - Dashboard and episode list

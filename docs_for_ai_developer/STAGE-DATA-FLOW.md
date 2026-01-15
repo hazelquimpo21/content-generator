@@ -101,24 +101,28 @@ The pipeline is organized into 4 phases with parallel execution where possible:
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ 📣 PHASE 4: DISTRIBUTE (Parallel) ⚡                                         │
+│ 📣 PHASE 4: DISTRIBUTE (5 tasks in PARALLEL) ⚡                              │
 │ ═══════════════════════════════════════════════════════════════════════════ │
-│ Both tasks run in PARALLEL - they only need the refined post                 │
+│ All 5 tasks run simultaneously - they only need the refined post.            │
+│ Stage 8 is split into 4 platform-specific analyzers (focused analyzer        │
+│ philosophy: each analyzer does ONE thing well).                              │
 │                                                                              │
-│   ┌─────────────────────────────┐  ┌─────────────────────────────┐          │
-│   │ Stage 8: generateSocial     │  │ Stage 9: generateEmail      │          │
-│   │ (Claude Sonnet 4)           │  │ (Claude Sonnet 4)           │          │
-│   │                             │  │                             │          │
-│   │ Input: Stage 7 output_text  │  │ Input: Stage 7 output_text  │          │
-│   │        Stage 2 quotes       │  │        Stage 1 metadata     │          │
-│   │                             │  │                             │          │
-│   │ Output:                     │  │ Output:                     │          │
-│   │ • instagram[], twitter[]    │  │ • subject_lines[]           │          │
-│   │ • linkedin[], facebook[]    │  │ • preview_text[]            │          │
-│   │                             │  │ • email_body                │          │
-│   └─────────────────────────────┘  └─────────────────────────────┘          │
+│   ┌────────────────┐ ┌────────────────┐ ┌────────────────┐ ┌───────────────┐│
+│   │ Stage 8a:      │ │ Stage 8b:      │ │ Stage 8c:      │ │ Stage 8d:     ││
+│   │ Instagram      │ │ Twitter/X      │ │ LinkedIn       │ │ Facebook      ││
+│   │ (Sonnet)       │ │ (Sonnet)       │ │ (Sonnet)       │ │ (Sonnet)      ││
+│   │                │ │                │ │                │ │               ││
+│   │ Output:        │ │ Output:        │ │ Output:        │ │ Output:       ││
+│   │ instagram[]    │ │ twitter[]      │ │ linkedin[]     │ │ facebook[]    ││
+│   └────────────────┘ └────────────────┘ └────────────────┘ └───────────────┘│
 │                                                                              │
-│ Checkpoint: { social, email }                                                │
+│   ┌─────────────────────────────────────────────────────────────────────┐   │
+│   │ Stage 9: generateEmail (Claude Sonnet)                              │   │
+│   │ Input: Stage 7 output_text + Stage 1 metadata                       │   │
+│   │ Output: subject_lines[], preview_text[], email_body                 │   │
+│   └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                              │
+│ Checkpoint: { instagram, twitter, linkedin, facebook, email }                │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -128,13 +132,15 @@ The pipeline is organized into 4 phases with parallel execution where possible:
 
 The parallel execution architecture provides significant speed improvements:
 
-| Phase | Execution | Sequential Time | Parallel Time | Savings |
-|-------|-----------|-----------------|---------------|---------|
-| Phase 1 | 2 tasks parallel | ~15 sec | ~8 sec | ~7 sec |
-| Phase 2 | 1 + 2 parallel | ~18 sec | ~13 sec | ~5 sec |
-| Phase 3 | 2 tasks sequential | ~12 sec | ~12 sec | 0 sec |
-| Phase 4 | 2 tasks parallel | ~12 sec | ~6 sec | ~6 sec |
-| **Total** | | **~57 sec** | **~39 sec** | **~18 sec (30%)** |
+| Phase | Tasks | Execution | Sequential Time | Parallel Time | Savings |
+|-------|-------|-----------|-----------------|---------------|---------|
+| Phase 1 | 2 | Parallel | ~15 sec | ~8 sec | ~7 sec |
+| Phase 2 | 3 | 1 + 2 parallel | ~18 sec | ~13 sec | ~5 sec |
+| Phase 3 | 2 | Sequential | ~12 sec | ~12 sec | 0 sec |
+| Phase 4 | 5 | Parallel (focused analyzers) | ~15 sec | ~6 sec | ~9 sec |
+| **Total** | **12** | | **~60 sec** | **~39 sec** | **~21 sec (~35%)** |
+
+**Why Stage 8 is split into 4 tasks:** Each platform analyzer is focused on a single platform, producing better quality output. This also enables parallel execution - all 5 distribution tasks run simultaneously.
 
 ---
 
@@ -350,7 +356,19 @@ When a task fails in parallel execution:
 
 ## Design Principles
 
-### 1. Single Canonical Summary
+### 1. Focused Analyzers (Core Philosophy)
+
+> **Analyzers work best when they don't have too many jobs.**
+
+Each analyzer does ONE focused thing well. When a task can be split into independent work, split it and run in parallel.
+
+**Stage 8 demonstrates this:** Instead of one "social content" analyzer handling all platforms, we have 4 platform-specific analyzers (Instagram, Twitter, LinkedIn, Facebook) that:
+- Have specialized prompts per platform
+- Run in parallel for faster execution
+- Can be tested independently
+- Produce better quality through focus
+
+### 2. Single Canonical Summary
 
 **Stage 1's `episode_crux`** is the ONLY summary in the pipeline.
 
@@ -360,18 +378,11 @@ When a task fails in parallel execution:
 | Stage 1 | `episode_crux` | **CANONICAL** ✓ |
 | Stage 3 | `narrative_summary` | **REMOVED** (redundant) |
 
-### 2. Single Canonical Quotes Source
+### 3. Single Canonical Quotes Source
 
 **Stage 2's `quotes[]`** is the ONLY quotes source.
 
 All downstream stages reference `previousStages[2].quotes`.
-
-### 3. Focused Analyzers
-
-Each analyzer does ONE thing well:
-- No multi-purpose stages
-- Clear inputs and outputs
-- Easy to test in isolation
 
 ---
 

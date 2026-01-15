@@ -1,5 +1,55 @@
 # System Architecture
 
+## Design Philosophy: Focused Analyzers
+
+> **Core Principle: Analyzers work best when they don't have too many jobs.**
+
+This is the foundational principle behind the pipeline architecture. Each analyzer does ONE focused thing well. When a task can be split into independent work, split it and run in parallel.
+
+### Why This Matters
+
+AI analyzers produce better results when they have a clear, focused task. A single prompt asking an AI to "generate Instagram, Twitter, LinkedIn, AND Facebook content" produces worse results than four specialized prompts.
+
+### Stage 8: The Case Study
+
+Stage 8 (Social Content) demonstrates this philosophy:
+
+```
+WRONG (avoided):                    RIGHT (implemented):
+┌─────────────────────┐             ┌─────────────────┐
+│ generateSocial()    │             │ generateInstagram() │ ← focused
+│ • Instagram logic   │             └─────────────────┘
+│ • Twitter logic     │             ┌─────────────────┐
+│ • LinkedIn logic    │     ───►    │ generateTwitter()   │ ← focused
+│ • Facebook logic    │             └─────────────────┘
+│ (400+ lines)        │             ┌─────────────────┐
+└─────────────────────┘             │ generateLinkedIn()  │ ← focused
+                                    └─────────────────┘
+                                    ┌─────────────────┐
+                                    │ generateFacebook()  │ ← focused
+                                    └─────────────────┘
+                                    (All 4 run in PARALLEL)
+```
+
+**Benefits:**
+- Better quality (specialized prompts per platform)
+- ~30% faster (parallel execution)
+- Easier to test (isolated modules)
+- Clearer code (single responsibility)
+
+### Canonical Data Sources
+
+No duplicate work across stages:
+
+| Data | Canonical Source | Rule |
+|------|------------------|------|
+| Episode Summary | Stage 1 `episode_crux` | Only Stage 1 creates the summary |
+| Verbatim Quotes | Stage 2 `quotes[]` | Only Stage 2 extracts quotes |
+
+> **See [PIPELINE-REFERENCE.md](./PIPELINE-REFERENCE.md) for complete pipeline documentation.**
+
+---
+
 ## Architectural Principles
 
 ### Modularity Requirements
@@ -25,7 +75,7 @@ backend/
 │   ├── stage-05-generate-headlines.js       (~300 lines)
 │   ├── stage-06-draft-blog-post.js          (~350 lines - two API calls)
 │   ├── stage-07-refine-with-claude.js       (~300 lines)
-│   ├── stage-08-generate-social.js          (~300 lines)
+│   ├── stage-08-social-platform.js          (~255 lines - 4 platform exports)
 │   └── stage-09-generate-email.js           (~300 lines)
 │
 ├── parsers/                      # Response validators (one per stage)
@@ -172,20 +222,24 @@ The pipeline is organized into **4 phases** with parallel execution where possib
                                    │
                                    ▼
 ┌──────────────────────────────────────────────────────────────────────────┐
-│ 📣 PHASE 4: DISTRIBUTE (Parallel) ⚡                                      │
-│    Stage 8: social + Stage 9: email                                      │
-│    Both run in PARALLEL - they only need the refined post                │
+│ 📣 PHASE 4: DISTRIBUTE (5 tasks in PARALLEL) ⚡                           │
+│    Stage 8a: Instagram  ─┐                                               │
+│    Stage 8b: Twitter/X   │                                               │
+│    Stage 8c: LinkedIn    ├─ All 5 run PARALLEL (focused analyzer design) │
+│    Stage 8d: Facebook    │                                               │
+│    Stage 9:  Email      ─┘                                               │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Performance Benefits
 
-| Phase | Execution | Time Saved |
-|-------|-----------|------------|
-| Phase 1 | 2 parallel | ~7 sec |
-| Phase 2 | 1 + 2 parallel | ~5 sec |
-| Phase 4 | 2 parallel | ~6 sec |
-| **Total** | | **~18 sec (30%)** |
+| Phase | Tasks | Execution | Time Saved |
+|-------|-------|-----------|------------|
+| Phase 1 | 2 | Parallel | ~7 sec |
+| Phase 2 | 3 | 1 sequential + 2 parallel | ~5 sec |
+| Phase 3 | 2 | Sequential | 0 sec |
+| Phase 4 | 5 | Parallel (focused analyzers) | ~6 sec |
+| **Total** | **12** | | **~18 sec (~30%)** |
 
 ### Key Files
 
@@ -210,15 +264,20 @@ Each stage uses the most appropriate AI model for its task:
 | Stage | Name | Model | Provider | Phase | Purpose |
 |-------|------|-------|----------|-------|---------|
 | 0 | Preprocessing | Claude Haiku | Anthropic | pregate | Compress long transcripts (200K context) |
-| 1 | Analysis | GPT-5 mini | OpenAI | extract | Extract metadata, themes, episode_crux |
-| 2 | **Quote Extraction** | **Claude Haiku** | Anthropic | extract | Extract verbatim quotes (fast, accurate) |
+| 1 | Analysis | GPT-5 mini | OpenAI | extract | Extract metadata, themes, `episode_crux` ⭐ |
+| 2 | Quote Extraction | Claude Haiku | Anthropic | extract | Extract verbatim `quotes[]` ⭐ |
 | 3 | Blog Outline | GPT-5 mini | OpenAI | plan | High-level post structure |
 | 4 | Paragraph Outlines | GPT-5 mini | OpenAI | plan | Detailed section plans |
 | 5 | Headlines | GPT-5 mini | OpenAI | plan | Title and copy options |
 | 6 | Draft Generation | GPT-5 mini | OpenAI | write | Write the blog post |
-| 7 | Refinement | Claude Sonnet 4 | Anthropic | write | Polish and improve |
-| 8 | Social Content | Claude Sonnet 4 | Anthropic | distribute | Platform-specific posts |
-| 9 | Email Campaign | Claude Sonnet 4 | Anthropic | distribute | Newsletter content |
+| 7 | Refinement | Claude Sonnet | Anthropic | write | Polish and improve |
+| 8a | Instagram | Claude Sonnet | Anthropic | distribute | Instagram-specific posts |
+| 8b | Twitter/X | Claude Sonnet | Anthropic | distribute | Twitter-specific posts |
+| 8c | LinkedIn | Claude Sonnet | Anthropic | distribute | LinkedIn-specific posts |
+| 8d | Facebook | Claude Sonnet | Anthropic | distribute | Facebook-specific posts |
+| 9 | Email Campaign | Claude Sonnet | Anthropic | distribute | Newsletter content |
+
+⭐ = Canonical data source (all downstream stages reference this)
 
 ## Quote Architecture
 

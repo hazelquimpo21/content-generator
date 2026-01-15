@@ -39,11 +39,21 @@ import api from '@utils/api-client';
 import styles from './ReviewHub.module.css';
 
 // Tab definitions
+// Each tab shows content from specific pipeline stages:
+// - Stage 1: Transcript Analysis (episode_crux, key_themes, target_audiences)
+// - Stage 2: Quote Extraction (quotes array)
+// - Stage 3: Blog Outline - High Level (outline array)
+// - Stage 4: Paragraph Details (paragraph_details)
+// - Stage 5: Headlines & Copy (headlines, subheadings, taglines, social_hooks)
+// - Stage 6: Draft Generation (output_text)
+// - Stage 7: Refinement Pass (output_text - final blog)
+// - Stage 8: Social Content (instagram, twitter, linkedin, facebook)
+// - Stage 9: Email Campaign (subject_lines, preview_text, email_body)
 const TABS = [
   { id: 'analysis', label: 'Analysis', icon: FileText, stages: [1] },
   { id: 'quotes', label: 'Quotes', icon: Quote, stages: [2] },
   { id: 'titles', label: 'Titles', icon: Type, stages: [5] },
-  { id: 'blog', label: 'Blog Post', icon: AlignLeft, stages: [5, 6, 7] },
+  { id: 'blog', label: 'Blog Post', icon: AlignLeft, stages: [3, 4, 6, 7] },
   { id: 'social', label: 'Social', icon: Share2, stages: [8] },
   { id: 'email', label: 'Email', icon: Mail, stages: [9] },
 ];
@@ -493,7 +503,8 @@ function ReviewHub() {
 
         {activeTab === 'blog' && (
           <BlogTab
-            outlineStage={getStage(5)}
+            outlineStage={getStage(3)}
+            paragraphsStage={getStage(4)}
             draftStage={getStage(6)}
             editedStage={getStage(7)}
             onCopy={copyToClipboard}
@@ -555,7 +566,23 @@ function ReviewHub() {
 // ============================================================================
 
 function AnalysisTab({ stage }) {
-  if (!stage?.output_data) return <EmptyState message="No analysis data" />;
+  console.log('[AnalysisTab] Stage 1 data:', {
+    hasStage: !!stage,
+    stageStatus: stage?.status,
+    hasOutputData: !!stage?.output_data,
+  });
+
+  if (!stage) {
+    return <EmptyState message="No analysis data" details="Stage 1 (Transcript Analysis) not found." />;
+  }
+
+  if (stage.status !== 'completed') {
+    return <EmptyState message="Analysis not complete" details={`Stage 1 status: ${stage.status}`} />;
+  }
+
+  if (!stage.output_data) {
+    return <EmptyState message="No analysis data" details="Stage 1 completed but has no output data." />;
+  }
 
   const data = stage.output_data;
 
@@ -599,7 +626,25 @@ function AnalysisTab({ stage }) {
  * - usage: Suggested use - headline/pullquote/social/key_point (optional)
  */
 function QuotesTab({ stage, onCopy, copied }) {
-  if (!stage?.output_data?.quotes) return <EmptyState message="No quotes extracted" />;
+  console.log('[QuotesTab] Stage 2 data:', {
+    hasStage: !!stage,
+    stageStatus: stage?.status,
+    hasOutputData: !!stage?.output_data,
+    hasQuotes: !!stage?.output_data?.quotes,
+    quoteCount: stage?.output_data?.quotes?.length,
+  });
+
+  if (!stage) {
+    return <EmptyState message="No quotes extracted" details="Stage 2 (Quote Extraction) not found." />;
+  }
+
+  if (stage.status !== 'completed') {
+    return <EmptyState message="Quotes not ready" details={`Stage 2 status: ${stage.status}`} />;
+  }
+
+  if (!stage?.output_data?.quotes) {
+    return <EmptyState message="No quotes extracted" details="Stage 2 completed but has no quotes data." />;
+  }
 
   return (
     <div className={styles.tabContent}>
@@ -639,7 +684,33 @@ function QuotesTab({ stage, onCopy, copied }) {
  * - social_hooks: array of strings (5-7 social media opening lines)
  */
 function TitlesTab({ stage, onCopy, copied }) {
-  if (!stage?.output_data) return <EmptyState message="No titles generated" />;
+  // Debug logging to help identify data issues
+  console.log('[TitlesTab] Stage 5 data:', {
+    hasStage: !!stage,
+    stageStatus: stage?.status,
+    hasOutputData: !!stage?.output_data,
+    outputDataKeys: stage?.output_data ? Object.keys(stage.output_data) : [],
+  });
+
+  if (!stage) {
+    return <EmptyState message="No titles generated" details="Stage 5 (Headlines & Copy) not found. This stage may not have run yet." />;
+  }
+
+  if (stage.status === 'pending') {
+    return <EmptyState message="Titles pending" details="Stage 5 has not been processed yet." />;
+  }
+
+  if (stage.status === 'processing') {
+    return <EmptyState message="Generating titles..." details="Stage 5 is currently processing." />;
+  }
+
+  if (stage.status === 'failed') {
+    return <EmptyState message="Title generation failed" details={stage.error_message || 'Stage 5 encountered an error.'} />;
+  }
+
+  if (!stage.output_data) {
+    return <EmptyState message="No titles generated" details="Stage 5 completed but has no output data. Try regenerating this stage." />;
+  }
 
   const { headlines = [], subheadings = [], taglines = [], social_hooks = [] } = stage.output_data;
 
@@ -735,9 +806,16 @@ function TitlesTab({ stage, onCopy, copied }) {
 /**
  * BlogTab component with inline editing support
  * Allows viewing, copying, regenerating, and editing the blog post content
+ *
+ * Stage Data Used:
+ * - outlineStage (Stage 3): High-level blog outline with sections
+ * - paragraphsStage (Stage 4): Detailed paragraph-level content
+ * - draftStage (Stage 6): Initial blog post draft
+ * - editedStage (Stage 7): Refined final blog post
  */
 function BlogTab({
   outlineStage,
+  paragraphsStage,
   draftStage,
   editedStage,
   onCopy,
@@ -759,9 +837,9 @@ function BlogTab({
 
   return (
     <div className={styles.tabContent}>
-      {/* Blog outline section */}
+      {/* Blog outline section - from Stage 3 */}
       {outlineStage?.output_data?.outline && (
-        <Card title="Outline" padding="lg">
+        <Card title="Outline" subtitle="High-level blog structure (Stage 3)" padding="lg">
           <div className={styles.outline}>
             {outlineStage.output_data.outline.map((section, i) => (
               <div key={i} className={styles.outlineSection}>
@@ -869,7 +947,24 @@ function BlogTab({
  * - facebook: array of { content: string }
  */
 function SocialTab({ stage, onCopy, copied }) {
-  if (!stage?.output_data) return <EmptyState message="No social content generated" />;
+  console.log('[SocialTab] Stage 8 data:', {
+    hasStage: !!stage,
+    stageStatus: stage?.status,
+    hasOutputData: !!stage?.output_data,
+    platforms: stage?.output_data ? Object.keys(stage.output_data) : [],
+  });
+
+  if (!stage) {
+    return <EmptyState message="No social content generated" details="Stage 8 (Social Content) not found." />;
+  }
+
+  if (stage.status !== 'completed') {
+    return <EmptyState message="Social content not ready" details={`Stage 8 status: ${stage.status}`} />;
+  }
+
+  if (!stage?.output_data) {
+    return <EmptyState message="No social content generated" details="Stage 8 completed but has no output data." />;
+  }
 
   const { instagram = [], twitter = [], linkedin = [], facebook = [] } = stage.output_data;
 
@@ -926,9 +1021,26 @@ function SocialTab({ stage, onCopy, copied }) {
  * - followup_email: string (optional follow-up email, 100-150 words)
  */
 function EmailTab({ stage, onCopy, copied }) {
+  console.log('[EmailTab] Stage 9 data:', {
+    hasStage: !!stage,
+    stageStatus: stage?.status,
+    hasOutputData: !!stage?.output_data,
+    emailFields: stage?.output_data ? Object.keys(stage.output_data) : [],
+  });
+
+  if (!stage) {
+    return <EmptyState message="No email content generated" details="Stage 9 (Email Campaign) not found." />;
+  }
+
+  if (stage.status !== 'completed') {
+    return <EmptyState message="Email content not ready" details={`Stage 9 status: ${stage.status}`} />;
+  }
+
   const email = stage?.output_data;
 
-  if (!email) return <EmptyState message="No email content generated" />;
+  if (!email) {
+    return <EmptyState message="No email content generated" details="Stage 9 completed but has no output data." />;
+  }
 
   return (
     <div className={styles.tabContent}>
@@ -1007,11 +1119,12 @@ function EmailTab({ stage, onCopy, copied }) {
   );
 }
 
-function EmptyState({ message }) {
+function EmptyState({ message, details }) {
   return (
     <div className={styles.emptyState}>
       <AlertCircle size={32} />
       <p>{message}</p>
+      {details && <p className={styles.emptyStateDetails}>{details}</p>}
     </div>
   );
 }

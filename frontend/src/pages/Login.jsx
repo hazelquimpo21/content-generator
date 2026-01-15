@@ -128,7 +128,7 @@ VITE_SUPABASE_ANON_KEY=your-anon-key-here`}
                 href="https://app.supabase.com"
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{ color: '#C4704D' }}
+                style={{ color: 'var(--color-primary)' }}
               >
                 Supabase dashboard
               </a>

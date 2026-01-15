@@ -25,6 +25,7 @@ function ProgressBar({
   className,
 }) {
   const percentage = Math.min(Math.round((value / max) * 100), 100);
+  const isComplete = percentage === 100;
 
   return (
     <div className={clsx(styles.container, className)}>
@@ -40,7 +41,7 @@ function ProgressBar({
 
       {/* Progress track */}
       <div
-        className={clsx(styles.track, styles[size])}
+        className={clsx(styles.track, styles[size], isComplete && styles.complete)}
         role="progressbar"
         aria-valuenow={value}
         aria-valuemin={0}

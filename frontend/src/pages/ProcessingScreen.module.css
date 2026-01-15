@@ -116,11 +116,12 @@
 
 .phase-processing,
 .phase-partial {
-  border-color: var(--color-warning);
+  border-color: var(--color-processing);
 }
 
 .phase-completed {
   border-color: var(--color-success);
+  animation: completePop 0.3s ease-out;
 }
 
 .phase-failed {
@@ -156,12 +157,13 @@
 }
 
 .iconProcessing {
-  color: var(--color-warning);
+  color: var(--color-processing);
   animation: spin 1s linear infinite;
 }
 
 .iconCompleted {
   color: var(--color-success);
+  animation: checkBounce 0.4s ease-out;
 }
 
 .iconFailed {
@@ -241,7 +243,7 @@
 }
 
 .stage-processing {
-  background-color: var(--color-warning-light);
+  background-color: var(--color-info-light);
 }
 
 .stage-completed {
@@ -265,12 +267,13 @@
 }
 
 .stageIconProcessing {
-  color: var(--color-warning);
+  color: var(--color-processing);
   animation: spin 1s linear infinite;
 }
 
 .stageIconCompleted {
   color: var(--color-success);
+  animation: checkBounce 0.3s ease-out;
 }
 
 .stageIconFailed {
@@ -325,6 +328,12 @@
   margin-top: var(--space-8);
   padding-top: var(--space-6);
   border-top: 1px solid var(--color-bg-accent);
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* Subtle pulse for the main CTA when complete */
+.actions button:first-child {
+  animation: successGlow 1.5s ease-out;
 }
 
 .actionButtons {
@@ -387,4 +396,22 @@
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+@keyframes completePop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+@keyframes successGlow {
+  0% { box-shadow: 0 0 0 0 rgba(81, 160, 94, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(81, 160, 94, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(81, 160, 94, 0); }
+}
+
+@keyframes checkBounce {
+  0% { transform: scale(0); opacity: 0; }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
 }

@@ -42,7 +42,7 @@
   color: var(--color-text-secondary);
 }
 
-/* Primary - terracotta */
+/* Primary - sage */
 .primary {
   background-color: var(--color-primary-light);
   color: var(--color-primary-dark);
@@ -54,10 +54,10 @@
   color: var(--color-success);
 }
 
-/* Warning - gold */
+/* Warning - slate */
 .warning {
   background-color: var(--color-warning-light);
-  color: #8a6d0b;
+  color: #5a6270;
 }
 
 /* Error - red */

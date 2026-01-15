@@ -112,7 +112,7 @@
 }
 
 .segmentActive {
-  background-color: var(--color-warning);
+  background-color: var(--color-processing);
 }
 
 /* ============================================================================
@@ -147,4 +147,15 @@
   100% {
     transform: translateX(100%);
   }
+}
+
+/* Completion state - subtle glow when 100% */
+.complete .fill {
+  animation: completeGlow 0.6s ease-out;
+}
+
+@keyframes completeGlow {
+  0% { filter: brightness(1); }
+  50% { filter: brightness(1.15); }
+  100% { filter: brightness(1); }
 }

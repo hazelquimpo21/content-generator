@@ -36,8 +36,8 @@ Process this podcast transcript and create a comprehensive summary that preserve
 
 4. **Episode Metadata**
    - Inferred title (if not explicitly stated)
-   - Main thesis or core message
    - Estimated duration based on content density
+   - NOTE: Do NOT include a "core message" summary - Stage 1 handles this with episode_crux
 
 ## Quality Requirements
 

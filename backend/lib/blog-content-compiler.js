@@ -192,7 +192,10 @@ as blockquotes or inline attributions. Aim to use 2-4 quotes total.
 function compileOutline(stage3Output, stage4Output) {
   const postStructure = stage3Output?.post_structure;
   const sectionDetails = stage4Output?.section_details || [];
-  const narrativeSummary = stage3Output?.narrative_summary;
+  // NOTE: We no longer use narrative_summary from Stage 3.
+  // Stage 1's episode_crux is the canonical "big picture" summary and is
+  // already included in the compileEpisodeContext() function above.
+  // This avoids duplicate summarization across stages.
 
   if (!postStructure) {
     logger.warn('📝 No blog outline available for compilation');
@@ -206,21 +209,7 @@ No outline was provided. Create a 750-word blog post with:
 `;
   }
 
-  let outlineSection = '';
-
-  // Add narrative summary if available (NEW - helps Stage 6 understand the big picture)
-  if (narrativeSummary) {
-    outlineSection += `
-## NARRATIVE SUMMARY (The "Big Picture")
-
-${narrativeSummary}
-
-This summary captures what your blog post should communicate. Keep this in mind as you write.
-
-`;
-  }
-
-  outlineSection += `
+  let outlineSection = `
 ## BLOG STRUCTURE (TARGET: ~${TARGET_TOTAL_WORDS} WORDS)
 
 Follow this structure EXACTLY. Hit the word counts for each section.
@@ -499,14 +488,14 @@ ${'='.repeat(60)}
   const quoteCount = stage2Output?.quotes?.length || 0;
   const sectionCount = stage3Output?.post_structure?.sections?.length || 0;
   const hasEpisodeCrux = !!stage1Output?.episode_crux;
-  const hasNarrativeSummary = !!stage3Output?.narrative_summary;
+  // NOTE: We no longer track hasNarrativeSummary since Stage 3 no longer
+  // produces it. Stage 1's episode_crux is the canonical "big picture" summary.
 
   logger.info('📚 Blog context compiled successfully', {
     contextLength: fullContext.length,
     quoteCount,
     sectionCount,
     hasEpisodeCrux,
-    hasNarrativeSummary,
     hasVoiceGuidelines: Object.keys(voiceGuidelines).length > 0,
   });
 
@@ -517,7 +506,6 @@ ${'='.repeat(60)}
       quoteCount,
       sectionCount,
       hasEpisodeCrux,
-      hasNarrativeSummary,
       contextLength: fullContext.length,
     },
     wordCountTarget: TARGET_TOTAL_WORDS,

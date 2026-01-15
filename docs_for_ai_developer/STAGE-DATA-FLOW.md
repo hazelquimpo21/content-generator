@@ -44,12 +44,15 @@ These stages return JSON objects with structured analysis:
 
 | Stage | Key Fields in `output_data` |
 |-------|----------------------------|
-| 0 | `summary`, `key_themes`, `speaker_info` (preprocessing) |
-| 1 | `episode_basics`, `guest_info`, `episode_crux` |
+| 0 | `comprehensive_summary`, `key_topics`, `speakers`, `episode_metadata` (preprocessing) |
+| 1 | `episode_basics`, `guest_info`, `episode_crux` ← **CANONICAL SUMMARY** |
 | 2 | `quotes[]` with `text`, `speaker`, `context`, `usage` |
-| 3 | `post_structure`, `narrative_summary`, `estimated_total_words` |
+| 3 | `post_structure`, `estimated_total_words` |
 | 4 | `section_details[]` with `paragraphs[]` |
 | 5 | `headlines[]`, `subheadings[]`, `taglines[]`, `social_hooks[]` |
+
+> **Note:** Stage 1's `episode_crux` is the **single source of truth** for the episode's
+> core insight/message. We intentionally avoid duplicate summarization in other stages.
 
 ### Stage 6: Both Types
 
@@ -112,8 +115,11 @@ const refinedPost = previousStages[7]?.output_text;
 │ ─────────────────────────────────────────────────────────────────────────── │
 │ SKIPPED if transcript < 8000 tokens                                          │
 │                                                                              │
-│ OUTPUT: { summary, key_themes, speaker_info }                                │
-│ STORED: previousStages[0] = { summary, key_themes, speaker_info, output_text: null } │
+│ OUTPUT: { comprehensive_summary, key_topics, speakers, episode_metadata }    │
+│ STORED: previousStages[0] = { comprehensive_summary, key_topics, ..., output_text: null } │
+│                                                                              │
+│ NOTE: Stage 0 focuses on COMPRESSION only. It does NOT create a core_message │
+│       summary - that's Stage 1's job (episode_crux).                         │
 └──────────────────────────────────┬──────────────────────────────────────────┘
                                    │
                                    ▼
@@ -124,6 +130,9 @@ const refinedPost = previousStages[7]?.output_text;
 │                                                                              │
 │ OUTPUT: { episode_basics, guest_info, episode_crux }                         │
 │ STORED: previousStages[1] = { episode_basics, guest_info, episode_crux, output_text: null } │
+│                                                                              │
+│ ⭐ episode_crux is the CANONICAL SUMMARY for the entire pipeline.            │
+│    All downstream stages reference this - no duplicate summarization.       │
 └──────────────────────────────────┬──────────────────────────────────────────┘
                                    │
                                    ▼
@@ -144,8 +153,11 @@ const refinedPost = previousStages[7]?.output_text;
 │ ─────────────────────────────────────────────────────────────────────────── │
 │ READS: previousStages[1], previousStages[2], evergreen                       │
 │                                                                              │
-│ OUTPUT: { post_structure, narrative_summary, estimated_total_words }         │
-│ STORED: previousStages[3] = { post_structure, narrative_summary, ..., output_text: null } │
+│ OUTPUT: { post_structure, estimated_total_words }                            │
+│ STORED: previousStages[3] = { post_structure, estimated_total_words, output_text: null } │
+│                                                                              │
+│ NOTE: Stage 3 does NOT create its own narrative_summary. It uses the         │
+│       episode_crux from Stage 1 as the "big picture" for the blog post.     │
 └──────────────────────────────────┬──────────────────────────────────────────┘
                                    │
                                    ▼
@@ -358,5 +370,23 @@ Both columns can be populated for the same stage. The orchestrator reads both wh
 
 ---
 
-*Last updated: 2026-01-14*
+## Design Principle: No Duplicate Summarization
+
+The pipeline is designed to avoid redundant summarization. There is **one canonical summary**:
+
+| Concept | Location | Purpose |
+|---------|----------|---------|
+| **episode_crux** | Stage 1 | The single source of truth for the episode's core insight/message |
+
+Previously, the pipeline had three separate summaries:
+- Stage 0: `core_message` (1-2 sentences) - **REMOVED** (redundant)
+- Stage 1: `episode_crux` (2-3 sentences) - **KEPT** (canonical)
+- Stage 3: `narrative_summary` (3-4 sentences) - **REMOVED** (redundant)
+
+This design follows the **single responsibility principle**: each stage has one job, and
+summary generation happens in exactly one place (Stage 1).
+
+---
+
+*Last updated: 2026-01-15*
 *Related: ARCHITECTURE.md, IMPLEMENTATION-GUIDE.md*

@@ -26,11 +26,10 @@ const BLOG_OUTLINE_SCHEMA = {
   parameters: {
     type: 'object',
     properties: {
-      // NEW: Narrative summary for downstream stages to understand the "big picture"
-      narrative_summary: {
-        type: 'string',
-        description: 'A 3-4 sentence summary of what this blog post will communicate. This captures the key message, main argument, and takeaway in prose form. Used by Stage 6 to understand the narrative arc.',
-      },
+      // NOTE: We intentionally do NOT include a narrative_summary here.
+      // Stage 1's episode_crux already captures the "big picture" message.
+      // Duplicating it here would be redundant and waste tokens.
+      // The blog-content-compiler uses episode_crux from Stage 1 directly.
       post_structure: {
         type: 'object',
         properties: {
@@ -83,7 +82,7 @@ const BLOG_OUTLINE_SCHEMA = {
         description: 'Sum of word count targets (should be ~750)',
       },
     },
-    required: ['post_structure', 'estimated_total_words', 'narrative_summary'],
+    required: ['post_structure', 'estimated_total_words'],
   },
 };
 
@@ -94,19 +93,9 @@ const BLOG_OUTLINE_SCHEMA = {
 function validateOutput(data, episodeId) {
   logger.debug('🔍 Validating Stage 3 outline output', { episodeId });
 
-  // Check narrative summary (NEW - critical for Stage 6)
-  if (!data.narrative_summary || data.narrative_summary.length < 50) {
-    logger.warn('⚠️ Narrative summary missing or too short', {
-      episodeId,
-      length: data.narrative_summary?.length || 0,
-    });
-    // Don't throw - just warn. We can work without it.
-  } else {
-    logger.debug('✅ Narrative summary present', {
-      episodeId,
-      length: data.narrative_summary.length,
-    });
-  }
+  // NOTE: We no longer require narrative_summary here.
+  // Stage 1's episode_crux serves as the canonical "big picture" summary.
+  // This avoids duplicate summarization across stages.
 
   if (!data.post_structure) {
     logger.error('❌ Missing post_structure', { episodeId });
@@ -160,7 +149,6 @@ function validateOutput(data, episodeId) {
     episodeId,
     sectionCount: sections.length,
     estimatedWords: estimated_total_words,
-    hasNarrativeSummary: !!data.narrative_summary,
   });
 
   return true;

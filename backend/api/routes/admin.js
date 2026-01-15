@@ -6,10 +6,22 @@
  * IMPORTANT: All routes require superadmin role (hazel@theclever.io).
  *
  * Routes:
- * GET /api/admin/costs       - Get cost analytics
+ * GET /api/admin/costs       - Get cost analytics (with phase grouping)
  * GET /api/admin/performance - Get performance metrics
  * GET /api/admin/errors      - Get recent errors
  * GET /api/admin/usage       - Get API usage statistics
+ *
+ * Architecture:
+ * -------------
+ * The pipeline uses a 4-phase architecture:
+ *   PRE-GATE → PHASE 1 (Extract) → PHASE 2 (Plan) → PHASE 3 (Write) → PHASE 4 (Distribute)
+ *
+ * Stage-to-Phase Mapping:
+ * - Stage 0: Pre-Gate (conditional preprocessing)
+ * - Stages 1-2: Phase 1 - Extract (parallel)
+ * - Stages 3-5: Phase 2 - Plan (outline first, then parallel)
+ * - Stages 6-7: Phase 3 - Write (sequential)
+ * - Stages 8-9: Phase 4 - Distribute (parallel)
  *
  * Authorization:
  * - All routes require authentication
@@ -22,6 +34,54 @@ import { Router } from 'express';
 import { apiLogRepo, episodeRepo, stageRepo } from '../../lib/supabase-client.js';
 import { requireAuth, requireSuperadmin } from '../middleware/auth-middleware.js';
 import logger from '../../lib/logger.js';
+
+// ============================================================================
+// PHASE CONFIGURATION (matches orchestrator/phase-config.js)
+// ============================================================================
+
+/**
+ * Stage to Phase mapping for cost aggregation.
+ * Each stage belongs to one phase.
+ */
+const STAGE_TO_PHASE = {
+  0: { phase: 'pregate', name: 'Pre-Gate' },
+  1: { phase: 'extract', name: 'Phase 1: Extract' },
+  2: { phase: 'extract', name: 'Phase 1: Extract' },
+  3: { phase: 'plan', name: 'Phase 2: Plan' },
+  4: { phase: 'plan', name: 'Phase 2: Plan' },
+  5: { phase: 'plan', name: 'Phase 2: Plan' },
+  6: { phase: 'write', name: 'Phase 3: Write' },
+  7: { phase: 'write', name: 'Phase 3: Write' },
+  8: { phase: 'distribute', name: 'Phase 4: Distribute' },
+  9: { phase: 'distribute', name: 'Phase 4: Distribute' },
+};
+
+/**
+ * Stage names matching the phase-based architecture.
+ */
+const STAGE_NAMES = {
+  0: 'Transcript Preprocessing',
+  1: 'Transcript Analysis',
+  2: 'Quote Extraction',
+  3: 'Blog Outline',
+  4: 'Paragraph Details',
+  5: 'Headlines & Copy',
+  6: 'Blog Draft',
+  7: 'Refinement',
+  8: 'Social Content',
+  9: 'Email Campaign',
+};
+
+/**
+ * Phase metadata for display.
+ */
+const PHASES = {
+  pregate: { emoji: '🚪', name: 'Pre-Gate', description: 'Preprocessing' },
+  extract: { emoji: '📤', name: 'Phase 1: Extract', description: 'Metadata & Quotes' },
+  plan: { emoji: '📋', name: 'Phase 2: Plan', description: 'Structure & Headlines' },
+  write: { emoji: '✍️', name: 'Phase 3: Write', description: 'Draft & Refine' },
+  distribute: { emoji: '📣', name: 'Phase 4: Distribute', description: 'Social & Email' },
+};
 
 const router = Router();
 
@@ -127,18 +187,51 @@ router.get('/costs', async (req, res, next) => {
       byModel[model].cost += log.cost_usd || 0;
     }
 
-    // Group by stage
+    // Group by stage (with names)
     const byStage = {};
     for (const log of usageLogs) {
-      const stage = log.stage_number || 0;
+      const stage = log.stage_number ?? 0;
       if (!byStage[stage]) {
         byStage[stage] = {
+          name: STAGE_NAMES[stage] || `Stage ${stage}`,
           calls: 0,
           cost: 0,
         };
       }
       byStage[stage].calls++;
       byStage[stage].cost += log.cost_usd || 0;
+    }
+
+    // Group by phase (aggregates stages into phases)
+    const byPhase = {};
+    for (const log of usageLogs) {
+      const stage = log.stage_number ?? 0;
+      const phaseInfo = STAGE_TO_PHASE[stage] || { phase: 'unknown', name: 'Unknown' };
+      const phaseId = phaseInfo.phase;
+
+      if (!byPhase[phaseId]) {
+        byPhase[phaseId] = {
+          name: PHASES[phaseId]?.name || phaseInfo.name,
+          emoji: PHASES[phaseId]?.emoji || '📦',
+          description: PHASES[phaseId]?.description || '',
+          calls: 0,
+          cost: 0,
+          stages: [],
+        };
+      }
+
+      byPhase[phaseId].calls++;
+      byPhase[phaseId].cost += log.cost_usd || 0;
+
+      // Track which stages contributed to this phase
+      if (!byPhase[phaseId].stages.includes(stage)) {
+        byPhase[phaseId].stages.push(stage);
+      }
+    }
+
+    // Sort stages within each phase
+    for (const phase of Object.values(byPhase)) {
+      phase.stages.sort((a, b) => a - b);
     }
 
     // Daily breakdown (using 'timestamp' column from api_usage_log table)
@@ -161,6 +254,7 @@ router.get('/costs', async (req, res, next) => {
       totalCalls: usageLogs.length,
       providerCount: Object.keys(byProvider).length,
       modelCount: Object.keys(byModel).length,
+      phaseCount: Object.keys(byPhase).length,
     });
 
     res.json({
@@ -178,7 +272,8 @@ router.get('/costs', async (req, res, next) => {
       },
       byProvider,
       byModel,
-      byStage,
+      byPhase,  // 🆕 Phase-level cost breakdown
+      byStage,  // Stage-level cost breakdown (for detailed view)
       byDay,
     });
   } catch (error) {
@@ -256,7 +351,9 @@ router.get('/performance', async (req, res, next) => {
         if (stage.status === 'completed' && stage.duration_ms) {
           if (!stageMetrics[stage.stage_number]) {
             stageMetrics[stage.stage_number] = {
-              name: stage.stage_name,
+              // Use canonical stage names from our config
+              name: STAGE_NAMES[stage.stage_number] || stage.stage_name || `Stage ${stage.stage_number}`,
+              phase: STAGE_TO_PHASE[stage.stage_number]?.phase || 'unknown',
               durations: [],
               costs: [],
             };
@@ -274,6 +371,7 @@ router.get('/performance', async (req, res, next) => {
     for (const [stageNum, data] of Object.entries(stageMetrics)) {
       stageAverages[stageNum] = {
         name: data.name,
+        phase: data.phase,
         avgDurationMs: data.durations.reduce((a, b) => a + b, 0) / data.durations.length,
         avgCost: data.costs.length > 0
           ? data.costs.reduce((a, b) => a + b, 0) / data.costs.length
@@ -282,11 +380,40 @@ router.get('/performance', async (req, res, next) => {
       };
     }
 
+    // Calculate phase-level performance (aggregate stages by phase)
+    const phaseMetrics = {};
+    for (const [stageNum, data] of Object.entries(stageAverages)) {
+      const phaseId = data.phase;
+      if (!phaseMetrics[phaseId]) {
+        phaseMetrics[phaseId] = {
+          name: PHASES[phaseId]?.name || phaseId,
+          emoji: PHASES[phaseId]?.emoji || '📦',
+          totalAvgDurationMs: 0,
+          totalAvgCost: 0,
+          stages: [],
+        };
+      }
+      phaseMetrics[phaseId].totalAvgDurationMs += data.avgDurationMs;
+      phaseMetrics[phaseId].totalAvgCost += data.avgCost;
+      phaseMetrics[phaseId].stages.push({
+        number: parseInt(stageNum),
+        name: data.name,
+        avgDurationMs: data.avgDurationMs,
+        avgCost: data.avgCost,
+      });
+    }
+
+    // Sort stages within each phase
+    for (const phase of Object.values(phaseMetrics)) {
+      phase.stages.sort((a, b) => a.number - b.number);
+    }
+
     logger.info('📤 GET /api/admin/performance - Success', {
       episodesAnalyzed: episodes.length,
       avgDurationSeconds: Math.round(avgDuration),
       avgCostUsd: avgCost.toFixed(4),
       stageMetricsCount: Object.keys(stageAverages).length,
+      phaseMetricsCount: Object.keys(phaseMetrics).length,
     });
 
     res.json({
@@ -299,7 +426,8 @@ router.get('/performance', async (req, res, next) => {
         minCost: costs.length > 0 ? Math.min(...costs) : 0,
         maxCost: costs.length > 0 ? Math.max(...costs) : 0,
       },
-      byStage: stageAverages,
+      byPhase: phaseMetrics,  // 🆕 Phase-level performance breakdown
+      byStage: stageAverages, // Stage-level performance (detailed view)
     });
   } catch (error) {
     logger.error('❌ GET /api/admin/performance - Failed', {

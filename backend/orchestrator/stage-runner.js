@@ -17,10 +17,16 @@
  * Stage-to-Model Mapping:
  * -----------------------
  * Stage 0: Claude Haiku (preprocessing, 200K context)
- * Stage 1: GPT-5 mini (transcript analysis)
+ * Stage 1: GPT-5 mini (transcript analysis) - Creates episode_crux (CANONICAL SUMMARY)
  * Stage 2: Claude Haiku (quote extraction - accurate, verbatim)
  * Stages 3-6: GPT-5 mini (outlining and drafting)
  * Stages 7-9: Claude Sonnet (refinement and distribution)
+ *
+ * Key Design Principle - No Duplicate Summarization:
+ * --------------------------------------------------
+ * Stage 1's `episode_crux` is the SINGLE canonical summary of the episode.
+ * Other stages (0, 3) intentionally DO NOT create their own summaries.
+ * This prevents redundant AI calls and saves tokens/cost.
  *
  * Error Handling:
  * ---------------

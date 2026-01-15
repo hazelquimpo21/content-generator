@@ -93,16 +93,15 @@ const PREPROCESSING_TOOL_SCHEMA = {
           type: 'string',
           description: 'A compelling, SEO-friendly title for this episode',
         },
-        core_message: {
-          type: 'string',
-          description: '1-2 sentence summary of the core takeaway',
-        },
+        // NOTE: core_message has been REMOVED. Stage 1's episode_crux is the
+        // canonical summary of the episode's main insight. Having both was
+        // redundant and wasted tokens on duplicate summarization.
         estimated_duration: {
           type: 'string',
           description: 'Estimated episode duration based on content density',
         },
       },
-      required: ['inferred_title', 'core_message'],
+      required: ['inferred_title'],
     },
   },
   required: ['comprehensive_summary', 'key_topics', 'speakers', 'episode_metadata'],

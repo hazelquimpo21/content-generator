@@ -18,20 +18,8 @@ You are an expert content strategist specializing in therapeutic and mental heal
 
 Create a high-level outline for a 750-word blog post based on this episode.
 
-### Narrative Summary (IMPORTANT)
-
-First, write a **narrative_summary** - a 3-4 sentence paragraph that captures:
-- What this blog post is about (the core message)
-- The main argument or insight
-- What the reader will take away
-
-This summary is used by the draft writer to understand the "big picture" before writing.
-
-**Example narrative_summary:**
-"This blog post explores why couples often avoid difficult conversations about money, even when
-financial stress is damaging their relationship. Drawing from attachment theory, we'll examine
-how early experiences shape our comfort with financial vulnerability. Readers will learn that
-the goal isn't to eliminate disagreements about money, but to create safety for honest dialogue."
+**NOTE:** You do NOT need to write a narrative summary. The episode_crux provided above
+already captures the "big picture" message. Focus only on the structure below.
 
 ### Structure Requirements
 

@@ -5,13 +5,18 @@
  * Analyzes the podcast transcript to extract episode metadata, guest info,
  * and the core "crux" of the episode.
  *
+ * ⭐ CANONICAL SUMMARY SOURCE ⭐
+ * This stage produces `episode_crux` - the SINGLE source of truth for the
+ * episode's core insight/message. Other stages (0, 3) intentionally do NOT
+ * create their own summaries to avoid duplication.
+ *
  * Purpose:
  * --------
  * This is the first analysis stage that provides foundational information
  * used by all subsequent stages. It extracts:
  * - Episode basics (title, topics, duration estimate)
  * - Guest information (name, credentials, expertise)
- * - Episode crux (the core insight/takeaway)
+ * - Episode crux (the core insight/takeaway) ← CANONICAL SUMMARY
  *
  * Input:
  * ------

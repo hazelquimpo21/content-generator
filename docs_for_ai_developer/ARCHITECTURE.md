@@ -218,9 +218,20 @@ const quotes = previousStages[2]?.quotes;
 Stage 0 (preprocessing) focuses ONLY on:
 - Compressing long transcripts into summaries
 - Identifying speakers and topics
-- Extracting episode metadata
+- Extracting episode metadata (title, duration - but NOT a core_message summary)
 
 **Stage 0 does not extract quotes** to maintain single responsibility and avoid diluted output quality.
+
+### No Duplicate Summarization
+
+**IMPORTANT:** The pipeline has one canonical summary: **Stage 1's `episode_crux`**.
+
+| Stage | What it does NOT do | Why |
+|-------|---------------------|-----|
+| Stage 0 | Does NOT create a `core_message` summary | Stage 1 handles this with `episode_crux` |
+| Stage 3 | Does NOT create a `narrative_summary` | Uses `episode_crux` from Stage 1 instead |
+
+This design prevents redundant AI calls doing the same summarization work, saving tokens and money.
 
 ## Data Flow Architecture
 

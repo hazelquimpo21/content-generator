@@ -304,11 +304,23 @@ router.get('/:id/stages', requireAuth, async (req, res, next) => {
     // Then get all stages
     const stages = await stageRepo.findAllByEpisode(id);
 
-    logger.debug('Stages retrieved', {
+    // Detailed logging for debugging stage data issues
+    const stagesSummary = stages.map(s => ({
+      num: s.stage_number,
+      status: s.status,
+      hasData: !!s.output_data,
+      hasText: !!s.output_text,
+    }));
+
+    logger.info('📊 Stages retrieved for Review Hub', {
       episodeId: id,
+      episodeStatus: episode.status,
       stageCount: stages.length,
       completedCount: stages.filter(s => s.status === 'completed').length,
+      pendingCount: stages.filter(s => s.status === 'pending').length,
       processingCount: stages.filter(s => s.status === 'processing').length,
+      failedCount: stages.filter(s => s.status === 'failed').length,
+      stagesSummary,
     });
 
     // Prevent browser caching - stages data changes during processing

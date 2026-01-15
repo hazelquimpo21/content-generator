@@ -279,6 +279,15 @@ export function AuthProvider({ children }) {
           }
           break;
 
+        case 'INITIAL_SESSION':
+          // INITIAL_SESSION fires when the app first loads with an existing session.
+          // We already handle this in initAuth(), so we just need to sync state here.
+          console.log('AuthContext: Initial session detected');
+          if (newSession) {
+            setSession(newSession);
+          }
+          break;
+
         default:
           console.log('AuthContext: Unhandled auth event', event);
       }

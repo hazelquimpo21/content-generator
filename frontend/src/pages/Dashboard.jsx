@@ -134,7 +134,7 @@ function Dashboard() {
   // Filter episodes by search query
   const filteredEpisodes = episodes.filter((episode) => {
     if (!searchQuery) return true;
-    const title = episode.episode_context?.title || '';
+    const title = episode.title || episode.episode_context?.title || '';
     return title.toLowerCase().includes(searchQuery.toLowerCase());
   });
 
@@ -257,7 +257,7 @@ function Dashboard() {
         onClose={handleDeleteCancel}
         onConfirm={handleDeleteConfirm}
         title="Delete Episode"
-        message={`Are you sure you want to delete "${deleteTarget?.episode_context?.title || 'this episode'}"?`}
+        message={`Are you sure you want to delete "${deleteTarget?.title || deleteTarget?.episode_context?.title || 'this episode'}"?`}
         description={
           deleteError ||
           'This action cannot be undone. All generated content for this episode will be permanently deleted.'
@@ -279,7 +279,8 @@ function Dashboard() {
  * @param {Function} onDelete - Handler for delete button click
  */
 function EpisodeCard({ episode, onClick, onDelete }) {
-  const title = episode.episode_context?.title || 'Untitled Episode';
+  // Check title from multiple sources: AI-generated (episode.title), user-provided (episode_context.title)
+  const title = episode.title || episode.episode_context?.title || 'Untitled Episode';
   const createdAt = episode.created_at
     ? format(new Date(episode.created_at), 'MMM d, yyyy')
     : '';

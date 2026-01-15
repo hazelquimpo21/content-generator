@@ -322,6 +322,17 @@ export async function processEpisode(episodeId, options = {}) {
         // Save result to database
         await stageRepo.markCompleted(episodeId, stageNum, result);
 
+        // After Stage 1, save the AI-generated title to episodes.title
+        // This ensures the title is available even if user didn't provide one
+        if (stageNum === 1 && result.output_data?.episode_basics?.title) {
+          const generatedTitle = result.output_data.episode_basics.title;
+          logger.debug('Saving Stage 1 generated title to episode', {
+            episodeId,
+            title: generatedTitle,
+          });
+          await episodeRepo.update(episodeId, { title: generatedTitle });
+        }
+
         // Add to context for next stage
         // IMPORTANT: Merge both output_data and output_text so downstream stages
         // can access either structured data OR text content as needed.

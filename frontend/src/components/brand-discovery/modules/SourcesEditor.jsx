@@ -218,7 +218,6 @@ function SourcesEditor({ data = {}, onSave, onClose, saving }) {
             >
               <Trash2 className={styles.tabRemoveIcon} />
             </button>
-          </button>
           </div>
         ))}
 

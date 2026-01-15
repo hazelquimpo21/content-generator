@@ -185,11 +185,17 @@ export function useTranscriptAutoPopulate() {
     // Validate transcript length
     if (!transcript || transcript.length < MIN_TRANSCRIPT_LENGTH) {
       // Reset state if transcript becomes too short
-      if (metadata || error) {
-        setMetadata(null);
-        setUsage(null);
-        setError(null);
-      }
+      setMetadata(null);
+      setUsage(null);
+      setError(null);
+      setAnalyzing(false);
+      return;
+    }
+
+    // Skip if we already have metadata for this transcript
+    // (prevents re-analysis when metadata state changes trigger re-render)
+    const transcriptHash = transcript.substring(0, 500) + transcript.length;
+    if (transcriptHash === lastAnalyzedTranscriptRef.current) {
       return;
     }
 
@@ -201,7 +207,7 @@ export function useTranscriptAutoPopulate() {
     debounceTimeoutRef.current = setTimeout(() => {
       performAnalysis(transcript);
     }, DEBOUNCE_DELAY);
-  }, [performAnalysis, metadata, error]);
+  }, [performAnalysis]); // Removed metadata/error from deps to prevent re-triggering
 
   /**
    * Check if current transcript length is sufficient for analysis

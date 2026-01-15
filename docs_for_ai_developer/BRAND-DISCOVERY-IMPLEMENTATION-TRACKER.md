@@ -85,25 +85,25 @@ User Input → (Manual Paste OR Future Scraper) → Raw Text → AI Analysis →
 4. ✅ Frontend API client updates
 
 ### Phase 2: Core Components
-5. ⬜ BrandDiscoveryStudio container component
-6. ⬜ ModuleCard component (shared)
-7. ⬜ CompletionProgress component
+5. ✅ BrandDiscoveryStudio container component
+6. ✅ ModuleCard component (shared)
+7. ✅ BrandDnaPreview component (replaces CompletionProgress)
 
 ### Phase 3: Simple Modules First
-8. ⬜ **Vibe Module** - 6 sliders (simplest)
-9. ⬜ **Channels Module** - drag-drop ranking (straightforward)
-10. ⬜ **Method Module** - multi-select lists (predefined options)
+8. ✅ **Vibe Module** - sliders (4 dimensions: warmth, formality, energy, approach)
+9. ✅ **Channels Module** - drag-drop ranking (8 platforms)
+10. ✅ **Method Module** - multi-select lists (modalities + specialties)
 
 ### Phase 4: Complex Modules
-11. ⬜ **Sources Module** - manual paste + AI analysis
-12. ⬜ **Audience Module** - archetype cards with nuances
-13. ⬜ **Values Module** - card selection + ranking + AI why (most complex)
+11. ✅ **Sources Module** - manual paste with content types
+12. ✅ **Audience Module** - archetype cards with primary/secondary selection + custom details
+13. ✅ **Values Module** - 3-phase: select → rank → review (card selection + ranking)
 
 ### Phase 5: Synthesis & Integration
-14. ⬜ Brand DNA Synthesizer service
-15. ⬜ BrandDNAPreview component
-16. ⬜ Pipeline integration (inject into prompts)
-17. ⬜ Settings page integration
+14. ✅ Brand DNA Synthesizer service
+15. ✅ BrandDNAPreview component
+16. ⬜ Pipeline integration (inject into prompts) - future enhancement
+17. ✅ Settings page integration
 
 ---
 
@@ -318,16 +318,22 @@ POST   /api/brand-discovery/values/generate-nuances
 - [x] Backend services (`brand-discovery-service.js`, `brand-dna-synthesizer.js`)
 - [x] Backend API routes (`brand-discovery.js`)
 - [x] Frontend API client updates (`api-client.js`)
+- [x] BrandDiscoveryStudio container component
+- [x] ModuleCard component
+- [x] BrandDnaPreview component
+- [x] SourcesEditor module (manual paste)
+- [x] VibeEditor module (4 sliders)
+- [x] MethodEditor module (modalities + specialties multi-select)
+- [x] ChannelsEditor module (drag-drop ranking)
+- [x] AudienceEditor module (archetype selection + custom details)
+- [x] ValuesEditor module (3-phase: select → rank → review)
+- [x] Settings page integration
 
-### In Progress
-- [ ] Frontend components
-
-### Not Started
-- [ ] BrandDiscoveryStudio container
-- [ ] Individual module components (Vibe, Sources, Values, Method, Audience, Channels)
-- [ ] Brand DNA preview component
-- [ ] Settings page integration
-- [ ] Pipeline prompt injection
+### Future Enhancements (Out of Scope)
+- [ ] Pipeline prompt injection (use Brand DNA in content generation)
+- [ ] URL scraping for Sources module
+- [ ] AI-generated value nuances
+- [ ] Brand DNA version comparison UI
 
 ---
 

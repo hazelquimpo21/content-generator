@@ -1,0 +1,145 @@
+/**
+ * ============================================================================
+ * MODULE CARD STYLES
+ * ============================================================================
+ * Styles for individual brand discovery module cards.
+ * Uses CSS custom property --module-color for accent colors.
+ * ============================================================================
+ */
+
+/* ============================================================================
+ * CARD BASE
+ * ============================================================================ */
+
+.card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-4);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* Status-based border colors */
+.card.status-not_started {
+  border-color: var(--color-border);
+}
+
+.card.status-in_progress {
+  border-color: var(--color-warning);
+  border-width: 2px;
+}
+
+.card.status-complete {
+  border-color: var(--color-success);
+  border-width: 2px;
+}
+
+/* ============================================================================
+ * STATUS BADGE
+ * ============================================================================ */
+
+.statusBadge {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-medium);
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.badge-default {
+  background-color: var(--color-surface-hover);
+  color: var(--color-text-tertiary);
+}
+
+.badge-warning {
+  background-color: var(--color-warning-light);
+  color: var(--color-warning-dark);
+}
+
+.badge-success {
+  background-color: var(--color-success-light);
+  color: var(--color-success-dark);
+}
+
+.statusIcon {
+  width: 12px;
+  height: 12px;
+}
+
+/* ============================================================================
+ * CARD CONTENT
+ * ============================================================================ */
+
+.cardContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--space-2);
+}
+
+.iconWrapper {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-3);
+  opacity: 0.9;
+}
+
+.icon {
+  width: 24px;
+  height: 24px;
+  color: white;
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  margin: 0;
+  margin-bottom: var(--space-1);
+}
+
+.description {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+  margin-bottom: var(--space-3);
+  line-height: 1.5;
+}
+
+.preview {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  margin: 0;
+  margin-top: auto;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border-light);
+}
+
+/* ============================================================================
+ * ACTION BUTTON
+ * ============================================================================ */
+
+.actionButton {
+  margin-top: var(--space-3);
+  width: 100%;
+}

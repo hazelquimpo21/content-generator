@@ -1,0 +1,402 @@
+/**
+ * ============================================================================
+ * VALUES EDITOR STYLES
+ * ============================================================================
+ */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-height: 75vh;
+  overflow-y: auto;
+}
+
+/* ============================================================================
+ * PROGRESS BAR
+ * ============================================================================ */
+
+.progressBar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background-color: var(--color-surface-hover);
+  border-radius: var(--radius-md);
+}
+
+.progressStep {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  opacity: 0.5;
+  transition: opacity var(--transition-fast);
+}
+
+.progressStep.active {
+  opacity: 1;
+}
+
+.stepNumber {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-bold);
+  color: var(--color-text-tertiary);
+  background-color: var(--color-surface);
+  border-radius: var(--radius-full);
+}
+
+.progressStep.active .stepNumber {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+.stepLabel {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-secondary);
+}
+
+.progressLine {
+  width: 40px;
+  height: 2px;
+  background-color: var(--color-border);
+}
+
+/* ============================================================================
+ * PHASE INTRO
+ * ============================================================================ */
+
+.phaseIntro {
+  margin: 0;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+/* ============================================================================
+ * FILTER BAR (Selection Phase)
+ * ============================================================================ */
+
+.filterBar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.filterIcon {
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-tertiary);
+}
+
+.filters {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.filterButton {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.filterButton:hover {
+  border-color: var(--color-primary);
+}
+
+.filterButton.activeFilter {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: white;
+}
+
+/* ============================================================================
+ * SELECTION COUNT
+ * ============================================================================ */
+
+.selectionCount {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.heartIcon {
+  width: 16px;
+  height: 16px;
+  color: var(--color-primary);
+}
+
+/* ============================================================================
+ * VALUES GRID (Selection Phase)
+ * ============================================================================ */
+
+.valuesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--space-3);
+  max-height: 400px;
+  overflow-y: auto;
+  padding: var(--space-1);
+}
+
+.valueCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background-color: var(--color-surface);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.valueCard:hover:not(.disabled) {
+  border-color: var(--color-primary);
+  transform: translateY(-2px);
+}
+
+.valueCard.selected {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-light);
+}
+
+.valueCard.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.selectedBadge {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background-color: var(--color-primary);
+  border-radius: var(--radius-full);
+}
+
+.checkIcon {
+  width: 14px;
+  height: 14px;
+  color: white;
+}
+
+.valueName {
+  font-family: var(--font-heading);
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  margin: 0;
+  padding-right: var(--space-6);
+}
+
+.valueDescription {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+  line-height: 1.5;
+  flex: 1;
+}
+
+.valueCategory {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  padding: 2px var(--space-2);
+  background-color: var(--color-surface-hover);
+  border-radius: var(--radius-full);
+}
+
+/* ============================================================================
+ * RANKING LIST (Ranking Phase)
+ * ============================================================================ */
+
+.rankingList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.rankItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: grab;
+  transition: all var(--transition-fast);
+}
+
+.rankItem:hover {
+  border-color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.rankItem.topRank {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-light);
+}
+
+.rankItem.dragging {
+  opacity: 0.8;
+  box-shadow: var(--shadow-lg);
+  cursor: grabbing;
+}
+
+.gripIcon {
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+.rankNumber {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  font-weight: var(--font-bold);
+  color: var(--color-text-tertiary);
+  background-color: var(--color-surface-hover);
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+
+.rankNumber.topNumber {
+  background-color: var(--color-primary);
+  color: white;
+}
+
+.rankContent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.rankName {
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+}
+
+.rankDescription {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topIcon {
+  width: 20px;
+  height: 20px;
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+/* ============================================================================
+ * REVIEW LIST (Review Phase)
+ * ============================================================================ */
+
+.reviewList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.reviewItem {
+  padding: var(--space-4);
+  background-color: var(--color-surface-hover);
+  border-radius: var(--radius-lg);
+  border-left: 4px solid var(--color-primary);
+}
+
+.reviewHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.reviewRank {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-bold);
+  color: var(--color-primary);
+}
+
+.reviewName {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.reviewDescription {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+  margin-bottom: var(--space-3);
+  line-height: 1.5;
+}
+
+.whyTextarea {
+  width: 100%;
+  padding: var(--space-3);
+  font-family: inherit;
+  font-size: var(--font-size-sm);
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  resize: vertical;
+  transition: border-color var(--transition-fast);
+}
+
+.whyTextarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+/* ============================================================================
+ * PHASE ACTIONS
+ * ============================================================================ */
+
+.phaseActions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.actionGroup {
+  display: flex;
+  gap: var(--space-3);
+}

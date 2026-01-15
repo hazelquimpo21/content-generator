@@ -78,7 +78,7 @@
  * VARIANTS
  * ============================================================================ */
 
-/* Primary - Filled terracotta */
+/* Primary - Filled sage */
 .primary {
   background-color: var(--color-primary);
   color: var(--color-text-inverse);
@@ -135,13 +135,13 @@
 }
 
 .danger:hover:not(:disabled) {
-  background-color: #9f3f38;
-  border-color: #9f3f38;
+  background-color: #a84440;
+  border-color: #a84440;
 }
 
 .danger:active:not(:disabled) {
-  background-color: #8a332d;
-  border-color: #8a332d;
+  background-color: #943c38;
+  border-color: #943c38;
 }
 
 /* ============================================================================
@@ -172,6 +172,22 @@
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* Subtle press animation */
+.button:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+/* Success feedback animation */
+@keyframes successPop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.success {
+  animation: successPop 0.2s ease-out;
 }
 
 .text {

@@ -5,7 +5,7 @@
  * Reusable button with multiple variants and sizes.
  *
  * Variants:
- * - primary: Filled terracotta (main actions)
+ * - primary: Filled sage (main actions)
  * - secondary: Outlined (secondary actions)
  * - ghost: Text only (tertiary actions)
  * - danger: Red (destructive actions)

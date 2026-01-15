@@ -3,7 +3,7 @@
  * DESIGN SYSTEM - CSS CUSTOM PROPERTIES
  * ============================================================================
  * Central repository for all design tokens.
- * Warm, elegant aesthetic with beige tones and terracotta accents.
+ * Calm, human-centered aesthetic with sage and stone tones.
  *
  * Usage:
  *   color: var(--color-primary);
@@ -15,42 +15,42 @@
 :root {
   /* ========================================================================
    * COLOR PALETTE
-   * Warm beiges, soft creams, with terracotta accents
+   * Soft sage greens, cool neutrals, calming and soothing
    * ======================================================================== */
 
-  /* Primary - Terracotta (warm, inviting accent) */
-  --color-primary: #C4704D;
-  --color-primary-hover: #A85D3E;
-  --color-primary-light: #E8C4B8;
-  --color-primary-dark: #8B4A32;
+  /* Primary - Sage (calming, nature-inspired) */
+  --color-primary: #6B8F71;
+  --color-primary-hover: #5A7A5F;
+  --color-primary-light: #E3EDE4;
+  --color-primary-dark: #3D5240;
 
-  /* Neutrals - Warm beige scale */
-  --color-bg-primary: #FAF6F1;       /* Main background - warm cream */
-  --color-bg-secondary: #F5EDE4;     /* Card backgrounds - soft beige */
-  --color-bg-tertiary: #EDE4D8;      /* Hover states - darker beige */
-  --color-bg-accent: #E5D9CC;        /* Borders, dividers */
+  /* Neutrals - Cool stone scale */
+  --color-bg-primary: #F8F9FA;       /* Main background - clean white */
+  --color-bg-secondary: #F1F3F5;     /* Card backgrounds - soft gray */
+  --color-bg-tertiary: #E9ECEF;      /* Hover states - medium gray */
+  --color-bg-accent: #DEE2E6;        /* Borders, dividers */
 
   /* Text colors */
-  --color-text-primary: #3D3229;     /* Main text - warm dark brown */
-  --color-text-secondary: #6B5D4D;   /* Secondary text */
-  --color-text-tertiary: #998977;    /* Placeholder, hints */
-  --color-text-inverse: #FAF6F1;     /* Text on dark backgrounds */
+  --color-text-primary: #212529;     /* Main text - near black */
+  --color-text-secondary: #495057;   /* Secondary text */
+  --color-text-tertiary: #868E96;    /* Placeholder, hints */
+  --color-text-inverse: #F8F9FA;     /* Text on dark backgrounds */
 
   /* Semantic colors */
-  --color-success: #5D8A66;          /* Success green (muted, organic) */
-  --color-success-light: #E8F0E9;
-  --color-warning: #C9A227;          /* Warning gold */
-  --color-warning-light: #FDF6E3;
-  --color-error: #B8524A;            /* Error red (warm) */
-  --color-error-light: #F8E8E7;
-  --color-info: #5A7B9A;             /* Info blue (muted) */
-  --color-info-light: #E8EFF4;
+  --color-success: #51A05E;          /* Success green (fresh, clear) */
+  --color-success-light: #E6F4E8;
+  --color-warning: #8E9AAB;          /* Processing - calm slate (not alarming) */
+  --color-warning-light: #F1F3F6;
+  --color-error: #C25550;            /* Error red (clear but not harsh) */
+  --color-error-light: #FCEAEA;
+  --color-info: #5B8DEF;             /* Info blue (friendly) */
+  --color-info-light: #EBF2FF;
 
   /* Status-specific colors */
-  --color-pending: #998977;
-  --color-processing: #C9A227;
-  --color-completed: #5D8A66;
-  --color-failed: #B8524A;
+  --color-pending: #868E96;
+  --color-processing: #5B8DEF;       /* Processing now uses friendly blue */
+  --color-completed: #51A05E;
+  --color-failed: #C25550;
 
   /* ========================================================================
    * TYPOGRAPHY
@@ -129,18 +129,18 @@
 
   /* ========================================================================
    * SHADOWS
-   * Subtle, warm shadows
+   * Subtle, cool shadows
    * ======================================================================== */
 
-  --shadow-xs: 0 1px 2px rgba(61, 50, 41, 0.05);
-  --shadow-sm: 0 1px 3px rgba(61, 50, 41, 0.08),
-               0 1px 2px rgba(61, 50, 41, 0.06);
-  --shadow-md: 0 4px 6px rgba(61, 50, 41, 0.07),
-               0 2px 4px rgba(61, 50, 41, 0.05);
-  --shadow-lg: 0 10px 15px rgba(61, 50, 41, 0.08),
-               0 4px 6px rgba(61, 50, 41, 0.05);
-  --shadow-xl: 0 20px 25px rgba(61, 50, 41, 0.10),
-               0 10px 10px rgba(61, 50, 41, 0.04);
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06),
+               0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.05),
+               0 2px 4px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.06),
+               0 4px 6px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.08),
+               0 10px 10px rgba(0, 0, 0, 0.03);
 
   /* ========================================================================
    * TRANSITIONS
@@ -187,13 +187,13 @@
 
 @media (prefers-color-scheme: dark) {
   :root.dark-mode {
-    --color-bg-primary: #1F1A16;
-    --color-bg-secondary: #2A241E;
-    --color-bg-tertiary: #362F27;
-    --color-bg-accent: #4A4139;
+    --color-bg-primary: #1A1D21;
+    --color-bg-secondary: #22262B;
+    --color-bg-tertiary: #2C3238;
+    --color-bg-accent: #3A424A;
 
-    --color-text-primary: #FAF6F1;
-    --color-text-secondary: #C9BBA8;
-    --color-text-tertiary: #998977;
+    --color-text-primary: #F8F9FA;
+    --color-text-secondary: #ADB5BD;
+    --color-text-tertiary: #6C757D;
   }
 }

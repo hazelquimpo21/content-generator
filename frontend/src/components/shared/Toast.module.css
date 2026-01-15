@@ -157,8 +157,13 @@
 }
 
 /* Processing - animated spinner */
+.processing {
+  border-color: var(--color-info-light);
+  background-color: var(--color-info-light);
+}
+
 .processing .icon {
-  color: var(--color-primary);
+  color: var(--color-processing);
   animation: spin 1s linear infinite;
 }
 

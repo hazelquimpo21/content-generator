@@ -131,13 +131,13 @@ function formatDuration(ms) {
  * @param {Object} context - Processing context
  * @param {Object} options - Execution options
  * @param {string} options.episodeId - Episode UUID for logging
- * @param {Function} options.onStart - Callback when task starts
- * @param {Function} options.onComplete - Callback when task completes
+ * @param {Function} options.onTaskStart - Callback when task starts
+ * @param {Function} options.onTaskComplete - Callback when task completes
  * @returns {Promise<Object>} Task result with output, timing, and cost
  * @throws {ProcessingError} If task fails
  */
 async function executeTask(taskKey, context, options = {}) {
-  const { episodeId, onStart, onComplete } = options;
+  const { episodeId, onTaskStart, onTaskComplete } = options;
   const taskConfig = getTaskConfig(taskKey);
 
   if (!taskConfig) {
@@ -158,8 +158,8 @@ async function executeTask(taskKey, context, options = {}) {
     episodeId,
   });
 
-  if (onStart) {
-    onStart(taskKey, taskConfig);
+  if (onTaskStart) {
+    onTaskStart(taskKey, taskConfig);
   }
 
   // -------------------------------------------------------------------------
@@ -201,11 +201,8 @@ async function executeTask(taskKey, context, options = {}) {
       episodeId,
     });
 
-    if (onComplete) {
-      onComplete(taskKey, taskConfig, result, durationMs);
-    }
-
-    return {
+    // Build the task result object (same as what's returned)
+    const taskResult = {
       taskKey,
       stageNumber,
       success: true,
@@ -213,6 +210,14 @@ async function executeTask(taskKey, context, options = {}) {
       durationMs,
       cost: result.cost_usd || 0,
     };
+
+    // Call the completion callback with the task result
+    // Signature: (taskKey, taskResult) - matches executeTasksSequential
+    if (onTaskComplete) {
+      onTaskComplete(taskKey, taskResult);
+    }
+
+    return taskResult;
 
   } catch (error) {
     const durationMs = Date.now() - startTime;

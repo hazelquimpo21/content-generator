@@ -663,32 +663,73 @@ Update evergreen content.
 
 ## Admin
 
+**Note:** All admin endpoints require superadmin role (hazel@theclever.io).
+
+The pipeline uses a **4-phase architecture**:
+- **Pre-Gate (Stage 0)**: Conditional preprocessing for long transcripts
+- **Phase 1 - Extract (Stages 1-2)**: Metadata & Quotes (parallel)
+- **Phase 2 - Plan (Stages 3-5)**: Structure & Headlines (outline first, then parallel)
+- **Phase 3 - Write (Stages 6-7)**: Draft & Refine (sequential)
+- **Phase 4 - Distribute (Stages 8-9)**: Social & Email (parallel)
+
+---
+
 ### GET `/api/admin/costs`
 
-Get cost analytics.
+Get cost analytics with phase and stage breakdowns.
 
 **Query Parameters:**
-- `start_date` (optional): ISO date
-- `end_date` (optional): ISO date
-- `group_by` (optional): "day" | "week" | "month" | "provider"
+- `period` (optional): "day" | "week" | "month" (default: "week")
+- `startDate` (optional): ISO date string
+- `endDate` (optional): ISO date string
 
 **Response (200 OK):**
 ```json
 {
-  "total_cost_usd": "45.67",
-  "cost_by_provider": {
-    "openai": "28.40",
-    "anthropic": "17.27"
+  "period": {
+    "start": "2025-01-06T00:00:00Z",
+    "end": "2025-01-13T00:00:00Z",
+    "label": "week"
   },
-  "cost_by_date": [
-    {
-      "date": "2025-01-12",
-      "cost_usd": "12.45",
-      "episodes": 3
-    }
-  ],
-  "total_tokens": 1245890,
-  "total_api_calls": 127
+  "totals": {
+    "cost": 45.67,
+    "calls": 127,
+    "inputTokens": 1045890,
+    "outputTokens": 200000,
+    "averageCostPerCall": 0.36
+  },
+  "byProvider": {
+    "openai": { "calls": 85, "cost": 28.40, "inputTokens": 700000, "outputTokens": 150000 },
+    "anthropic": { "calls": 42, "cost": 17.27, "inputTokens": 345890, "outputTokens": 50000 }
+  },
+  "byModel": {
+    "gpt-5-mini": { "calls": 85, "cost": 28.40 },
+    "claude-sonnet-4-20250514": { "calls": 30, "cost": 15.00 },
+    "claude-3-5-haiku-20241022": { "calls": 12, "cost": 2.27 }
+  },
+  "byPhase": {
+    "pregate": { "name": "Pre-Gate", "emoji": "🚪", "description": "Preprocessing", "calls": 3, "cost": 0.15, "stages": [0] },
+    "extract": { "name": "Phase 1: Extract", "emoji": "📤", "description": "Metadata & Quotes", "calls": 24, "cost": 5.40, "stages": [1, 2] },
+    "plan": { "name": "Phase 2: Plan", "emoji": "📋", "description": "Structure & Headlines", "calls": 36, "cost": 8.10, "stages": [3, 4, 5] },
+    "write": { "name": "Phase 3: Write", "emoji": "✍️", "description": "Draft & Refine", "calls": 24, "cost": 22.00, "stages": [6, 7] },
+    "distribute": { "name": "Phase 4: Distribute", "emoji": "📣", "description": "Social & Email", "calls": 24, "cost": 10.02, "stages": [8, 9] }
+  },
+  "byStage": {
+    "0": { "name": "Transcript Preprocessing", "calls": 3, "cost": 0.15 },
+    "1": { "name": "Transcript Analysis", "calls": 12, "cost": 2.70 },
+    "2": { "name": "Quote Extraction", "calls": 12, "cost": 2.70 },
+    "3": { "name": "Blog Outline", "calls": 12, "cost": 2.70 },
+    "4": { "name": "Paragraph Details", "calls": 12, "cost": 2.70 },
+    "5": { "name": "Headlines & Copy", "calls": 12, "cost": 2.70 },
+    "6": { "name": "Blog Draft", "calls": 12, "cost": 6.00 },
+    "7": { "name": "Refinement", "calls": 12, "cost": 16.00 },
+    "8": { "name": "Social Content", "calls": 12, "cost": 5.01 },
+    "9": { "name": "Email Campaign", "calls": 12, "cost": 5.01 }
+  },
+  "byDay": {
+    "2025-01-12": { "cost": 12.45, "calls": 32 },
+    "2025-01-13": { "cost": 8.22, "calls": 21 }
+  }
 }
 ```
 
@@ -696,26 +737,80 @@ Get cost analytics.
 
 ### GET `/api/admin/performance`
 
-Get performance metrics.
+Get performance metrics with phase and stage breakdowns.
+
+**Query Parameters:**
+- `limit` (optional): Number of episodes to analyze (default: 100)
 
 **Response (200 OK):**
 ```json
 {
-  "average_processing_time_seconds": 272,
-  "average_cost_per_episode_usd": "1.28",
-  "stage_performance": [
-    {
-      "stage_number": 1,
-      "stage_name": "Transcript Analysis",
-      "avg_duration_seconds": 12,
-      "min_duration_seconds": 8,
-      "max_duration_seconds": 18,
-      "avg_cost_usd": "0.0045",
-      "success_rate": 0.98
+  "episodesAnalyzed": 35,
+  "overall": {
+    "avgDurationSeconds": 272,
+    "avgCostUsd": 1.28,
+    "minDuration": 180,
+    "maxDuration": 420,
+    "minCost": 0.85,
+    "maxCost": 2.10
+  },
+  "byPhase": {
+    "pregate": {
+      "name": "Pre-Gate",
+      "emoji": "🚪",
+      "totalAvgDurationMs": 3200,
+      "totalAvgCost": 0.05,
+      "stages": [
+        { "number": 0, "name": "Transcript Preprocessing", "avgDurationMs": 3200, "avgCost": 0.05 }
+      ]
+    },
+    "extract": {
+      "name": "Phase 1: Extract",
+      "emoji": "📤",
+      "totalAvgDurationMs": 8500,
+      "totalAvgCost": 0.18,
+      "stages": [
+        { "number": 1, "name": "Transcript Analysis", "avgDurationMs": 5200, "avgCost": 0.09 },
+        { "number": 2, "name": "Quote Extraction", "avgDurationMs": 3300, "avgCost": 0.09 }
+      ]
+    },
+    "plan": {
+      "name": "Phase 2: Plan",
+      "emoji": "📋",
+      "totalAvgDurationMs": 12000,
+      "totalAvgCost": 0.27,
+      "stages": [
+        { "number": 3, "name": "Blog Outline", "avgDurationMs": 4500, "avgCost": 0.09 },
+        { "number": 4, "name": "Paragraph Details", "avgDurationMs": 4000, "avgCost": 0.09 },
+        { "number": 5, "name": "Headlines & Copy", "avgDurationMs": 3500, "avgCost": 0.09 }
+      ]
+    },
+    "write": {
+      "name": "Phase 3: Write",
+      "emoji": "✍️",
+      "totalAvgDurationMs": 18000,
+      "totalAvgCost": 0.55,
+      "stages": [
+        { "number": 6, "name": "Blog Draft", "avgDurationMs": 8000, "avgCost": 0.15 },
+        { "number": 7, "name": "Refinement", "avgDurationMs": 10000, "avgCost": 0.40 }
+      ]
+    },
+    "distribute": {
+      "name": "Phase 4: Distribute",
+      "emoji": "📣",
+      "totalAvgDurationMs": 9000,
+      "totalAvgCost": 0.23,
+      "stages": [
+        { "number": 8, "name": "Social Content", "avgDurationMs": 5500, "avgCost": 0.12 },
+        { "number": 9, "name": "Email Campaign", "avgDurationMs": 3500, "avgCost": 0.11 }
+      ]
     }
-  ],
-  "total_episodes_processed": 35,
-  "episodes_this_month": 10
+  },
+  "byStage": {
+    "0": { "name": "Transcript Preprocessing", "phase": "pregate", "avgDurationMs": 3200, "avgCost": 0.05, "sampleSize": 10 },
+    "1": { "name": "Transcript Analysis", "phase": "extract", "avgDurationMs": 5200, "avgCost": 0.09, "sampleSize": 20 },
+    "2": { "name": "Quote Extraction", "phase": "extract", "avgDurationMs": 3300, "avgCost": 0.09, "sampleSize": 20 }
+  }
 }
 ```
 
@@ -726,41 +821,70 @@ Get performance metrics.
 Get recent errors.
 
 **Query Parameters:**
-- `limit` (optional): Number of results (default: 20)
-- `since` (optional): ISO timestamp
+- `limit` (optional): Number of results (default: 50)
 
 **Response (200 OK):**
 ```json
 {
-  "errors": [
+  "totalErrors": 5,
+  "recentErrors": [
     {
-      "id": "uuid",
-      "timestamp": "2025-01-13T14:30:00Z",
-      "episode_id": "uuid",
-      "episode_title": "Understanding Anxiety",
-      "stage_number": 4,
-      "stage_name": "Paragraph-Level Outlines",
-      "error_message": "Rate limit exceeded",
-      "retry_count": 2,
-      "status": "failed"
+      "episodeId": "uuid",
+      "episodeTitle": "Understanding Anxiety",
+      "stageNumber": 4,
+      "stageName": "Paragraph Details",
+      "error": "Rate limit exceeded",
+      "errorDetails": { "provider": "openai", "retryCount": 2 },
+      "failedAt": "2025-01-13T14:30:00Z"
     }
   ],
-  "total": 5
+  "byType": [
+    { "type": "rate_limit", "count": 2, "recent": [...] },
+    { "type": "timeout", "count": 1, "recent": [...] }
+  ],
+  "errorEpisodes": [
+    {
+      "id": "uuid",
+      "title": "Understanding Anxiety",
+      "error": "Rate limit exceeded",
+      "failedAt": "2025-01-13T14:30:00Z",
+      "currentStage": 4
+    }
+  ]
 }
 ```
 
 ---
 
-### POST `/api/admin/errors/:id/retry`
+### GET `/api/admin/usage`
 
-Retry a failed stage.
+Get overall API usage statistics.
 
-**Response (202 Accepted):**
+**Response (200 OK):**
 ```json
 {
-  "stage_id": "uuid",
-  "status": "processing",
-  "message": "Retry started"
+  "episodes": {
+    "total": 35,
+    "byStatus": {
+      "pending": 2,
+      "processing": 1,
+      "completed": 30,
+      "error": 2
+    },
+    "successRate": 85.7
+  },
+  "apiUsage": {
+    "last30Days": {
+      "calls": 350,
+      "cost": 45.67
+    },
+    "dailyAverage": {
+      "calls": 12,
+      "cost": 1.52
+    },
+    "projectedMonthlyCost": 45.60
+  },
+  "generatedAt": "2025-01-13T16:00:00Z"
 }
 ```
 

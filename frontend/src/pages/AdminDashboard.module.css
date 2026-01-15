@@ -142,8 +142,20 @@
 
 .breakdownGrid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--space-6);
+}
+
+@media (max-width: 900px) {
+  .breakdownGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .breakdownGrid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .breakdown h4 {
@@ -173,7 +185,47 @@
 }
 
 /* ============================================================================
- * STAGE PERFORMANCE
+ * PHASE PERFORMANCE
+ * ============================================================================ */
+
+.phasePerformance {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.phaseBlock {
+  border: 1px solid var(--color-bg-accent);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.phaseHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-bg-tertiary);
+  border-bottom: 1px solid var(--color-bg-accent);
+}
+
+.phaseName {
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+}
+
+.phaseTotals {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.phaseStages {
+  padding: var(--space-2) var(--space-4);
+}
+
+/* ============================================================================
+ * STAGE PERFORMANCE (within phases)
  * ============================================================================ */
 
 .stagePerformance {
@@ -190,20 +242,25 @@
   border-bottom: 1px solid var(--color-bg-accent);
 }
 
+.stageRow:last-child {
+  border-bottom: none;
+}
+
 .stageName {
-  color: var(--color-text-primary);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
 }
 
 .stageDuration {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
-  color: var(--color-text-secondary);
+  color: var(--color-text-tertiary);
 }
 
 .stageCost {
   font-family: var(--font-mono);
   font-size: var(--text-sm);
-  color: var(--color-text-secondary);
+  color: var(--color-text-tertiary);
 }
 
 /* ============================================================================

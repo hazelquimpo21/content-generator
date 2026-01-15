@@ -352,6 +352,15 @@ function NewEpisode() {
                 </div>
               )}
             </div>
+
+            {/* Show detected title prominently after analysis */}
+            {metadata?.suggested_title && !analyzing && (
+              <div className={styles.suggestedTitle}>
+                <Wand2 size={16} />
+                <span className={styles.suggestedTitleLabel}>Suggested Title:</span>
+                <span className={styles.suggestedTitleText}>{metadata.suggested_title}</span>
+              </div>
+            )}
           </div>
         </Card>
 

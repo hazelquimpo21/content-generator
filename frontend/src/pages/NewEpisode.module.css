@@ -184,6 +184,40 @@
 }
 
 /* ============================================================================
+ * SUGGESTED TITLE DISPLAY
+ * ============================================================================ */
+
+.suggestedTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-primary-light);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-md);
+  margin-top: var(--space-2);
+  animation: fadeIn var(--transition-base) ease-out;
+}
+
+.suggestedTitle svg {
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.suggestedTitleLabel {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.suggestedTitleText {
+  font-size: var(--text-sm);
+  color: var(--color-text-primary);
+  font-weight: var(--font-semibold);
+}
+
+/* ============================================================================
  * AUTO-POPULATED FIELD HIGHLIGHT
  * ============================================================================ */
 

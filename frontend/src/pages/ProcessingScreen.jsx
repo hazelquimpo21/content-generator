@@ -22,18 +22,27 @@ import { Button, Card, ProgressBar, Spinner, useToast } from '@components/shared
 import api from '@utils/api-client';
 import styles from './ProcessingScreen.module.css';
 
-// Stage definitions (10 stages: 0-9)
+// ============================================================================
+// STAGE DEFINITIONS
+// ============================================================================
+// Maps to backend stage numbers (0-9) organized into 4 phases:
+// - PRE-GATE: Stage 0 (conditional preprocessing)
+// - PHASE 1 (Extract): Stages 1-2 (run in parallel)
+// - PHASE 2 (Plan): Stages 3-5 (outline first, then 4-5 in parallel)
+// - PHASE 3 (Write): Stages 6-7 (sequential)
+// - PHASE 4 (Distribute): Stages 8-9 (run in parallel)
+// ============================================================================
 const STAGES = [
-  { number: 0, name: 'Transcript Preprocessing', description: 'Analyzing long transcripts with AI' },
-  { number: 1, name: 'Transcript Analysis', description: 'Extracting themes and structure' },
-  { number: 2, name: 'Quote Extraction', description: 'Finding key quotes and insights' },
-  { number: 3, name: 'Title Generation', description: 'Creating compelling titles' },
-  { number: 4, name: 'Summary Writing', description: 'Writing episode summaries' },
-  { number: 5, name: 'Outline Creation', description: 'Building blog post outline' },
-  { number: 6, name: 'Blog Post Draft', description: 'Writing full blog post' },
-  { number: 7, name: 'Blog Post Editing', description: 'Polishing and refining' },
-  { number: 8, name: 'Social Content', description: 'Creating social media posts' },
-  { number: 9, name: 'Email Campaign', description: 'Writing email content' },
+  { number: 0, name: 'Transcript Preprocessing', description: 'Compressing long transcripts', phase: 'pregate' },
+  { number: 1, name: 'Transcript Analysis', description: 'Extracting themes and metadata', phase: 'extract' },
+  { number: 2, name: 'Quote Extraction', description: 'Finding key quotes and insights', phase: 'extract' },
+  { number: 3, name: 'Blog Outline', description: 'Creating high-level blog structure', phase: 'plan' },
+  { number: 4, name: 'Paragraph Details', description: 'Planning paragraph-level content', phase: 'plan' },
+  { number: 5, name: 'Headlines & Copy', description: 'Generating title options', phase: 'plan' },
+  { number: 6, name: 'Blog Post Draft', description: 'Writing full blog post', phase: 'write' },
+  { number: 7, name: 'Blog Refinement', description: 'Polishing and improving prose', phase: 'write' },
+  { number: 8, name: 'Social Content', description: 'Creating social media posts', phase: 'distribute' },
+  { number: 9, name: 'Email Campaign', description: 'Writing email newsletter', phase: 'distribute' },
 ];
 
 const TOTAL_STAGES = 10;

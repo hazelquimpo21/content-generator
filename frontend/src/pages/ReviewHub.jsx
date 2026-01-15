@@ -39,7 +39,7 @@ import {
   MoreVertical,
   CalendarX,
 } from 'lucide-react';
-import { Button, Card, Spinner, Badge, ConfirmDialog, useToast } from '@components/shared';
+import { Button, Card, Spinner, Badge, ConfirmDialog, EditableText, EditableCard, useToast } from '@components/shared';
 import ScheduleModal from '@components/shared/ScheduleModal';
 import SaveToLibraryModal from '@components/shared/SaveToLibraryModal';
 import api from '@utils/api-client';
@@ -118,6 +118,9 @@ function ReviewHub() {
   // Library and calendar status tracking
   const [libraryItems, setLibraryItems] = useState([]);
   const [calendarItems, setCalendarItems] = useState([]);
+
+  // Stage content editing state - tracks which items are being saved
+  const [savingStageContent, setSavingStageContent] = useState({});
 
   // ============================================================================
   // EFFECTS
@@ -653,6 +656,361 @@ function ReviewHub() {
     }
   }
 
+  // ============================================================================
+  // STAGE CONTENT EDITING HANDLERS
+  // ============================================================================
+
+  /**
+   * Update stage output_data with new content
+   * Generic handler used by all tabs for editing individual items
+   *
+   * @param {string} stageId - Stage UUID
+   * @param {Object} newOutputData - New output_data object
+   * @param {string} saveKey - Unique key for tracking save state (e.g., 'quote-0')
+   */
+  async function handleUpdateStageData(stageId, newOutputData, saveKey) {
+    const logPrefix = '[ReviewHub:StageEdit]';
+
+    try {
+      setSavingStageContent((prev) => ({ ...prev, [saveKey]: true }));
+      console.log(`${logPrefix} Updating stage content:`, {
+        stageId,
+        saveKey,
+        dataKeys: Object.keys(newOutputData),
+      });
+
+      await api.stages.update(stageId, { output_data: newOutputData });
+
+      // Update local state immediately for responsive UX
+      setStages((prev) =>
+        prev.map((s) =>
+          s.id === stageId ? { ...s, output_data: newOutputData } : s
+        )
+      );
+
+      console.log(`${logPrefix} Stage content updated successfully:`, { stageId, saveKey });
+
+      showToast({
+        message: 'Changes saved',
+        variant: 'success',
+      });
+    } catch (err) {
+      console.error(`${logPrefix} Failed to update stage content:`, {
+        stageId,
+        saveKey,
+        error: err.message,
+        errorStack: err.stack,
+      });
+
+      showToast({
+        message: 'Failed to save changes',
+        description: err.message,
+        variant: 'error',
+      });
+
+      throw err; // Re-throw so EditableCard/EditableText can handle it
+    } finally {
+      setSavingStageContent((prev) => ({ ...prev, [saveKey]: false }));
+    }
+  }
+
+  /**
+   * Update a quote in Stage 2
+   * @param {Object} stage - Stage 2 data
+   * @param {number} index - Quote index
+   * @param {Object} updatedQuote - Updated quote object
+   */
+  async function handleUpdateQuote(stage, index, updatedQuote) {
+    const logPrefix = '[ReviewHub:QuoteEdit]';
+    console.log(`${logPrefix} Updating quote at index ${index}:`, {
+      stageId: stage.id,
+      oldText: stage.output_data.quotes[index]?.text?.substring(0, 50),
+      newText: updatedQuote.text?.substring(0, 50),
+    });
+
+    const updatedQuotes = [...stage.output_data.quotes];
+    updatedQuotes[index] = updatedQuote;
+
+    await handleUpdateStageData(
+      stage.id,
+      { ...stage.output_data, quotes: updatedQuotes },
+      `quote-${index}`
+    );
+  }
+
+  /**
+   * Delete a quote from Stage 2
+   * @param {Object} stage - Stage 2 data
+   * @param {number} index - Quote index to delete
+   */
+  async function handleDeleteQuote(stage, index) {
+    const logPrefix = '[ReviewHub:QuoteDelete]';
+    const quoteToDelete = stage.output_data.quotes[index];
+
+    console.log(`${logPrefix} Deleting quote at index ${index}:`, {
+      stageId: stage.id,
+      quoteText: quoteToDelete?.text?.substring(0, 50),
+      remainingCount: stage.output_data.quotes.length - 1,
+    });
+
+    // Prevent deleting if only 1 quote remains
+    if (stage.output_data.quotes.length <= 1) {
+      console.warn(`${logPrefix} Cannot delete last quote`);
+      showToast({
+        message: 'Cannot delete',
+        description: 'At least one quote must remain',
+        variant: 'warning',
+      });
+      return;
+    }
+
+    const updatedQuotes = stage.output_data.quotes.filter((_, i) => i !== index);
+
+    await handleUpdateStageData(
+      stage.id,
+      { ...stage.output_data, quotes: updatedQuotes },
+      `quote-delete-${index}`
+    );
+
+    showToast({
+      message: 'Quote deleted',
+      variant: 'success',
+    });
+  }
+
+  /**
+   * Update a title item in Stage 5
+   * @param {Object} stage - Stage 5 data
+   * @param {string} category - Category key (headlines, subheadings, taglines, social_hooks)
+   * @param {number} index - Item index
+   * @param {string} newValue - New text value
+   */
+  async function handleUpdateTitleItem(stage, category, index, newValue) {
+    const logPrefix = '[ReviewHub:TitleEdit]';
+    console.log(`${logPrefix} Updating ${category}[${index}]:`, {
+      stageId: stage.id,
+      category,
+      oldValue: stage.output_data[category]?.[index]?.substring(0, 30),
+      newValue: newValue?.substring(0, 30),
+    });
+
+    const updatedArray = [...(stage.output_data[category] || [])];
+    updatedArray[index] = newValue;
+
+    await handleUpdateStageData(
+      stage.id,
+      { ...stage.output_data, [category]: updatedArray },
+      `title-${category}-${index}`
+    );
+  }
+
+  /**
+   * Delete a title item from Stage 5
+   * @param {Object} stage - Stage 5 data
+   * @param {string} category - Category key
+   * @param {number} index - Item index to delete
+   */
+  async function handleDeleteTitleItem(stage, category, index) {
+    const logPrefix = '[ReviewHub:TitleDelete]';
+    const currentArray = stage.output_data[category] || [];
+
+    console.log(`${logPrefix} Deleting ${category}[${index}]:`, {
+      stageId: stage.id,
+      category,
+      itemValue: currentArray[index]?.substring(0, 30),
+      remainingCount: currentArray.length - 1,
+    });
+
+    // Prevent deleting if only 1 item remains in category
+    if (currentArray.length <= 1) {
+      console.warn(`${logPrefix} Cannot delete last item in ${category}`);
+      showToast({
+        message: 'Cannot delete',
+        description: `At least one ${category.replace('_', ' ').slice(0, -1)} must remain`,
+        variant: 'warning',
+      });
+      return;
+    }
+
+    const updatedArray = currentArray.filter((_, i) => i !== index);
+
+    await handleUpdateStageData(
+      stage.id,
+      { ...stage.output_data, [category]: updatedArray },
+      `title-delete-${category}-${index}`
+    );
+
+    showToast({
+      message: 'Item deleted',
+      variant: 'success',
+    });
+  }
+
+  /**
+   * Update a social post in Stage 8
+   * @param {Object} stage - Platform-specific Stage 8 data
+   * @param {string} platform - Platform name
+   * @param {number} index - Post index
+   * @param {Object} updatedPost - Updated post object
+   */
+  async function handleUpdateSocialPost(stage, platform, index, updatedPost) {
+    const logPrefix = '[ReviewHub:SocialEdit]';
+    console.log(`${logPrefix} Updating ${platform} post[${index}]:`, {
+      stageId: stage.id,
+      platform,
+      oldContent: stage.output_data.posts[index]?.content?.substring(0, 50),
+      newContent: updatedPost.content?.substring(0, 50),
+    });
+
+    const updatedPosts = [...stage.output_data.posts];
+    updatedPosts[index] = updatedPost;
+
+    await handleUpdateStageData(
+      stage.id,
+      { ...stage.output_data, posts: updatedPosts },
+      `social-${platform}-${index}`
+    );
+  }
+
+  /**
+   * Delete a social post from Stage 8
+   * @param {Object} stage - Platform-specific Stage 8 data
+   * @param {string} platform - Platform name
+   * @param {number} index - Post index to delete
+   */
+  async function handleDeleteSocialPost(stage, platform, index) {
+    const logPrefix = '[ReviewHub:SocialDelete]';
+    const currentPosts = stage.output_data.posts || [];
+
+    console.log(`${logPrefix} Deleting ${platform} post[${index}]:`, {
+      stageId: stage.id,
+      platform,
+      postContent: currentPosts[index]?.content?.substring(0, 50),
+      remainingCount: currentPosts.length - 1,
+    });
+
+    // Prevent deleting if only 1 post remains
+    if (currentPosts.length <= 1) {
+      console.warn(`${logPrefix} Cannot delete last post for ${platform}`);
+      showToast({
+        message: 'Cannot delete',
+        description: 'At least one post must remain',
+        variant: 'warning',
+      });
+      return;
+    }
+
+    const updatedPosts = currentPosts.filter((_, i) => i !== index);
+
+    await handleUpdateStageData(
+      stage.id,
+      { ...stage.output_data, posts: updatedPosts },
+      `social-delete-${platform}-${index}`
+    );
+
+    showToast({
+      message: 'Post deleted',
+      variant: 'success',
+    });
+  }
+
+  /**
+   * Update email content in Stage 9
+   * @param {Object} stage - Stage 9 data
+   * @param {string} field - Field to update (subject_lines, preview_text, email_body, followup_email)
+   * @param {number|null} index - Index for array fields, null for string fields
+   * @param {string} newValue - New value
+   */
+  async function handleUpdateEmailContent(stage, field, index, newValue) {
+    const logPrefix = '[ReviewHub:EmailEdit]';
+    console.log(`${logPrefix} Updating email ${field}${index !== null ? `[${index}]` : ''}:`, {
+      stageId: stage.id,
+      field,
+      index,
+      newValueLength: newValue?.length,
+    });
+
+    let updatedData = { ...stage.output_data };
+
+    if (index !== null) {
+      // Array field (subject_lines, preview_text)
+      const updatedArray = [...(stage.output_data[field] || [])];
+      updatedArray[index] = newValue;
+      updatedData[field] = updatedArray;
+    } else {
+      // String field (email_body, followup_email)
+      updatedData[field] = newValue;
+    }
+
+    await handleUpdateStageData(
+      stage.id,
+      updatedData,
+      `email-${field}${index !== null ? `-${index}` : ''}`
+    );
+  }
+
+  /**
+   * Delete an email array item from Stage 9
+   * @param {Object} stage - Stage 9 data
+   * @param {string} field - Array field (subject_lines, preview_text)
+   * @param {number} index - Index to delete
+   */
+  async function handleDeleteEmailItem(stage, field, index) {
+    const logPrefix = '[ReviewHub:EmailDelete]';
+    const currentArray = stage.output_data[field] || [];
+
+    console.log(`${logPrefix} Deleting email ${field}[${index}]:`, {
+      stageId: stage.id,
+      field,
+      itemValue: currentArray[index]?.substring(0, 30),
+      remainingCount: currentArray.length - 1,
+    });
+
+    // Prevent deleting if only 1 item remains
+    if (currentArray.length <= 1) {
+      console.warn(`${logPrefix} Cannot delete last ${field.replace('_', ' ')}`);
+      showToast({
+        message: 'Cannot delete',
+        description: `At least one ${field.replace('_', ' ').slice(0, -1)} must remain`,
+        variant: 'warning',
+      });
+      return;
+    }
+
+    const updatedArray = currentArray.filter((_, i) => i !== index);
+
+    await handleUpdateStageData(
+      stage.id,
+      { ...stage.output_data, [field]: updatedArray },
+      `email-delete-${field}-${index}`
+    );
+
+    showToast({
+      message: 'Item deleted',
+      variant: 'success',
+    });
+  }
+
+  /**
+   * Update analysis content in Stage 1
+   * @param {Object} stage - Stage 1 data
+   * @param {string} field - Field to update
+   * @param {*} newValue - New value
+   */
+  async function handleUpdateAnalysis(stage, field, newValue) {
+    const logPrefix = '[ReviewHub:AnalysisEdit]';
+    console.log(`${logPrefix} Updating analysis ${field}:`, {
+      stageId: stage.id,
+      field,
+    });
+
+    await handleUpdateStageData(
+      stage.id,
+      { ...stage.output_data, [field]: newValue },
+      `analysis-${field}`
+    );
+  }
+
   if (loading) {
     return <Spinner centered text="Loading content..." />;
   }
@@ -776,7 +1134,11 @@ function ReviewHub() {
       {/* Tab content */}
       <div className={styles.content}>
         {activeTab === 'analysis' && (
-          <AnalysisTab stage={getStage(1)} />
+          <AnalysisTab
+            stage={getStage(1)}
+            onUpdateAnalysis={handleUpdateAnalysis}
+            savingState={savingStageContent}
+          />
         )}
 
         {activeTab === 'quotes' && (
@@ -784,6 +1146,9 @@ function ReviewHub() {
             stage={getStage(2)}
             onCopy={copyToClipboard}
             copied={copied}
+            onUpdateQuote={handleUpdateQuote}
+            onDeleteQuote={handleDeleteQuote}
+            savingState={savingStageContent}
           />
         )}
 
@@ -792,6 +1157,9 @@ function ReviewHub() {
             stage={getStage(5)}
             onCopy={copyToClipboard}
             copied={copied}
+            onUpdateTitleItem={handleUpdateTitleItem}
+            onDeleteTitleItem={handleDeleteTitleItem}
+            savingState={savingStageContent}
           />
         )}
 
@@ -843,6 +1211,10 @@ function ReviewHub() {
             // Status tracking
             getLibraryStatus={getLibraryStatus}
             getCalendarStatus={getCalendarStatus}
+            // Editing props
+            onUpdateSocialPost={handleUpdateSocialPost}
+            onDeleteSocialPost={handleDeleteSocialPost}
+            savingState={savingStageContent}
           />
         )}
 
@@ -861,6 +1233,10 @@ function ReviewHub() {
             // Status tracking
             getLibraryStatus={getLibraryStatus}
             getCalendarStatus={getCalendarStatus}
+            // Editing props
+            onUpdateEmailContent={handleUpdateEmailContent}
+            onDeleteEmailItem={handleDeleteEmailItem}
+            savingState={savingStageContent}
           />
         )}
       </div>
@@ -923,7 +1299,12 @@ function ReviewHub() {
 // TAB COMPONENTS
 // ============================================================================
 
-function AnalysisTab({ stage }) {
+function AnalysisTab({ stage, onUpdateAnalysis, savingState }) {
+  const [editingCrux, setEditingCrux] = useState(false);
+  const [editingThemeIndex, setEditingThemeIndex] = useState(null);
+  const [editValue, setEditValue] = useState('');
+  const [editThemeValue, setEditThemeValue] = useState({ theme: '', description: '' });
+
   console.log('[AnalysisTab] Stage 1 data:', {
     hasStage: !!stage,
     stageStatus: stage?.status,
@@ -944,18 +1325,182 @@ function AnalysisTab({ stage }) {
 
   const data = stage.output_data;
 
+  // Start editing episode crux
+  const handleStartEditCrux = () => {
+    console.log('[AnalysisTab] Starting edit for episode crux');
+    setEditingCrux(true);
+    setEditValue(data.episode_crux || '');
+  };
+
+  // Save edited episode crux
+  const handleSaveCrux = async () => {
+    if (!editValue.trim()) {
+      console.warn('[AnalysisTab] Cannot save empty episode crux');
+      return;
+    }
+    try {
+      await onUpdateAnalysis(stage, 'episode_crux', editValue.trim());
+      setEditingCrux(false);
+      setEditValue('');
+    } catch (err) {
+      console.error('[AnalysisTab] Failed to save episode crux:', err);
+    }
+  };
+
+  // Start editing a theme
+  const handleStartEditTheme = (index) => {
+    console.log('[AnalysisTab] Starting edit for theme', index);
+    setEditingThemeIndex(index);
+    setEditThemeValue({
+      theme: data.key_themes[index]?.theme || '',
+      description: data.key_themes[index]?.description || '',
+    });
+  };
+
+  // Save edited theme
+  const handleSaveTheme = async (index) => {
+    if (!editThemeValue.theme.trim() || !editThemeValue.description.trim()) {
+      console.warn('[AnalysisTab] Cannot save theme with empty fields');
+      return;
+    }
+    try {
+      const updatedThemes = [...data.key_themes];
+      updatedThemes[index] = {
+        theme: editThemeValue.theme.trim(),
+        description: editThemeValue.description.trim(),
+      };
+      await onUpdateAnalysis(stage, 'key_themes', updatedThemes);
+      setEditingThemeIndex(null);
+      setEditThemeValue({ theme: '', description: '' });
+    } catch (err) {
+      console.error('[AnalysisTab] Failed to save theme:', err);
+    }
+  };
+
+  // Cancel any editing
+  const handleCancelEdit = () => {
+    setEditingCrux(false);
+    setEditingThemeIndex(null);
+    setEditValue('');
+    setEditThemeValue({ theme: '', description: '' });
+  };
+
   return (
     <div className={styles.tabContent}>
-      <Card title="Episode Crux" padding="lg">
-        <p className={styles.crux}>{data.episode_crux}</p>
+      <Card
+        title="Episode Crux"
+        subtitle="The core insight of this episode"
+        headerAction={
+          editingCrux ? (
+            <div className={styles.cardActions}>
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={Save}
+                onClick={handleSaveCrux}
+                loading={savingState?.['analysis-episode_crux']}
+                disabled={!editValue.trim()}
+              >
+                Save
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={X}
+                onClick={handleCancelEdit}
+              >
+                Cancel
+              </Button>
+            </div>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={Edit3}
+              onClick={handleStartEditCrux}
+            >
+              Edit
+            </Button>
+          )
+        }
+        padding="lg"
+      >
+        {editingCrux ? (
+          <textarea
+            className={styles.blogTextarea}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            placeholder="Enter the episode's core insight..."
+            disabled={savingState?.['analysis-episode_crux']}
+            style={{ minHeight: '100px' }}
+          />
+        ) : (
+          <p className={styles.crux}>{data.episode_crux}</p>
+        )}
       </Card>
 
       <Card title="Key Themes" padding="lg">
         <div className={styles.themesList}>
           {data.key_themes?.map((theme, i) => (
             <div key={i} className={styles.theme}>
-              <h4>{theme.theme}</h4>
-              <p>{theme.description}</p>
+              {editingThemeIndex === i ? (
+                <div className={styles.editForm}>
+                  <div className={styles.fieldGroup}>
+                    <label className={styles.fieldLabel}>Theme</label>
+                    <input
+                      type="text"
+                      value={editThemeValue.theme}
+                      onChange={(e) => setEditThemeValue({ ...editThemeValue, theme: e.target.value })}
+                      className={styles.titleInput}
+                      placeholder="Theme name"
+                      autoFocus
+                    />
+                  </div>
+                  <div className={styles.fieldGroup}>
+                    <label className={styles.fieldLabel}>Description</label>
+                    <textarea
+                      value={editThemeValue.description}
+                      onChange={(e) => setEditThemeValue({ ...editThemeValue, description: e.target.value })}
+                      className={styles.blogTextarea}
+                      placeholder="Theme description"
+                      style={{ minHeight: '60px' }}
+                    />
+                  </div>
+                  <div className={styles.cardActions}>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      leftIcon={Check}
+                      onClick={() => handleSaveTheme(i)}
+                      loading={savingState?.['analysis-key_themes']}
+                      disabled={!editThemeValue.theme.trim() || !editThemeValue.description.trim()}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={X}
+                      onClick={handleCancelEdit}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <h4>{theme.theme}</h4>
+                  <p>{theme.description}</p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={Edit3}
+                    onClick={() => handleStartEditTheme(i)}
+                  >
+                    Edit
+                  </Button>
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -975,7 +1520,7 @@ function AnalysisTab({ stage }) {
 }
 
 /**
- * QuotesTab - Displays extracted quotes from Stage 2
+ * QuotesTab - Displays extracted quotes from Stage 2 with edit/delete capability
  *
  * Quote structure (from Stage 2):
  * - text: The verbatim quote (required)
@@ -983,7 +1528,9 @@ function AnalysisTab({ stage }) {
  * - context: Why it's significant (optional)
  * - usage: Suggested use - headline/pullquote/social/key_point (optional)
  */
-function QuotesTab({ stage, onCopy, copied }) {
+function QuotesTab({ stage, onCopy, copied, onUpdateQuote, onDeleteQuote, savingState }) {
+  const [editingIndex, setEditingIndex] = useState(null);
+
   console.log('[QuotesTab] Stage 2 data:', {
     hasStage: !!stage,
     stageStatus: stage?.status,
@@ -1004,28 +1551,78 @@ function QuotesTab({ stage, onCopy, copied }) {
     return <EmptyState message="No quotes extracted" details="Stage 2 completed but has no quotes data." />;
   }
 
+  const quotes = stage.output_data.quotes;
+
+  // Field definitions for quote editing
+  const quoteFields = [
+    { key: 'text', label: 'Quote', required: true, multiline: true, rows: 3, placeholder: 'Enter the quote text...' },
+    { key: 'speaker', label: 'Speaker', required: true, placeholder: 'Who said this?' },
+    { key: 'context', label: 'Context', required: false, multiline: true, rows: 2, placeholder: 'Why is this quote significant?' },
+    { key: 'usage', label: 'Suggested Use', required: false, placeholder: 'headline, pullquote, social, or key_point' },
+  ];
+
   return (
     <div className={styles.tabContent}>
-      {stage.output_data.quotes.map((quote, i) => (
+      {quotes.map((quote, i) => (
         <Card key={i} padding="lg" className={styles.quoteCard}>
-          <blockquote className={styles.quote}>
-            "{quote.text}"
-          </blockquote>
-          <p className={styles.quoteSpeaker}>— {quote.speaker}</p>
-          {quote.context && <p className={styles.quoteContext}>{quote.context}</p>}
-          {quote.usage && (
-            <Badge variant="secondary" className={styles.quoteUsage}>
-              {quote.usage}
-            </Badge>
+          {editingIndex === i ? (
+            <EditableCard
+              item={quote}
+              fields={quoteFields}
+              onSave={async (updatedQuote) => {
+                await onUpdateQuote(stage, i, updatedQuote);
+                setEditingIndex(null);
+              }}
+              onDelete={async () => {
+                await onDeleteQuote(stage, i);
+              }}
+              canDelete={quotes.length > 1}
+              itemId={`quote-${i}`}
+              deleteConfirmText="Are you sure you want to delete this quote?"
+            />
+          ) : (
+            <>
+              <blockquote className={styles.quote}>
+                "{quote.text}"
+              </blockquote>
+              <p className={styles.quoteSpeaker}>— {quote.speaker}</p>
+              {quote.context && <p className={styles.quoteContext}>{quote.context}</p>}
+              {quote.usage && (
+                <Badge variant="secondary" className={styles.quoteUsage}>
+                  {quote.usage}
+                </Badge>
+              )}
+              <div className={styles.postActions}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={Edit3}
+                  onClick={() => setEditingIndex(i)}
+                >
+                  Edit
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={copied === `quote-${i}` ? Check : Copy}
+                  onClick={() => onCopy(quote.text, `quote-${i}`)}
+                >
+                  {copied === `quote-${i}` ? 'Copied!' : 'Copy'}
+                </Button>
+                {quotes.length > 1 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={Trash2}
+                    onClick={() => onDeleteQuote(stage, i)}
+                    loading={savingState?.[`quote-delete-${i}`]}
+                  >
+                    Delete
+                  </Button>
+                )}
+              </div>
+            </>
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={copied === `quote-${i}` ? Check : Copy}
-            onClick={() => onCopy(quote.text, `quote-${i}`)}
-          >
-            {copied === `quote-${i}` ? 'Copied!' : 'Copy'}
-          </Button>
         </Card>
       ))}
     </div>
@@ -1035,6 +1632,7 @@ function QuotesTab({ stage, onCopy, copied }) {
 /**
  * TitlesTab - Displays headlines, subheadings, taglines, and social hooks from Stage 5
  * Uses pill navigation to switch between categories for reduced scrolling
+ * Supports inline editing and deletion of individual items
  *
  * Stage 5 output structure:
  * - headlines: array of strings (10-15 main blog title options)
@@ -1042,8 +1640,10 @@ function QuotesTab({ stage, onCopy, copied }) {
  * - taglines: array of strings (5-7 short punchy summaries)
  * - social_hooks: array of strings (5-7 social media opening lines)
  */
-function TitlesTab({ stage, onCopy, copied }) {
+function TitlesTab({ stage, onCopy, copied, onUpdateTitleItem, onDeleteTitleItem, savingState }) {
   const [activeCategory, setActiveCategory] = useState('headlines');
+  const [editingIndex, setEditingIndex] = useState(null);
+  const [editValue, setEditValue] = useState('');
 
   // Debug logging to help identify data issues
   console.log('[TitlesTab] Stage 5 data:', {
@@ -1097,6 +1697,45 @@ function TitlesTab({ stage, onCopy, copied }) {
   const currentCategory = categories.find(c => c.id === activeCategory) || categories[0];
   const currentItems = getCurrentItems();
 
+  // Start editing an item
+  const handleStartEdit = (index) => {
+    console.log('[TitlesTab] Starting edit for', activeCategory, 'index', index);
+    setEditingIndex(index);
+    setEditValue(currentItems[index] || '');
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setEditingIndex(null);
+    setEditValue('');
+  };
+
+  // Save edited item
+  const handleSaveEdit = async (index) => {
+    if (!editValue.trim()) {
+      console.warn('[TitlesTab] Cannot save empty value');
+      return;
+    }
+    console.log('[TitlesTab] Saving edit for', activeCategory, 'index', index);
+    try {
+      await onUpdateTitleItem(stage, activeCategory, index, editValue.trim());
+      setEditingIndex(null);
+      setEditValue('');
+    } catch (err) {
+      console.error('[TitlesTab] Failed to save edit:', err);
+    }
+  };
+
+  // Handle keyboard events in edit mode
+  const handleKeyDown = (e, index) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveEdit(index);
+    } else if (e.key === 'Escape') {
+      handleCancelEdit();
+    }
+  };
+
   return (
     <div className={styles.tabContent}>
       {/* Category pill navigation */}
@@ -1105,7 +1744,10 @@ function TitlesTab({ stage, onCopy, copied }) {
           <button
             key={category.id}
             className={`${styles.pill} ${activeCategory === category.id ? styles.pillActive : ''}`}
-            onClick={() => setActiveCategory(category.id)}
+            onClick={() => {
+              setActiveCategory(category.id);
+              setEditingIndex(null); // Cancel any editing when switching categories
+            }}
           >
             <span>{category.label}</span>
             <span className={styles.pillCount}>{category.count}</span>
@@ -1122,15 +1764,69 @@ function TitlesTab({ stage, onCopy, copied }) {
         <div className={styles.titlesList}>
           {currentItems.map((item, i) => (
             <div key={i} className={styles.titleItem}>
-              <span className={styles.titleText}>{item}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                leftIcon={copied === `${activeCategory}-${i}` ? Check : Copy}
-                onClick={() => onCopy(item, `${activeCategory}-${i}`)}
-              >
-                {copied === `${activeCategory}-${i}` ? 'Copied!' : 'Copy'}
-              </Button>
+              {editingIndex === i ? (
+                <div className={styles.titleEditGroup}>
+                  <input
+                    type="text"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(e, i)}
+                    className={styles.titleInput}
+                    autoFocus
+                  />
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    leftIcon={Check}
+                    onClick={() => handleSaveEdit(i)}
+                    loading={savingState?.[`title-${activeCategory}-${i}`]}
+                    disabled={!editValue.trim()}
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={X}
+                    onClick={handleCancelEdit}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <span className={styles.titleText}>{item}</span>
+                  <div className={styles.cardActions}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={Edit3}
+                      onClick={() => handleStartEdit(i)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={copied === `${activeCategory}-${i}` ? Check : Copy}
+                      onClick={() => onCopy(item, `${activeCategory}-${i}`)}
+                    >
+                      {copied === `${activeCategory}-${i}` ? 'Copied!' : 'Copy'}
+                    </Button>
+                    {currentItems.length > 1 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={Trash2}
+                        onClick={() => onDeleteTitleItem(stage, activeCategory, i)}
+                        loading={savingState?.[`title-delete-${activeCategory}-${i}`]}
+                      >
+                        Delete
+                      </Button>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           ))}
         </div>
@@ -1372,6 +2068,7 @@ function BlogTab({
 /**
  * SocialTab - Displays platform-specific social media content from Stage 8
  * Uses platform pills for quick switching between platforms
+ * Supports inline editing and deletion of individual posts
  *
  * Stage 8 is now split into 4 separate sub-stages (one per platform).
  * Each platform stage has its own output_data.posts array.
@@ -1380,9 +2077,13 @@ function BlogTab({
  * - platformStages: Object map of platform -> stage record (e.g., { instagram: {...}, twitter: {...} })
  * - onRegeneratePlatform: Function(platform, stageId) to regenerate a specific platform
  * - regenerating: Currently regenerating identifier (e.g., '8-instagram')
+ * - onUpdateSocialPost: Function(stage, platform, index, updatedPost) to save edited post
+ * - onDeleteSocialPost: Function(stage, platform, index) to delete a post
+ * - savingState: Object tracking save state by key
  */
-function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regenerating, onSaveToLibrary, onSchedule, onReschedule, onUnschedule, unscheduling, episodeTitle, getLibraryStatus, getCalendarStatus }) {
+function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regenerating, onSaveToLibrary, onSchedule, onReschedule, onUnschedule, unscheduling, episodeTitle, getLibraryStatus, getCalendarStatus, onUpdateSocialPost, onDeleteSocialPost, savingState }) {
   const [activePlatform, setActivePlatform] = useState('instagram');
+  const [editingIndex, setEditingIndex] = useState(null);
 
   // Format scheduled date for display
   const formatScheduledDate = (dateStr) => {
@@ -1510,87 +2211,144 @@ function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regen
                 metadata: { type: post.type, hashtags: post.hashtags },
               };
 
+              // Field definitions for social post editing
+              const socialPostFields = [
+                { key: 'content', label: 'Post Content', required: true, multiline: true, rows: 4, placeholder: 'Enter post content...' },
+                { key: 'type', label: 'Post Type', required: false, placeholder: 'e.g., carousel, story, reel' },
+                ...(currentPlatform?.id === 'instagram' ? [
+                  { key: 'hashtags', label: 'Hashtags (comma-separated)', required: false, placeholder: '#health #wellness #podcast' }
+                ] : []),
+              ];
+
               return (
                 <div
                   key={i}
                   className={styles.socialPostItem}
                   style={{ '--platform-accent': currentPlatform?.color }}
                 >
-                  <div className={styles.postHeader}>
-                    {post.type && (
-                      <Badge variant="secondary" className={styles.postType}>
-                        {post.type}
-                      </Badge>
-                    )}
-                    {/* Library status badge only - scheduled shown in actions */}
-                    {libraryItem && (
-                      <Badge variant="success" className={styles.statusBadge}>
-                        <CheckCircle size={10} />
-                        In Library
-                      </Badge>
-                    )}
-                  </div>
-                  <p className={styles.socialPost}>{post.content}</p>
-                  {post.hashtags && post.hashtags.length > 0 && (
-                    <p className={styles.hashtags}>{post.hashtags.join(' ')}</p>
-                  )}
-                  <div className={styles.postActions}>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      leftIcon={copied === `${activePlatform}-${i}` ? Check : Copy}
-                      onClick={() => onCopy(post.content, `${activePlatform}-${i}`)}
-                    >
-                      {copied === `${activePlatform}-${i}` ? 'Copied!' : 'Copy'}
-                    </Button>
-                    <Button
-                      variant={libraryItem ? 'secondary' : 'ghost'}
-                      size="sm"
-                      leftIcon={libraryItem ? CheckCircle : Bookmark}
-                      onClick={() => !libraryItem && onSaveToLibrary(libraryData)}
-                      disabled={!!libraryItem}
-                      title={libraryItem ? 'Already in library' : 'Save to library'}
-                    >
-                      {libraryItem ? 'Saved' : 'Save'}
-                    </Button>
-                    {calendarItem ? (
-                      <div className={styles.scheduledActions}>
-                        <Badge variant="primary" className={styles.scheduledBadge}>
-                          <Calendar size={10} />
-                          {formatScheduledDate(calendarItem.scheduled_date)}
-                        </Badge>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          leftIcon={Calendar}
-                          onClick={() => onReschedule(calendarItem, postData)}
-                          title="Change scheduled date"
-                        >
-                          Reschedule
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          leftIcon={CalendarX}
-                          onClick={() => onUnschedule(calendarItem.id)}
-                          loading={unscheduling === calendarItem.id}
-                          title="Remove from schedule"
-                        >
-                          Unschedule
-                        </Button>
+                  {editingIndex === i ? (
+                    <EditableCard
+                      item={{
+                        ...post,
+                        hashtags: post.hashtags?.join(', ') || '', // Convert array to comma-separated for editing
+                      }}
+                      fields={socialPostFields}
+                      onSave={async (updatedPost) => {
+                        // Convert hashtags back to array
+                        const hashtagsArray = updatedPost.hashtags
+                          ? updatedPost.hashtags.split(',').map(t => t.trim()).filter(t => t)
+                          : [];
+                        await onUpdateSocialPost(currentPlatform?.stage, currentPlatform?.id, i, {
+                          ...updatedPost,
+                          hashtags: hashtagsArray.length > 0 ? hashtagsArray : undefined,
+                        });
+                        setEditingIndex(null);
+                      }}
+                      onDelete={async () => {
+                        await onDeleteSocialPost(currentPlatform?.stage, currentPlatform?.id, i);
+                      }}
+                      canDelete={currentPosts.length > 1}
+                      itemId={`social-${currentPlatform?.id}-${i}`}
+                      deleteConfirmText="Are you sure you want to delete this post?"
+                    />
+                  ) : (
+                    <>
+                      <div className={styles.postHeader}>
+                        {post.type && (
+                          <Badge variant="secondary" className={styles.postType}>
+                            {post.type}
+                          </Badge>
+                        )}
+                        {/* Library status badge only - scheduled shown in actions */}
+                        {libraryItem && (
+                          <Badge variant="success" className={styles.statusBadge}>
+                            <CheckCircle size={10} />
+                            In Library
+                          </Badge>
+                        )}
                       </div>
-                    ) : (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        leftIcon={Calendar}
-                        onClick={() => onSchedule(postData)}
-                        title="Schedule content"
-                      >
-                        Schedule
-                      </Button>
-                    )}
-                  </div>
+                      <p className={styles.socialPost}>{post.content}</p>
+                      {post.hashtags && post.hashtags.length > 0 && (
+                        <p className={styles.hashtags}>{post.hashtags.join(' ')}</p>
+                      )}
+                      <div className={styles.postActions}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          leftIcon={Edit3}
+                          onClick={() => setEditingIndex(i)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          leftIcon={copied === `${activePlatform}-${i}` ? Check : Copy}
+                          onClick={() => onCopy(post.content, `${activePlatform}-${i}`)}
+                        >
+                          {copied === `${activePlatform}-${i}` ? 'Copied!' : 'Copy'}
+                        </Button>
+                        {currentPosts.length > 1 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            leftIcon={Trash2}
+                            onClick={() => onDeleteSocialPost(currentPlatform?.stage, currentPlatform?.id, i)}
+                            loading={savingState?.[`social-delete-${currentPlatform?.id}-${i}`]}
+                          >
+                            Delete
+                          </Button>
+                        )}
+                        <Button
+                          variant={libraryItem ? 'secondary' : 'ghost'}
+                          size="sm"
+                          leftIcon={libraryItem ? CheckCircle : Bookmark}
+                          onClick={() => !libraryItem && onSaveToLibrary(libraryData)}
+                          disabled={!!libraryItem}
+                          title={libraryItem ? 'Already in library' : 'Save to library'}
+                        >
+                          {libraryItem ? 'Saved' : 'Save'}
+                        </Button>
+                        {calendarItem ? (
+                          <div className={styles.scheduledActions}>
+                            <Badge variant="primary" className={styles.scheduledBadge}>
+                              <Calendar size={10} />
+                              {formatScheduledDate(calendarItem.scheduled_date)}
+                            </Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              leftIcon={Calendar}
+                              onClick={() => onReschedule(calendarItem, postData)}
+                              title="Change scheduled date"
+                            >
+                              Reschedule
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              leftIcon={CalendarX}
+                              onClick={() => onUnschedule(calendarItem.id)}
+                              loading={unscheduling === calendarItem.id}
+                              title="Remove from schedule"
+                            >
+                              Unschedule
+                            </Button>
+                          </div>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            leftIcon={Calendar}
+                            onClick={() => onSchedule(postData)}
+                            title="Schedule content"
+                          >
+                            Schedule
+                          </Button>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -1603,6 +2361,7 @@ function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regen
 
 /**
  * EmailTab - Displays email campaign content from Stage 9
+ * Supports inline editing and deletion of subject lines, preview text, and email body
  *
  * Stage 9 output structure:
  * - subject_lines: array of strings (5 email subject options, <50 chars)
@@ -1610,7 +2369,13 @@ function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regen
  * - email_body: string (full email body in markdown, 200-350 words)
  * - followup_email: string (optional follow-up email, 100-150 words)
  */
-function EmailTab({ stage, onCopy, copied, onSaveToLibrary, onSchedule, onReschedule, onUnschedule, unscheduling, episodeTitle, getLibraryStatus, getCalendarStatus }) {
+function EmailTab({ stage, onCopy, copied, onSaveToLibrary, onSchedule, onReschedule, onUnschedule, unscheduling, episodeTitle, getLibraryStatus, getCalendarStatus, onUpdateEmailContent, onDeleteEmailItem, savingState }) {
+  const [editingSubjectIndex, setEditingSubjectIndex] = useState(null);
+  const [editingPreviewIndex, setEditingPreviewIndex] = useState(null);
+  const [editingEmailBody, setEditingEmailBody] = useState(false);
+  const [editingFollowup, setEditingFollowup] = useState(false);
+  const [editValue, setEditValue] = useState('');
+
   console.log('[EmailTab] Stage 9 data:', {
     hasStage: !!stage,
     stageStatus: stage?.status,
@@ -1628,6 +2393,69 @@ function EmailTab({ stage, onCopy, copied, onSaveToLibrary, onSchedule, onResche
   const formatScheduledDate = (dateStr) => {
     const date = new Date(dateStr + 'T00:00:00');
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  // Start editing a subject line
+  const handleStartEditSubject = (index) => {
+    console.log('[EmailTab] Starting edit for subject line', index);
+    setEditingSubjectIndex(index);
+    setEditValue(email.subject_lines[index] || '');
+  };
+
+  // Start editing a preview text
+  const handleStartEditPreview = (index) => {
+    console.log('[EmailTab] Starting edit for preview text', index);
+    setEditingPreviewIndex(index);
+    setEditValue(email.preview_text[index] || '');
+  };
+
+  // Save edited subject line
+  const handleSaveSubject = async (index) => {
+    if (!editValue.trim()) {
+      console.warn('[EmailTab] Cannot save empty subject line');
+      return;
+    }
+    try {
+      await onUpdateEmailContent(stage, 'subject_lines', index, editValue.trim());
+      setEditingSubjectIndex(null);
+      setEditValue('');
+    } catch (err) {
+      console.error('[EmailTab] Failed to save subject line:', err);
+    }
+  };
+
+  // Save edited preview text
+  const handleSavePreview = async (index) => {
+    if (!editValue.trim()) {
+      console.warn('[EmailTab] Cannot save empty preview text');
+      return;
+    }
+    try {
+      await onUpdateEmailContent(stage, 'preview_text', index, editValue.trim());
+      setEditingPreviewIndex(null);
+      setEditValue('');
+    } catch (err) {
+      console.error('[EmailTab] Failed to save preview text:', err);
+    }
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setEditingSubjectIndex(null);
+    setEditingPreviewIndex(null);
+    setEditingEmailBody(false);
+    setEditingFollowup(false);
+    setEditValue('');
+  };
+
+  // Handle keyboard events
+  const handleKeyDown = (e, onSave) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      onSave();
+    } else if (e.key === 'Escape') {
+      handleCancelEdit();
+    }
   };
 
   if (!stage) {
@@ -1650,15 +2478,70 @@ function EmailTab({ stage, onCopy, copied, onSaveToLibrary, onSchedule, onResche
           <div className={styles.subjectLines}>
             {email.subject_lines.map((subject, i) => (
               <div key={i} className={styles.subjectItem}>
-                <span>{subject}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  leftIcon={copied === `subject-${i}` ? Check : Copy}
-                  onClick={() => onCopy(subject, `subject-${i}`)}
-                >
-                  {copied === `subject-${i}` ? 'Copied!' : 'Copy'}
-                </Button>
+                {editingSubjectIndex === i ? (
+                  <div className={styles.titleEditGroup}>
+                    <input
+                      type="text"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, () => handleSaveSubject(i))}
+                      className={styles.titleInput}
+                      autoFocus
+                      maxLength={80}
+                    />
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      leftIcon={Check}
+                      onClick={() => handleSaveSubject(i)}
+                      loading={savingState?.[`email-subject_lines-${i}`]}
+                      disabled={!editValue.trim()}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={X}
+                      onClick={handleCancelEdit}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <span>{subject}</span>
+                    <div className={styles.cardActions}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={Edit3}
+                        onClick={() => handleStartEditSubject(i)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={copied === `subject-${i}` ? Check : Copy}
+                        onClick={() => onCopy(subject, `subject-${i}`)}
+                      >
+                        {copied === `subject-${i}` ? 'Copied!' : 'Copy'}
+                      </Button>
+                      {email.subject_lines.length > 1 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          leftIcon={Trash2}
+                          onClick={() => onDeleteEmailItem(stage, 'subject_lines', i)}
+                          loading={savingState?.[`email-delete-subject_lines-${i}`]}
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>
@@ -1671,15 +2554,70 @@ function EmailTab({ stage, onCopy, copied, onSaveToLibrary, onSchedule, onResche
           <div className={styles.previewTextList}>
             {email.preview_text.map((text, i) => (
               <div key={i} className={styles.previewItem}>
-                <span>{text}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  leftIcon={copied === `preview-${i}` ? Check : Copy}
-                  onClick={() => onCopy(text, `preview-${i}`)}
-                >
-                  {copied === `preview-${i}` ? 'Copied!' : 'Copy'}
-                </Button>
+                {editingPreviewIndex === i ? (
+                  <div className={styles.titleEditGroup}>
+                    <input
+                      type="text"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => handleKeyDown(e, () => handleSavePreview(i))}
+                      className={styles.titleInput}
+                      autoFocus
+                      maxLength={120}
+                    />
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      leftIcon={Check}
+                      onClick={() => handleSavePreview(i)}
+                      loading={savingState?.[`email-preview_text-${i}`]}
+                      disabled={!editValue.trim()}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={X}
+                      onClick={handleCancelEdit}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <span>{text}</span>
+                    <div className={styles.cardActions}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={Edit3}
+                        onClick={() => handleStartEditPreview(i)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={copied === `preview-${i}` ? Check : Copy}
+                        onClick={() => onCopy(text, `preview-${i}`)}
+                      >
+                        {copied === `preview-${i}` ? 'Copied!' : 'Copy'}
+                      </Button>
+                      {email.preview_text.length > 1 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          leftIcon={Trash2}
+                          onClick={() => onDeleteEmailItem(stage, 'preview_text', i)}
+                          loading={savingState?.[`email-delete-preview_text-${i}`]}
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             ))}
           </div>
@@ -1711,10 +2649,69 @@ function EmailTab({ stage, onCopy, copied, onSaveToLibrary, onSchedule, onResche
           },
         };
 
+        // Start editing email body
+        const handleStartEditBody = () => {
+          console.log('[EmailTab] Starting edit for email body');
+          setEditingEmailBody(true);
+          setEditValue(email.email_body);
+        };
+
+        // Save edited email body
+        const handleSaveEmailBody = async () => {
+          if (!editValue.trim()) {
+            console.warn('[EmailTab] Cannot save empty email body');
+            return;
+          }
+          try {
+            await onUpdateEmailContent(stage, 'email_body', null, editValue.trim());
+            setEditingEmailBody(false);
+            setEditValue('');
+          } catch (err) {
+            console.error('[EmailTab] Failed to save email body:', err);
+          }
+        };
+
         return (
-          <Card title="Email Body" subtitle="Main newsletter content" padding="lg">
+          <Card
+            title="Email Body"
+            subtitle="Main newsletter content"
+            headerAction={
+              editingEmailBody ? (
+                <div className={styles.cardActions}>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    leftIcon={Save}
+                    onClick={handleSaveEmailBody}
+                    loading={savingState?.['email-email_body']}
+                    disabled={!editValue.trim()}
+                  >
+                    Save Changes
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={X}
+                    onClick={handleCancelEdit}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={Edit3}
+                  onClick={handleStartEditBody}
+                >
+                  Edit
+                </Button>
+              )
+            }
+            padding="lg"
+          >
             {/* Library status indicator - scheduled shown in actions */}
-            {libraryItem && (
+            {libraryItem && !editingEmailBody && (
               <div className={styles.statusIndicators}>
                 <Badge variant="success" className={styles.statusBadge}>
                   <CheckCircle size={12} />
@@ -1722,82 +2719,167 @@ function EmailTab({ stage, onCopy, copied, onSaveToLibrary, onSchedule, onResche
                 </Badge>
               </div>
             )}
-            <pre className={styles.emailBody}>{email.email_body}</pre>
-            <div className={styles.postActions}>
-              <Button
-                variant="ghost"
-                size="sm"
-                leftIcon={copied === 'body' ? Check : Copy}
-                onClick={() => onCopy(email.email_body, 'body')}
-              >
-                {copied === 'body' ? 'Copied!' : 'Copy'}
-              </Button>
-              <Button
-                variant={libraryItem ? 'secondary' : 'ghost'}
-                size="sm"
-                leftIcon={libraryItem ? CheckCircle : Bookmark}
-                onClick={() => !libraryItem && onSaveToLibrary(libraryData)}
-                disabled={!!libraryItem}
-                title={libraryItem ? 'Already in library' : 'Save to library'}
-              >
-                {libraryItem ? 'In Library' : 'Save'}
-              </Button>
-              {calendarItem ? (
-                <div className={styles.scheduledActions}>
-                  <Badge variant="primary" className={styles.scheduledBadge}>
-                    <Calendar size={12} />
-                    {formatScheduledDate(calendarItem.scheduled_date)}
-                  </Badge>
+            {editingEmailBody ? (
+              <textarea
+                className={styles.blogTextarea}
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                placeholder="Enter email content..."
+                disabled={savingState?.['email-email_body']}
+              />
+            ) : (
+              <pre className={styles.emailBody}>{email.email_body}</pre>
+            )}
+            {!editingEmailBody && (
+              <div className={styles.postActions}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={copied === 'body' ? Check : Copy}
+                  onClick={() => onCopy(email.email_body, 'body')}
+                >
+                  {copied === 'body' ? 'Copied!' : 'Copy'}
+                </Button>
+                <Button
+                  variant={libraryItem ? 'secondary' : 'ghost'}
+                  size="sm"
+                  leftIcon={libraryItem ? CheckCircle : Bookmark}
+                  onClick={() => !libraryItem && onSaveToLibrary(libraryData)}
+                  disabled={!!libraryItem}
+                  title={libraryItem ? 'Already in library' : 'Save to library'}
+                >
+                  {libraryItem ? 'In Library' : 'Save'}
+                </Button>
+                {calendarItem ? (
+                  <div className={styles.scheduledActions}>
+                    <Badge variant="primary" className={styles.scheduledBadge}>
+                      <Calendar size={12} />
+                      {formatScheduledDate(calendarItem.scheduled_date)}
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={Calendar}
+                      onClick={() => onReschedule(calendarItem, emailData)}
+                      title="Change scheduled date"
+                    >
+                      Reschedule
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={CalendarX}
+                      onClick={() => onUnschedule(calendarItem.id)}
+                      loading={unscheduling === calendarItem.id}
+                      title="Remove from schedule"
+                    >
+                      Unschedule
+                    </Button>
+                  </div>
+                ) : (
                   <Button
                     variant="ghost"
                     size="sm"
                     leftIcon={Calendar}
-                    onClick={() => onReschedule(calendarItem, emailData)}
-                    title="Change scheduled date"
+                    onClick={() => onSchedule(emailData)}
+                    title="Schedule content"
                   >
-                    Reschedule
+                    Schedule
+                  </Button>
+                )}
+              </div>
+            )}
+          </Card>
+        );
+      })()}
+
+      {/* Follow-up Email (optional) */}
+      {email.followup_email && (() => {
+        // Start editing followup
+        const handleStartEditFollowup = () => {
+          console.log('[EmailTab] Starting edit for followup email');
+          setEditingFollowup(true);
+          setEditValue(email.followup_email);
+        };
+
+        // Save edited followup
+        const handleSaveFollowup = async () => {
+          if (!editValue.trim()) {
+            console.warn('[EmailTab] Cannot save empty followup email');
+            return;
+          }
+          try {
+            await onUpdateEmailContent(stage, 'followup_email', null, editValue.trim());
+            setEditingFollowup(false);
+            setEditValue('');
+          } catch (err) {
+            console.error('[EmailTab] Failed to save followup email:', err);
+          }
+        };
+
+        return (
+          <Card
+            title="Follow-up Email"
+            subtitle="Optional follow-up content"
+            headerAction={
+              editingFollowup ? (
+                <div className={styles.cardActions}>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    leftIcon={Save}
+                    onClick={handleSaveFollowup}
+                    loading={savingState?.['email-followup_email']}
+                    disabled={!editValue.trim()}
+                  >
+                    Save Changes
                   </Button>
                   <Button
                     variant="ghost"
                     size="sm"
-                    leftIcon={CalendarX}
-                    onClick={() => onUnschedule(calendarItem.id)}
-                    loading={unscheduling === calendarItem.id}
-                    title="Remove from schedule"
+                    leftIcon={X}
+                    onClick={handleCancelEdit}
                   >
-                    Unschedule
+                    Cancel
                   </Button>
                 </div>
               ) : (
                 <Button
                   variant="ghost"
                   size="sm"
-                  leftIcon={Calendar}
-                  onClick={() => onSchedule(emailData)}
-                  title="Schedule content"
+                  leftIcon={Edit3}
+                  onClick={handleStartEditFollowup}
                 >
-                  Schedule
+                  Edit
                 </Button>
-              )}
-            </div>
+              )
+            }
+            padding="lg"
+          >
+            {editingFollowup ? (
+              <textarea
+                className={styles.blogTextarea}
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                placeholder="Enter follow-up email content..."
+                disabled={savingState?.['email-followup_email']}
+              />
+            ) : (
+              <pre className={styles.emailBody}>{email.followup_email}</pre>
+            )}
+            {!editingFollowup && (
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={copied === 'followup' ? Check : Copy}
+                onClick={() => onCopy(email.followup_email, 'followup')}
+              >
+                {copied === 'followup' ? 'Copied!' : 'Copy'}
+              </Button>
+            )}
           </Card>
         );
       })()}
-
-      {/* Follow-up Email (optional) */}
-      {email.followup_email && (
-        <Card title="Follow-up Email" subtitle="Optional follow-up content" padding="lg">
-          <pre className={styles.emailBody}>{email.followup_email}</pre>
-          <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={copied === 'followup' ? Check : Copy}
-            onClick={() => onCopy(email.followup_email, 'followup')}
-          >
-            {copied === 'followup' ? 'Copied!' : 'Copy'}
-          </Button>
-        </Card>
-      )}
     </div>
   );
 }

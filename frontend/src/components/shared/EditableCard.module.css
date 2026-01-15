@@ -1,0 +1,226 @@
+/**
+ * ============================================================================
+ * EDITABLE CARD COMPONENT STYLES
+ * ============================================================================
+ */
+
+/* View mode card */
+.viewCard {
+  position: relative;
+}
+
+/* Edit button in view mode */
+.viewActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.editButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: var(--color-bg-tertiary);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.editButton:hover {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.editButton:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Edit mode card */
+.editCard {
+  position: relative;
+  padding: var(--space-4);
+  background-color: var(--color-bg-secondary);
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius-md);
+}
+
+/* Edit form */
+.editForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* Field group */
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.fieldLabel {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-secondary);
+}
+
+.required {
+  color: var(--color-error);
+  margin-left: 2px;
+}
+
+/* Input wrapper */
+.inputWrapper {
+  position: relative;
+}
+
+/* Input styles */
+.input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  color: var(--color-text-primary);
+  transition: all var(--transition-fast);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+.input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.input:disabled {
+  background-color: var(--color-bg-tertiary);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.inputError {
+  border-color: var(--color-error);
+}
+
+.inputError:focus {
+  box-shadow: 0 0 0 3px var(--color-error-light);
+}
+
+/* Textarea */
+.textarea {
+  min-height: 60px;
+  resize: vertical;
+  line-height: var(--leading-relaxed);
+}
+
+/* Character count */
+.charCount {
+  position: absolute;
+  bottom: var(--space-1);
+  right: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  pointer-events: none;
+}
+
+.charCountOver {
+  color: var(--color-error);
+  font-weight: var(--font-medium);
+}
+
+/* Field error */
+.fieldError {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--color-error);
+}
+
+.fieldError svg {
+  flex-shrink: 0;
+}
+
+/* General error */
+.generalError {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--color-error-light);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--color-error);
+  margin-top: var(--space-2);
+}
+
+.generalError svg {
+  flex-shrink: 0;
+}
+
+/* Edit actions */
+.editActions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.saveActions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* Delete confirmation overlay */
+.deleteConfirmOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(255, 255, 255, 0.95);
+  border-radius: var(--radius-md);
+  z-index: 10;
+  animation: fadeIn 0.15s ease-out;
+}
+
+.deleteConfirm {
+  text-align: center;
+  padding: var(--space-4);
+}
+
+.deleteConfirm p {
+  margin: 0 0 var(--space-4) 0;
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+}
+
+.deleteConfirmActions {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

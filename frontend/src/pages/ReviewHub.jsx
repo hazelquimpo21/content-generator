@@ -144,7 +144,22 @@ function ReviewHub() {
    * @returns {Object|undefined} Stage data or undefined if not found
    */
   function getStage(stageNumber) {
-    return stages.find((s) => s.stage_number === stageNumber);
+    return stages.find((s) => s.stage_number === stageNumber && !s.sub_stage);
+  }
+
+  /**
+   * Get all Stage 8 platform-specific stages
+   * Stage 8 is split into 4 sub-stages: instagram, twitter, linkedin, facebook
+   * @returns {Object} Map of platform -> stage data
+   */
+  function getStage8Platforms() {
+    const platforms = {};
+    stages
+      .filter((s) => s.stage_number === 8 && s.sub_stage)
+      .forEach((s) => {
+        platforms[s.sub_stage] = s;
+      });
+    return platforms;
   }
 
   // ============================================================================
@@ -295,6 +310,28 @@ function ReviewHub() {
       console.log('[ReviewHub] Stage regenerated successfully');
     } catch (err) {
       console.error('[ReviewHub] Failed to regenerate stage:', err);
+      setError(err.message || 'Failed to regenerate');
+    } finally {
+      setRegenerating(null);
+    }
+  }
+
+  /**
+   * Regenerate a specific social platform (Stage 8 sub-stage)
+   * @param {string} platform - Platform name (instagram, twitter, linkedin, facebook)
+   * @param {string} stageId - Stage record ID
+   */
+  async function handleRegeneratePlatform(platform, stageId) {
+    try {
+      setRegenerating(`8-${platform}`);
+      console.log('[ReviewHub] Regenerating platform:', platform);
+
+      await api.stages.regenerate(stageId);
+      await fetchEpisode();
+
+      console.log('[ReviewHub] Platform regenerated successfully:', platform);
+    } catch (err) {
+      console.error('[ReviewHub] Failed to regenerate platform:', err);
       setError(err.message || 'Failed to regenerate');
     } finally {
       setRegenerating(null);
@@ -524,9 +561,11 @@ function ReviewHub() {
 
         {activeTab === 'social' && (
           <SocialTab
-            stage={getStage(8)}
+            platformStages={getStage8Platforms()}
             onCopy={copyToClipboard}
             copied={copied}
+            onRegeneratePlatform={handleRegeneratePlatform}
+            regenerating={regenerating}
           />
         )}
 
@@ -919,46 +958,55 @@ function BlogTab({
  * SocialTab - Displays platform-specific social media content from Stage 8
  * Uses platform pills for quick switching between platforms
  *
- * Stage 8 output structure:
- * - instagram: array of { type: 'short'|'medium'|'long', content: string, hashtags: string[] }
- * - twitter: array of { content: string, type: 'standalone'|'thread_opener' }
- * - linkedin: array of { content: string }
- * - facebook: array of { content: string }
+ * Stage 8 is now split into 4 separate sub-stages (one per platform).
+ * Each platform stage has its own output_data.posts array.
+ *
+ * Props:
+ * - platformStages: Object map of platform -> stage record (e.g., { instagram: {...}, twitter: {...} })
+ * - onRegeneratePlatform: Function(platform, stageId) to regenerate a specific platform
+ * - regenerating: Currently regenerating identifier (e.g., '8-instagram')
  */
-function SocialTab({ stage, onCopy, copied }) {
+function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regenerating }) {
   const [activePlatform, setActivePlatform] = useState('instagram');
 
-  console.log('[SocialTab] Stage 8 data:', {
-    hasStage: !!stage,
-    stageStatus: stage?.status,
-    hasOutputData: !!stage?.output_data,
-    platforms: stage?.output_data ? Object.keys(stage.output_data) : [],
+  console.log('[SocialTab] Platform stages:', {
+    platforms: Object.keys(platformStages || {}),
+    statuses: Object.entries(platformStages || {}).map(([p, s]) => `${p}: ${s?.status}`),
   });
 
-  if (!stage) {
+  // Platform definitions with colors
+  const platformConfig = {
+    instagram: { label: 'Instagram', color: '#E4405F' },
+    twitter: { label: 'Twitter / X', color: '#1DA1F2' },
+    linkedin: { label: 'LinkedIn', color: '#0A66C2' },
+    facebook: { label: 'Facebook', color: '#1877F2' },
+  };
+
+  // Build platforms array from available stages
+  const platforms = Object.entries(platformConfig)
+    .map(([id, config]) => {
+      const stage = platformStages?.[id];
+      const posts = stage?.output_data?.posts || [];
+      return {
+        id,
+        label: config.label,
+        color: config.color,
+        stage,
+        posts,
+        status: stage?.status || 'pending',
+      };
+    })
+    .filter((platform) => platform.stage); // Only show platforms that have stage data
+
+  // Check if no platforms exist at all
+  if (platforms.length === 0) {
     return <EmptyState message="No social content generated" details="Stage 8 (Social Content) not found." />;
   }
 
-  if (stage.status !== 'completed') {
-    return <EmptyState message="Social content not ready" details={`Stage 8 status: ${stage.status}`} />;
-  }
-
-  if (!stage?.output_data) {
-    return <EmptyState message="No social content generated" details="Stage 8 completed but has no output data." />;
-  }
-
-  const { instagram = [], twitter = [], linkedin = [], facebook = [] } = stage.output_data;
-
-  // Platform definitions with icons and colors
-  const platforms = [
-    { id: 'instagram', label: 'Instagram', posts: instagram, color: '#E4405F' },
-    { id: 'twitter', label: 'Twitter / X', posts: twitter, color: '#1DA1F2' },
-    { id: 'linkedin', label: 'LinkedIn', posts: linkedin, color: '#0A66C2' },
-    { id: 'facebook', label: 'Facebook', posts: facebook, color: '#1877F2' },
-  ].filter(platform => platform.posts.length > 0);
-
-  const currentPlatform = platforms.find(p => p.id === activePlatform) || platforms[0];
+  const currentPlatform = platforms.find((p) => p.id === activePlatform) || platforms[0];
   const currentPosts = currentPlatform?.posts || [];
+  const isCurrentPlatformReady = currentPlatform?.status === 'completed';
+  const isRegenerating = regenerating === `8-${currentPlatform?.id}`;
 
   return (
     <div className={styles.tabContent}>
@@ -972,7 +1020,13 @@ function SocialTab({ stage, onCopy, copied }) {
             style={activePlatform === platform.id ? { '--platform-color': platform.color } : {}}
           >
             <span>{platform.label}</span>
-            <span className={styles.pillCount}>{platform.posts.length}</span>
+            {platform.status === 'completed' ? (
+              <span className={styles.pillCount}>{platform.posts.length}</span>
+            ) : platform.status === 'processing' ? (
+              <Spinner size="sm" />
+            ) : (
+              <span className={styles.pillStatus}>{platform.status}</span>
+            )}
           </button>
         ))}
       </div>
@@ -980,36 +1034,65 @@ function SocialTab({ stage, onCopy, copied }) {
       {/* Posts for selected platform */}
       <Card
         title={currentPlatform?.label}
-        subtitle={`${currentPosts.length} post${currentPosts.length !== 1 ? 's' : ''} ready to share`}
+        subtitle={
+          isCurrentPlatformReady
+            ? `${currentPosts.length} post${currentPosts.length !== 1 ? 's' : ''} ready to share`
+            : `Status: ${currentPlatform?.status}`
+        }
+        action={
+          currentPlatform?.stage && (
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={isRegenerating ? Spinner : RefreshCw}
+              disabled={isRegenerating}
+              onClick={() => onRegeneratePlatform(currentPlatform.id, currentPlatform.stage.id)}
+            >
+              {isRegenerating ? 'Regenerating...' : 'Regenerate'}
+            </Button>
+          )
+        }
         padding="lg"
       >
-        <div className={styles.socialPlatform}>
-          {currentPosts.map((post, i) => (
-            <div
-              key={i}
-              className={styles.socialPostItem}
-              style={{ '--platform-accent': currentPlatform?.color }}
-            >
-              {post.type && (
-                <Badge variant="secondary" className={styles.postType}>
-                  {post.type}
-                </Badge>
-              )}
-              <p className={styles.socialPost}>{post.content}</p>
-              {post.hashtags && post.hashtags.length > 0 && (
-                <p className={styles.hashtags}>{post.hashtags.join(' ')}</p>
-              )}
-              <Button
-                variant="ghost"
-                size="sm"
-                leftIcon={copied === `${activePlatform}-${i}` ? Check : Copy}
-                onClick={() => onCopy(post.content, `${activePlatform}-${i}`)}
+        {!isCurrentPlatformReady ? (
+          <EmptyState
+            message={`${currentPlatform?.label} content not ready`}
+            details={`Status: ${currentPlatform?.status}`}
+          />
+        ) : currentPosts.length === 0 ? (
+          <EmptyState
+            message="No posts generated"
+            details="Try regenerating this platform"
+          />
+        ) : (
+          <div className={styles.socialPlatform}>
+            {currentPosts.map((post, i) => (
+              <div
+                key={i}
+                className={styles.socialPostItem}
+                style={{ '--platform-accent': currentPlatform?.color }}
               >
-                {copied === `${activePlatform}-${i}` ? 'Copied!' : 'Copy'}
-              </Button>
-            </div>
-          ))}
-        </div>
+                {post.type && (
+                  <Badge variant="secondary" className={styles.postType}>
+                    {post.type}
+                  </Badge>
+                )}
+                <p className={styles.socialPost}>{post.content}</p>
+                {post.hashtags && post.hashtags.length > 0 && (
+                  <p className={styles.hashtags}>{post.hashtags.join(' ')}</p>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={copied === `${activePlatform}-${i}` ? Check : Copy}
+                  onClick={() => onCopy(post.content, `${activePlatform}-${i}`)}
+                >
+                  {copied === `${activePlatform}-${i}` ? 'Copied!' : 'Copy'}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
     </div>
   );

@@ -66,7 +66,13 @@ import { outlineParagraphs } from '../analyzers/stage-04-outline-paragraphs.js';
 import { generateHeadlines } from '../analyzers/stage-05-generate-headlines.js';
 import { draftBlogPost } from '../analyzers/stage-06-draft-blog-post.js';
 import { refineWithClaude } from '../analyzers/stage-07-refine-with-claude.js';
-import { generateSocial } from '../analyzers/stage-08-generate-social.js';
+// Stage 8 is split into 4 platform-specific analyzers
+import {
+  generateInstagram,
+  generateTwitter,
+  generateLinkedIn,
+  generateFacebook,
+} from '../analyzers/stage-08-social-platform.js';
 import { generateEmail } from '../analyzers/stage-09-generate-email.js';
 
 // ============================================================================
@@ -78,6 +84,9 @@ import { generateEmail } from '../analyzers/stage-09-generate-email.js';
  *
  * Stage 0:  Transcript preprocessing (for long transcripts)
  * Stages 1-9: Main content pipeline
+ *
+ * Stage 8 is special - it has sub-stages for each social platform.
+ * Use STAGE_8_SUBSTAGE_ANALYZERS for platform-specific analyzers.
  */
 const STAGE_ANALYZERS = {
   0: preprocessTranscript,
@@ -88,9 +97,25 @@ const STAGE_ANALYZERS = {
   5: generateHeadlines,
   6: draftBlogPost,
   7: refineWithClaude,
-  8: generateSocial,
+  // Stage 8 requires subStage - use STAGE_8_SUBSTAGE_ANALYZERS
+  8: null,  // Requires subStage parameter
   9: generateEmail,
 };
+
+/**
+ * Maps Stage 8 sub-stage identifiers to their platform-specific analyzers.
+ */
+const STAGE_8_SUBSTAGE_ANALYZERS = {
+  instagram: generateInstagram,
+  twitter: generateTwitter,
+  linkedin: generateLinkedIn,
+  facebook: generateFacebook,
+};
+
+/**
+ * Valid sub-stages for Stage 8
+ */
+export const STAGE_8_SUBSTAGES = Object.keys(STAGE_8_SUBSTAGE_ANALYZERS);
 
 /**
  * Human-readable names for each stage.
@@ -107,6 +132,16 @@ export const STAGE_NAMES = {
   7: 'Refinement Pass',
   8: 'Social Content',
   9: 'Email Campaign',
+};
+
+/**
+ * Human-readable names for Stage 8 sub-stages.
+ */
+export const STAGE_8_SUBSTAGE_NAMES = {
+  instagram: 'Social Content (Instagram)',
+  twitter: 'Social Content (Twitter/X)',
+  linkedin: 'Social Content (LinkedIn)',
+  facebook: 'Social Content (Facebook)',
 };
 
 /**
@@ -192,36 +227,34 @@ export const STAGE_PHASES = {
  * @param {string} context.transcript - Full transcript text
  * @param {Object} context.evergreen - Evergreen content settings
  * @param {Object} context.previousStages - Outputs from completed stages
+ * @param {Object} [options] - Optional parameters
+ * @param {string} [options.subStage] - Sub-stage for Stage 8 (instagram, twitter, linkedin, facebook)
  * @returns {Promise<Object>} Stage result object:
  *   - output_data: Structured JSON output (most stages)
  *   - output_text: Text/markdown output (stages 6-7)
  *   - input_tokens: Number of tokens sent to AI
  *   - output_tokens: Number of tokens received
  *   - cost_usd: API cost in USD
+ *   - subStage: Sub-stage identifier (for Stage 8 only)
  * @throws {ProcessingError} If stage validation or execution fails
  *
  * @example
- * const result = await runStage(1, {
- *   episodeId: 'uuid',
- *   transcript: '...',
- *   evergreen: {...},
- *   previousStages: { 0: {...} }
- * });
- * // result = {
- * //   output_data: { episode_basics: {...}, guest_info: {...} },
- * //   output_text: null,
- * //   input_tokens: 1500,
- * //   output_tokens: 800,
- * //   cost_usd: 0.0045
- * // }
+ * // Regular stage
+ * const result = await runStage(1, context);
+ *
+ * // Stage 8 with sub-stage
+ * const result = await runStage(8, context, { subStage: 'instagram' });
  */
-export async function runStage(stageNumber, context) {
+export async function runStage(stageNumber, context, options = {}) {
+  const { subStage } = options;
+
   // -------------------------------------------------------------------------
   // Validate stage number
   // -------------------------------------------------------------------------
   if (stageNumber < 0 || stageNumber > 9) {
     logger.error('❌ Invalid stage number requested', {
       stageNumber,
+      subStage,
       episodeId: context.episodeId,
       validRange: '0-9',
     });
@@ -235,8 +268,45 @@ export async function runStage(stageNumber, context) {
   // -------------------------------------------------------------------------
   // Get analyzer and metadata
   // -------------------------------------------------------------------------
-  const analyzer = STAGE_ANALYZERS[stageNumber];
-  const stageName = STAGE_NAMES[stageNumber];
+  let analyzer;
+  let stageName;
+
+  // Stage 8 requires a subStage parameter
+  if (stageNumber === 8) {
+    if (!subStage) {
+      logger.error('❌ Stage 8 requires subStage parameter', {
+        stageNumber,
+        episodeId: context.episodeId,
+        validSubStages: STAGE_8_SUBSTAGES,
+      });
+      throw new ProcessingError(
+        stageNumber,
+        'Social Content',
+        `Stage 8 requires subStage parameter. Valid values: ${STAGE_8_SUBSTAGES.join(', ')}`
+      );
+    }
+
+    analyzer = STAGE_8_SUBSTAGE_ANALYZERS[subStage];
+    stageName = STAGE_8_SUBSTAGE_NAMES[subStage] || `Social Content (${subStage})`;
+
+    if (!analyzer) {
+      logger.error('❌ Invalid subStage for Stage 8', {
+        stageNumber,
+        subStage,
+        episodeId: context.episodeId,
+        validSubStages: STAGE_8_SUBSTAGES,
+      });
+      throw new ProcessingError(
+        stageNumber,
+        stageName,
+        `Invalid subStage: ${subStage}. Valid values: ${STAGE_8_SUBSTAGES.join(', ')}`
+      );
+    }
+  } else {
+    analyzer = STAGE_ANALYZERS[stageNumber];
+    stageName = STAGE_NAMES[stageNumber];
+  }
+
   const provider = STAGE_PROVIDERS[stageNumber];
   const model = STAGE_MODELS[stageNumber];
   const phase = STAGE_PHASES[stageNumber];
@@ -245,13 +315,14 @@ export async function runStage(stageNumber, context) {
   if (!analyzer) {
     logger.error('❌ No analyzer found for stage', {
       stageNumber,
+      subStage,
       stageName,
       episodeId: context.episodeId,
     });
     throw new ProcessingError(
       stageNumber,
       stageName,
-      `No analyzer found for stage ${stageNumber}`
+      `No analyzer found for stage ${stageNumber}${subStage ? ` (${subStage})` : ''}`
     );
   }
 
@@ -260,6 +331,7 @@ export async function runStage(stageNumber, context) {
   // -------------------------------------------------------------------------
   logger.debug('🔧 Running stage analyzer', {
     stage: stageNumber,
+    subStage: subStage || null,
     name: stageName,
     phase,
     provider,
@@ -284,6 +356,7 @@ export async function runStage(stageNumber, context) {
     // -----------------------------------------------------------------------
     logger.debug('✅ Stage analyzer completed', {
       stage: stageNumber,
+      subStage: subStage || null,
       name: stageName,
       phase,
       episodeId: context.episodeId,
@@ -306,6 +379,8 @@ export async function runStage(stageNumber, context) {
       cost_usd: result.cost_usd || 0,
       // Include skip flag if present (Stage 0 may be skipped)
       skipped: result.skipped || false,
+      // Include subStage for Stage 8
+      subStage: subStage || null,
     };
 
   } catch (error) {
@@ -316,6 +391,7 @@ export async function runStage(stageNumber, context) {
     // -----------------------------------------------------------------------
     logger.error('❌ Stage analyzer failed', {
       stage: stageNumber,
+      subStage: subStage || null,
       name: stageName,
       phase,
       provider,
@@ -423,4 +499,6 @@ export default {
   STAGE_PROVIDERS,
   STAGE_MODELS,
   STAGE_PHASES,
+  STAGE_8_SUBSTAGES,
+  STAGE_8_SUBSTAGE_NAMES,
 };

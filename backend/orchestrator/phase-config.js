@@ -19,7 +19,18 @@
  * - Phase 1: analyze + quotes run in parallel (both only need transcript)
  * - Phase 2: outline + headlines run in parallel (both only need Phase 1)
  * - Phase 3: draft → refine must be sequential (refine needs draft)
- * - Phase 4: social + email run in parallel (both only need Phase 3)
+ * - Phase 4: 4 social platforms + email run in parallel (5 total tasks)
+ *
+ * Stage 8 Sub-Stages:
+ * -------------------
+ * Stage 8 (Social Content) is split into 4 focused platform-specific tasks:
+ * - social_instagram: Instagram-optimized posts
+ * - social_twitter: Twitter/X-optimized posts
+ * - social_linkedin: LinkedIn-optimized posts
+ * - social_facebook: Facebook-optimized posts
+ *
+ * Each platform task has its own prompt file and runs in parallel for
+ * better quality output through specialization.
  *
  * Estimated time savings: ~25-30% faster than fully sequential execution.
  *
@@ -142,13 +153,43 @@ export const TASKS = {
   // -------------------------------------------------------------------------
   // PHASE 4: DISTRIBUTE - Create marketing content
   // -------------------------------------------------------------------------
-  social: {
+  // Stage 8 is split into 4 parallel platform-specific sub-tasks
+  // Each has the same stage ID (8) but different subStage identifiers
+  social_instagram: {
     id: 8,
-    name: 'Social Content',
-    analyzer: 'generateSocial',
+    subStage: 'instagram',
+    name: 'Social Content (Instagram)',
+    analyzer: 'generateInstagram',
     model: 'claude-sonnet-4-20250514',
     provider: 'anthropic',
-    description: 'Generate social media posts for all platforms',
+    description: 'Generate Instagram posts',
+  },
+  social_twitter: {
+    id: 8,
+    subStage: 'twitter',
+    name: 'Social Content (Twitter/X)',
+    analyzer: 'generateTwitter',
+    model: 'claude-sonnet-4-20250514',
+    provider: 'anthropic',
+    description: 'Generate Twitter/X posts',
+  },
+  social_linkedin: {
+    id: 8,
+    subStage: 'linkedin',
+    name: 'Social Content (LinkedIn)',
+    analyzer: 'generateLinkedIn',
+    model: 'claude-sonnet-4-20250514',
+    provider: 'anthropic',
+    description: 'Generate LinkedIn posts',
+  },
+  social_facebook: {
+    id: 8,
+    subStage: 'facebook',
+    name: 'Social Content (Facebook)',
+    analyzer: 'generateFacebook',
+    model: 'claude-sonnet-4-20250514',
+    provider: 'anthropic',
+    description: 'Generate Facebook posts',
   },
   email: {
     id: 9,
@@ -262,14 +303,14 @@ export const PHASES = {
   // PHASE 4: DISTRIBUTE
   // -------------------------------------------------------------------------
   // Create marketing content from the refined blog post.
-  // PARALLEL: Both tasks need the refined post, not each other.
+  // PARALLEL: All 5 tasks (4 social platforms + email) run concurrently.
   // -------------------------------------------------------------------------
   distribute: {
     id: 'distribute',
     name: '📣 Phase 4: Distribute',
-    description: 'Generate social media posts and email campaign',
-    tasks: ['social', 'email'],
-    parallel: true,  // ✨ PARALLEL: Independent tasks
+    description: 'Generate social media posts (4 platforms) and email campaign',
+    tasks: ['social_instagram', 'social_twitter', 'social_linkedin', 'social_facebook', 'email'],
+    parallel: true,  // ✨ PARALLEL: All 5 tasks run concurrently
     requiredPhases: ['write'],
     emoji: '📣',
   },
@@ -312,7 +353,11 @@ export const TASK_DEPENDENCIES = {
   refine: ['draft'],  // Needs the draft output_text
 
   // Phase 4: Distribute
-  social: ['refine', 'quotes', 'headlines'],  // Needs refined post + quotes + headlines
+  // All 4 social platform tasks have identical dependencies
+  social_instagram: ['refine', 'quotes', 'headlines'],
+  social_twitter: ['refine', 'quotes', 'headlines'],
+  social_linkedin: ['refine', 'quotes', 'headlines'],
+  social_facebook: ['refine', 'quotes', 'headlines'],
   email: ['refine', 'analyze', 'headlines'],  // Needs refined post + analysis + headlines
 };
 
@@ -346,7 +391,20 @@ export const REQUIRED_PREVIOUS_DATA = {
   refine: [
     { stage: 6, fields: ['output_text'], required: true },
   ],
-  social: [
+  // All 4 social platform tasks have identical requirements
+  social_instagram: [
+    { stage: 7, fields: ['output_text'], required: true },
+    { stage: 2, fields: ['quotes'] },
+  ],
+  social_twitter: [
+    { stage: 7, fields: ['output_text'], required: true },
+    { stage: 2, fields: ['quotes'] },
+  ],
+  social_linkedin: [
+    { stage: 7, fields: ['output_text'], required: true },
+    { stage: 2, fields: ['quotes'] },
+  ],
+  social_facebook: [
     { stage: 7, fields: ['output_text'], required: true },
     { stage: 2, fields: ['quotes'] },
   ],

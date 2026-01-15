@@ -592,12 +592,16 @@ export async function processEpisode(episodeId, options = {}) {
         // Task-level callbacks for DB updates
         onTaskStart: async (taskKey, config) => {
           const stageNum = getStageNumber(taskKey);
-          await stageRepo.markProcessing(episodeId, stageNum);
+          // Pass subStage for Stage 8 platform-specific tasks
+          const subStage = config.subStage || null;
+          await stageRepo.markProcessing(episodeId, stageNum, subStage);
           await episodeRepo.updateStatus(episodeId, 'processing', stageNum);
         },
         onTaskComplete: async (taskKey, taskResult) => {
           const stageNum = taskResult.stageNumber;
-          await stageRepo.markCompleted(episodeId, stageNum, taskResult.result);
+          // Pass subStage for Stage 8 platform-specific tasks
+          const subStage = taskResult.subStage || null;
+          await stageRepo.markCompleted(episodeId, stageNum, taskResult.result, subStage);
 
           // Special handling: Save AI-generated title from Stage 1
           if (stageNum === 1 && taskResult.result?.output_data?.episode_basics?.title) {
@@ -734,13 +738,27 @@ export async function processEpisode(episodeId, options = {}) {
  * - Fixing a specific stage that failed
  * - Re-running a stage with updated prompts
  * - Testing individual analyzers
+ * - Regenerating a specific social platform (Stage 8 sub-stage)
  *
  * @param {string} episodeId - Episode UUID
  * @param {number} stageNumber - Stage to regenerate (0-9)
+ * @param {Object} [options] - Optional parameters
+ * @param {string} [options.subStage] - Sub-stage for Stage 8 (instagram, twitter, linkedin, facebook)
  * @returns {Promise<Object>} Regeneration result
  */
-export async function regenerateStage(episodeId, stageNumber) {
-  logger.info('🔄 Regenerating single stage', { episodeId, stageNumber });
+export async function regenerateStage(episodeId, stageNumber, options = {}) {
+  const { subStage } = options;
+
+  logger.info('🔄 Regenerating single stage', {
+    episodeId,
+    stageNumber,
+    subStage: subStage || null,
+  });
+
+  // Validate Stage 8 requires subStage
+  if (stageNumber === 8 && !subStage) {
+    throw new Error('Stage 8 regeneration requires a subStage parameter (instagram, twitter, linkedin, facebook)');
+  }
 
   // Load context
   const context = await loadContext(episodeId);
@@ -749,26 +767,27 @@ export async function regenerateStage(episodeId, stageNumber) {
   await loadPreviousStagesByNumber(context, stageNumber);
 
   // Mark stage as processing
-  await stageRepo.markProcessing(episodeId, stageNumber);
+  await stageRepo.markProcessing(episodeId, stageNumber, subStage);
 
   try {
     // Import runStage directly for single stage execution
     const { runStage } = await import('./stage-runner.js');
-    const result = await runStage(stageNumber, context);
+    const result = await runStage(stageNumber, context, { subStage });
 
     // Save result
-    await stageRepo.markCompleted(episodeId, stageNumber, result);
+    await stageRepo.markCompleted(episodeId, stageNumber, result, subStage);
 
     logger.info('✅ Stage regeneration complete', {
       episodeId,
       stageNumber,
+      subStage: subStage || null,
       cost: result.cost_usd?.toFixed(4),
     });
 
     return result;
 
   } catch (error) {
-    await stageRepo.markFailed(episodeId, stageNumber, error.message);
+    await stageRepo.markFailed(episodeId, stageNumber, error.message, null, subStage);
     throw error;
   }
 }

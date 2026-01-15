@@ -153,6 +153,7 @@ async function executeTask(taskKey, context, options = {}) {
   logger.info(`  🔧 Starting task: ${taskConfig.name}`, {
     task: taskKey,
     stageNumber,
+    subStage: taskConfig.subStage || null,
     model: taskConfig.model,
     provider: taskConfig.provider,
     episodeId,
@@ -182,8 +183,14 @@ async function executeTask(taskKey, context, options = {}) {
   // Execute the analyzer
   // -------------------------------------------------------------------------
   try {
+    // Build options for runStage, including subStage if present
+    const runOptions = {};
+    if (taskConfig.subStage) {
+      runOptions.subStage = taskConfig.subStage;
+    }
+
     // Run the stage analyzer (existing infrastructure)
-    const result = await runStage(stageNumber, context);
+    const result = await runStage(stageNumber, context, runOptions);
 
     const durationMs = Date.now() - startTime;
 
@@ -205,6 +212,7 @@ async function executeTask(taskKey, context, options = {}) {
     const taskResult = {
       taskKey,
       stageNumber,
+      subStage: taskConfig.subStage || null,
       success: true,
       result,
       durationMs,

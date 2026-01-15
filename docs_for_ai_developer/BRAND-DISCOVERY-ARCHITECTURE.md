@@ -557,7 +557,7 @@ POST   /api/brand-discovery/values/generate-nuances
 3. Backend creates scrape job, returns scrape_id
          │
          ▼
-4. Backend (async): Call Firecrawl API for homepage
+4. Backend (async): Simple scraper fetches homepage HTML
          │
          ▼
 5. Backend (async): Discover and scrape /about, /services pages
@@ -579,9 +579,297 @@ POST   /api/brand-discovery/values/generate-nuances
          ▼
 9. Frontend polls for completion, receives extracted_data
          │
-         ▼
-10. UI shows inferred fields with "confirm/reject" options
+         ├─ Success → UI shows inferred fields with "confirm/reject" options
+         │
+         └─ Failed → UI shows manual text input fallback
 ```
+
+---
+
+## Simple Scraper Service Specification
+
+We build our own lightweight scraper instead of using a paid service. This handles 90%+ of therapist/coach websites (WordPress, Squarespace, Wix, etc.).
+
+### What It Does
+
+```
+URL → fetch HTML → parse with cheerio → extract main content → clean text
+```
+
+### Implementation Details
+
+```javascript
+// backend/services/scraper-service.js
+
+const SCRAPER_CONFIG = {
+  // Request settings
+  timeout: 10000,              // 10 second timeout
+  maxRedirects: 3,             // Follow up to 3 redirects
+  userAgent: 'Mozilla/5.0 (compatible; BrandDiscoveryBot/1.0)',
+
+  // Content extraction
+  removeSelectors: [
+    'script', 'style', 'noscript', 'iframe',
+    'nav', 'header', 'footer',
+    '.navigation', '.nav', '.menu', '.sidebar',
+    '.cookie-banner', '.popup', '.modal',
+    '[role="navigation"]', '[role="banner"]'
+  ],
+
+  // Main content selectors (tried in order)
+  contentSelectors: [
+    'main',
+    'article',
+    '[role="main"]',
+    '.content', '.main-content', '.page-content',
+    '.entry-content', '.post-content',
+    '#content', '#main'
+  ],
+
+  // About page URL patterns to try
+  aboutPagePatterns: [
+    '/about',
+    '/about-me',
+    '/about-us',
+    '/bio',
+    '/meet-{name}',      // Common pattern
+    '/our-story',
+    '/who-we-are'
+  ],
+
+  // Services page URL patterns to try
+  servicesPagePatterns: [
+    '/services',
+    '/work-with-me',
+    '/offerings',
+    '/what-i-do',
+    '/how-i-help',
+    '/therapy',
+    '/coaching'
+  ]
+};
+```
+
+### Scraper Functions
+
+```javascript
+/**
+ * Main scrape function
+ * @param {string} url - Website URL to scrape
+ * @returns {Promise<ScrapeResult>}
+ */
+async function scrapeWebsite(url) {
+  const results = {
+    homepage: null,
+    about: null,
+    services: null,
+    error: null
+  };
+
+  try {
+    // 1. Scrape homepage
+    results.homepage = await scrapePage(url);
+
+    // 2. Find and scrape about page
+    const aboutUrl = await findPage(url, SCRAPER_CONFIG.aboutPagePatterns);
+    if (aboutUrl) {
+      results.about = await scrapePage(aboutUrl);
+    }
+
+    // 3. Find and scrape services page
+    const servicesUrl = await findPage(url, SCRAPER_CONFIG.servicesPagePatterns);
+    if (servicesUrl) {
+      results.services = await scrapePage(servicesUrl);
+    }
+
+  } catch (error) {
+    results.error = {
+      type: categorizeError(error),
+      message: error.message,
+      recoverable: isRecoverable(error)
+    };
+  }
+
+  return results;
+}
+
+/**
+ * Scrape a single page
+ * @param {string} url - Page URL
+ * @returns {Promise<PageContent>}
+ */
+async function scrapePage(url) {
+  // 1. Fetch HTML
+  const response = await fetch(url, {
+    headers: { 'User-Agent': SCRAPER_CONFIG.userAgent },
+    timeout: SCRAPER_CONFIG.timeout,
+    redirect: 'follow'
+  });
+
+  if (!response.ok) {
+    throw new ScraperError(`HTTP ${response.status}`, response.status);
+  }
+
+  const html = await response.text();
+
+  // 2. Parse with cheerio
+  const $ = cheerio.load(html);
+
+  // 3. Remove unwanted elements
+  SCRAPER_CONFIG.removeSelectors.forEach(selector => {
+    $(selector).remove();
+  });
+
+  // 4. Find main content
+  let content = '';
+  for (const selector of SCRAPER_CONFIG.contentSelectors) {
+    const element = $(selector);
+    if (element.length > 0) {
+      content = element.text();
+      break;
+    }
+  }
+
+  // 5. Fallback to body if no main content found
+  if (!content) {
+    content = $('body').text();
+  }
+
+  // 6. Clean up text
+  content = cleanText(content);
+
+  return {
+    url,
+    title: $('title').text().trim(),
+    content,
+    wordCount: content.split(/\s+/).length
+  };
+}
+
+/**
+ * Clean extracted text
+ */
+function cleanText(text) {
+  return text
+    .replace(/\s+/g, ' ')           // Collapse whitespace
+    .replace(/\n{3,}/g, '\n\n')     // Max 2 newlines
+    .trim()
+    .slice(0, 50000);               // Max 50k chars per page
+}
+
+/**
+ * Find a page by trying common URL patterns
+ */
+async function findPage(baseUrl, patterns) {
+  const base = new URL(baseUrl);
+
+  for (const pattern of patterns) {
+    const testUrl = new URL(pattern, base).href;
+    try {
+      const response = await fetch(testUrl, {
+        method: 'HEAD',
+        timeout: 3000
+      });
+      if (response.ok) {
+        return testUrl;
+      }
+    } catch {
+      // Continue to next pattern
+    }
+  }
+
+  return null;
+}
+```
+
+### Error Handling
+
+```javascript
+const ERROR_TYPES = {
+  TIMEOUT: 'timeout',           // Request took too long
+  BLOCKED: 'blocked',           // 403, bot detection
+  NOT_FOUND: 'not_found',       // 404
+  SERVER_ERROR: 'server_error', // 5xx
+  NETWORK: 'network',           // Connection failed
+  INVALID_URL: 'invalid_url',   // Malformed URL
+  NO_CONTENT: 'no_content'      // Page exists but no extractable content
+};
+
+function categorizeError(error) {
+  if (error.code === 'ETIMEDOUT' || error.code === 'ESOCKETTIMEDOUT') {
+    return ERROR_TYPES.TIMEOUT;
+  }
+  if (error.status === 403) {
+    return ERROR_TYPES.BLOCKED;
+  }
+  if (error.status === 404) {
+    return ERROR_TYPES.NOT_FOUND;
+  }
+  if (error.status >= 500) {
+    return ERROR_TYPES.SERVER_ERROR;
+  }
+  if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+    return ERROR_TYPES.NETWORK;
+  }
+  return 'unknown';
+}
+
+function isRecoverable(error) {
+  // These errors might work with manual paste fallback
+  return [
+    ERROR_TYPES.BLOCKED,
+    ERROR_TYPES.TIMEOUT,
+    ERROR_TYPES.NO_CONTENT
+  ].includes(categorizeError(error));
+}
+```
+
+### What It Handles vs. Fallback
+
+| Scenario | Handles? | Notes |
+|----------|----------|-------|
+| Static HTML sites | ✅ Yes | Most therapy/coach sites |
+| WordPress | ✅ Yes | Server-rendered |
+| Squarespace | ✅ Yes | Server-rendered |
+| Wix | ⚠️ Partial | Some JS-heavy, may get limited content |
+| React/Vue SPAs | ❌ No | Needs JS execution |
+| Sites that block bots | ❌ No | Offer manual paste |
+| Sites behind login | ❌ No | Offer manual paste |
+
+### Fallback UX
+
+When scraping fails, show manual input:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  We couldn't read your site automatically                           │
+│                                                                      │
+│  This sometimes happens with certain website platforms.             │
+│  You can paste your About page text below instead.                  │
+│                                                                      │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │                                                              │   │
+│  │  Paste your About page content here...                      │   │
+│  │                                                              │   │
+│  │                                                              │   │
+│  │                                                              │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                                                                      │
+│  [Analyze This Text]                                                │
+│                                                                      │
+│  Tip: Copy from your website's About, Bio, or Services page        │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Dependencies
+
+```json
+{
+  "cheerio": "^1.0.0"
+}
+```
+
+No external API services required. Just `node-fetch` (or native fetch in Node 18+) and `cheerio` for HTML parsing.
 
 ---
 
@@ -637,8 +925,7 @@ frontend/
 ## Environment Variables
 
 ```
-# Scraping service
-FIRECRAWL_API_KEY=fc_...
+# No new environment variables required for scraping (self-built)
 
 # AI for inference (uses existing keys)
 # ANTHROPIC_API_KEY already exists

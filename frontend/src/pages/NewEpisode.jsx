@@ -37,7 +37,7 @@ import styles from './NewEpisode.module.css';
 // ============================================================================
 
 // Spam protection for title regeneration
-const REGENERATE_COOLDOWN_SECONDS = 15;
+const REGENERATE_COOLDOWN_SECONDS = 5;
 const MAX_REGENERATIONS = 5;
 
 // ============================================================================

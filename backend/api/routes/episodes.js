@@ -351,7 +351,6 @@ router.put('/:id', requireAuth, async (req, res, next) => {
  * Delete an episode and all related data.
  * User must own the episode or be a superadmin.
  *
- * NOTE: Cannot delete episodes that are currently processing.
  * The cascade delete in the database will automatically remove
  * all associated stage_outputs records.
  */
@@ -370,18 +369,13 @@ router.delete('/:id', requireAuth, async (req, res, next) => {
     // Check authorization (owner or superadmin can delete)
     checkEpisodeAccess(episode, req.user, 'delete');
 
-    // Prevent deletion of episodes that are currently processing
-    // This avoids orphaned stage updates and race conditions
+    // Log warning if deleting a processing episode (but allow it)
     if (episode.status === 'processing') {
-      logger.warn('Attempted to delete processing episode', {
+      logger.warn('Deleting episode that is currently processing', {
         episodeId: id,
         userId: req.user.id,
         currentStage: episode.current_stage,
       });
-      throw new ValidationError(
-        'status',
-        'Cannot delete an episode while it is being processed. Please wait for processing to complete or pause the episode first.'
-      );
     }
 
     logger.info('Deleting episode', {

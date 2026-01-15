@@ -288,8 +288,8 @@ function EpisodeCard({ episode, onClick, onDelete }) {
     ? Math.round((episode.current_stage / 9) * 100)
     : 0;
 
-  // Check if episode can be deleted (not currently processing)
-  const canDelete = episode.status !== 'processing';
+  // Allow deletion of episodes in any status
+  const canDelete = true;
 
   return (
     <Card

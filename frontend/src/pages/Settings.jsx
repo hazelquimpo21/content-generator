@@ -4,13 +4,15 @@
  * ============================================================================
  * Configure evergreen content: therapist profile, podcast info, voice guidelines,
  * topics, and content pillars.
+ * Also includes Brand Discovery for defining brand identity and voice.
  * This content is used across all episode processing.
  * ============================================================================
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Save, RefreshCw, User, Mic, BookOpen, Tag, Layers } from 'lucide-react';
 import { Button, Card, Input, Spinner, TagManager, useToast } from '@components/shared';
+import { BrandDiscoveryStudio } from '@components/brand-discovery';
 import api from '@utils/api-client';
 import styles from './Settings.module.css';
 
@@ -293,6 +295,14 @@ function Settings() {
           Settings saved successfully!
         </div>
       )}
+
+      {/* Brand Discovery - Onboarding for brand identity */}
+      <BrandDiscoveryStudio
+        defaultExpanded={true}
+        onBrandDnaChange={(brandDna) => {
+          console.log('[Settings] Brand DNA updated:', brandDna);
+        }}
+      />
 
       {/* Settings sections */}
       <div className={styles.sections}>

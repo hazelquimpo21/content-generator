@@ -43,6 +43,7 @@ import libraryRouter from './routes/library.js';
 import calendarRouter from './routes/calendar.js';
 import topicsRouter from './routes/topics.js';
 import pillarsRouter from './routes/pillars.js';
+import brandDiscoveryRouter from './routes/brand-discovery.js';
 
 // ============================================================================
 // APP CONFIGURATION
@@ -123,6 +124,7 @@ app.get('/', (req, res) => {
       calendar: '/api/calendar',
       topics: '/api/topics',
       pillars: '/api/pillars',
+      brandDiscovery: '/api/brand-discovery',
     },
     documentation: 'See /docs for API documentation',
   });
@@ -156,6 +158,9 @@ app.use('/api/calendar', calendarRouter);
 // Topics and Pillars routes (user-scoped content organization)
 app.use('/api/topics', topicsRouter);
 app.use('/api/pillars', pillarsRouter);
+
+// Brand Discovery routes (user-scoped onboarding)
+app.use('/api/brand-discovery', brandDiscoveryRouter);
 
 // ============================================================================
 // ERROR HANDLING

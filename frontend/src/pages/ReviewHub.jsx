@@ -35,6 +35,7 @@ import {
   X,
   Bookmark,
   Calendar,
+  CheckCircle,
 } from 'lucide-react';
 import { Button, Card, Spinner, Badge, ConfirmDialog, useToast } from '@components/shared';
 import ScheduleModal from '@components/shared/ScheduleModal';
@@ -108,6 +109,10 @@ function ReviewHub() {
   const [scheduleData, setScheduleData] = useState(null);
   const [scheduling, setScheduling] = useState(false);
 
+  // Library and calendar status tracking
+  const [libraryItems, setLibraryItems] = useState([]);
+  const [calendarItems, setCalendarItems] = useState([]);
+
   // ============================================================================
   // EFFECTS
   // ============================================================================
@@ -143,12 +148,70 @@ function ReviewHub() {
       setError(null);
 
       console.log('[ReviewHub] Episode loaded successfully');
+
+      // Fetch library and calendar items for this episode
+      fetchContentStatus();
     } catch (err) {
       console.error('[ReviewHub] Failed to fetch episode:', err);
       setError(err.message || 'Failed to load episode');
     } finally {
       setLoading(false);
     }
+  }
+
+  /**
+   * Fetch library and calendar items to show status on content
+   */
+  async function fetchContentStatus() {
+    try {
+      console.log('[ReviewHub] Fetching content status for episode:', episodeId);
+
+      // Fetch library items for this episode
+      const libraryData = await api.library.list({ episode_id: episodeId });
+      setLibraryItems(libraryData.items || []);
+
+      // Fetch calendar items for this episode
+      const calendarData = await api.calendar.list({ episode_id: episodeId });
+      setCalendarItems(calendarData.items || []);
+
+      console.log('[ReviewHub] Content status loaded:', {
+        libraryCount: libraryData.items?.length || 0,
+        calendarCount: calendarData.items?.length || 0,
+      });
+    } catch (err) {
+      // Non-critical error - just log it
+      console.warn('[ReviewHub] Failed to fetch content status:', err);
+    }
+  }
+
+  /**
+   * Check if content is in library
+   * @param {string} contentType - blog, social, email
+   * @param {string|null} platform - Platform for social content
+   * @param {string} content - The content text to match
+   * @returns {Object|null} Library item if found, null otherwise
+   */
+  function getLibraryStatus(contentType, platform, content) {
+    return libraryItems.find(item =>
+      item.content_type === contentType &&
+      item.platform === platform &&
+      item.content === content
+    ) || null;
+  }
+
+  /**
+   * Check if content is scheduled
+   * @param {string} contentType - blog, social, email
+   * @param {string|null} platform - Platform for social content
+   * @param {string} content - The content text to match
+   * @returns {Object|null} Calendar item if found, null otherwise
+   */
+  function getCalendarStatus(contentType, platform, content) {
+    return calendarItems.find(item =>
+      item.content_type === contentType &&
+      item.platform === platform &&
+      item.full_content === content
+    ) || null;
   }
 
   /**
@@ -452,6 +515,9 @@ function ReviewHub() {
       });
 
       setSaveLibraryData(null);
+
+      // Refresh status to show updated indicators
+      fetchContentStatus();
     } catch (err) {
       console.error('[ReviewHub] Failed to save to library:', err);
       showToast({
@@ -502,6 +568,9 @@ function ReviewHub() {
       });
 
       setScheduleData(null);
+
+      // Refresh status to show updated indicators
+      fetchContentStatus();
     } catch (err) {
       console.error('[ReviewHub] Failed to schedule content:', err);
       showToast({
@@ -678,6 +747,9 @@ function ReviewHub() {
             onSaveToLibrary={handleOpenSaveLibrary}
             onSchedule={handleOpenSchedule}
             episodeTitle={episodeTitle}
+            // Status tracking
+            getLibraryStatus={getLibraryStatus}
+            getCalendarStatus={getCalendarStatus}
           />
         )}
 
@@ -692,6 +764,9 @@ function ReviewHub() {
             onSaveToLibrary={handleOpenSaveLibrary}
             onSchedule={handleOpenSchedule}
             episodeTitle={episodeTitle}
+            // Status tracking
+            getLibraryStatus={getLibraryStatus}
+            getCalendarStatus={getCalendarStatus}
           />
         )}
 
@@ -704,6 +779,9 @@ function ReviewHub() {
             onSaveToLibrary={handleOpenSaveLibrary}
             onSchedule={handleOpenSchedule}
             episodeTitle={episodeTitle}
+            // Status tracking
+            getLibraryStatus={getLibraryStatus}
+            getCalendarStatus={getCalendarStatus}
           />
         )}
       </div>
@@ -1004,10 +1082,17 @@ function BlogTab({
   onSaveToLibrary,
   onSchedule,
   episodeTitle,
+  // Status tracking
+  getLibraryStatus,
+  getCalendarStatus,
 }) {
   const blogPost = editedStage?.output_text || draftStage?.output_text;
   // Use editedStage if available, otherwise fall back to draftStage for saving
   const stageToUpdate = editedStage || draftStage;
+
+  // Check library and calendar status for the blog post
+  const libraryItem = blogPost ? getLibraryStatus('blog', null, blogPost) : null;
+  const calendarItem = blogPost ? getCalendarStatus('blog', null, blogPost) : null;
 
   // Prepare data for save/schedule
   const blogData = blogPost ? {
@@ -1096,20 +1181,23 @@ function BlogTab({
                     Copy
                   </Button>
                   <Button
-                    variant="ghost"
+                    variant={libraryItem ? 'secondary' : 'ghost'}
                     size="sm"
-                    leftIcon={Bookmark}
-                    onClick={() => onSaveToLibrary(blogData)}
+                    leftIcon={libraryItem ? CheckCircle : Bookmark}
+                    onClick={() => !libraryItem && onSaveToLibrary(blogData)}
+                    disabled={!!libraryItem}
+                    title={libraryItem ? 'Already saved to library' : 'Save to library'}
                   >
-                    Save
+                    {libraryItem ? 'In Library' : 'Save'}
                   </Button>
                   <Button
-                    variant="ghost"
+                    variant={calendarItem ? 'secondary' : 'ghost'}
                     size="sm"
-                    leftIcon={Calendar}
-                    onClick={() => onSchedule(blogData)}
+                    leftIcon={calendarItem ? CheckCircle : Calendar}
+                    onClick={() => !calendarItem && onSchedule(blogData)}
+                    title={calendarItem ? `Scheduled for ${calendarItem.scheduled_date}` : 'Schedule content'}
                   >
-                    Schedule
+                    {calendarItem ? `Scheduled ${calendarItem.scheduled_date}` : 'Schedule'}
                   </Button>
                 </>
               )}
@@ -1117,6 +1205,23 @@ function BlogTab({
           }
           padding="lg"
         >
+          {/* Status indicators */}
+          {(libraryItem || calendarItem) && !isEditing && (
+            <div className={styles.statusIndicators}>
+              {libraryItem && (
+                <Badge variant="success" className={styles.statusBadge}>
+                  <CheckCircle size={12} />
+                  In Library
+                </Badge>
+              )}
+              {calendarItem && (
+                <Badge variant="primary" className={styles.statusBadge}>
+                  <Calendar size={12} />
+                  Scheduled: {calendarItem.scheduled_date}
+                </Badge>
+              )}
+            </div>
+          )}
           <div className={styles.blogPost}>
             {isEditing ? (
               <textarea
@@ -1148,7 +1253,7 @@ function BlogTab({
  * - onRegeneratePlatform: Function(platform, stageId) to regenerate a specific platform
  * - regenerating: Currently regenerating identifier (e.g., '8-instagram')
  */
-function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regenerating, onSaveToLibrary, onSchedule, episodeTitle }) {
+function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regenerating, onSaveToLibrary, onSchedule, episodeTitle, getLibraryStatus, getCalendarStatus }) {
   const [activePlatform, setActivePlatform] = useState('instagram');
 
   console.log('[SocialTab] Platform stages:', {
@@ -1248,63 +1353,87 @@ function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regen
           />
         ) : (
           <div className={styles.socialPlatform}>
-            {currentPosts.map((post, i) => (
-              <div
-                key={i}
-                className={styles.socialPostItem}
-                style={{ '--platform-accent': currentPlatform?.color }}
-              >
-                {post.type && (
-                  <Badge variant="secondary" className={styles.postType}>
-                    {post.type}
-                  </Badge>
-                )}
-                <p className={styles.socialPost}>{post.content}</p>
-                {post.hashtags && post.hashtags.length > 0 && (
-                  <p className={styles.hashtags}>{post.hashtags.join(' ')}</p>
-                )}
-                <div className={styles.postActions}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    leftIcon={copied === `${activePlatform}-${i}` ? Check : Copy}
-                    onClick={() => onCopy(post.content, `${activePlatform}-${i}`)}
-                  >
-                    {copied === `${activePlatform}-${i}` ? 'Copied!' : 'Copy'}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    leftIcon={Bookmark}
-                    onClick={() => onSaveToLibrary({
-                      title: `${currentPlatform?.label} - ${post.type || 'Post'}`,
-                      content_type: 'social',
-                      platform: currentPlatform?.id,
-                      content: post.content + (post.hashtags?.length ? '\n\n' + post.hashtags.join(' ') : ''),
-                      source_stage: 8,
-                      source_sub_stage: currentPlatform?.id,
-                      metadata: { type: post.type, hashtags: post.hashtags },
-                    })}
-                  >
-                    Save
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    leftIcon={Calendar}
-                    onClick={() => onSchedule({
-                      title: `${episodeTitle} - ${currentPlatform?.label}`,
-                      content_type: 'social',
-                      platform: currentPlatform?.id,
-                      content: post.content + (post.hashtags?.length ? '\n\n' + post.hashtags.join(' ') : ''),
-                      metadata: { type: post.type, hashtags: post.hashtags },
-                    })}
-                  >
-                    Schedule
-                  </Button>
+            {currentPosts.map((post, i) => {
+              const postContent = post.content + (post.hashtags?.length ? '\n\n' + post.hashtags.join(' ') : '');
+              const libraryItem = getLibraryStatus('social', currentPlatform?.id, postContent);
+              const calendarItem = getCalendarStatus('social', currentPlatform?.id, postContent);
+
+              return (
+                <div
+                  key={i}
+                  className={styles.socialPostItem}
+                  style={{ '--platform-accent': currentPlatform?.color }}
+                >
+                  <div className={styles.postHeader}>
+                    {post.type && (
+                      <Badge variant="secondary" className={styles.postType}>
+                        {post.type}
+                      </Badge>
+                    )}
+                    {/* Status badges */}
+                    {libraryItem && (
+                      <Badge variant="success" className={styles.statusBadge}>
+                        <CheckCircle size={10} />
+                        In Library
+                      </Badge>
+                    )}
+                    {calendarItem && (
+                      <Badge variant="primary" className={styles.statusBadge}>
+                        <Calendar size={10} />
+                        {calendarItem.scheduled_date}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className={styles.socialPost}>{post.content}</p>
+                  {post.hashtags && post.hashtags.length > 0 && (
+                    <p className={styles.hashtags}>{post.hashtags.join(' ')}</p>
+                  )}
+                  <div className={styles.postActions}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={copied === `${activePlatform}-${i}` ? Check : Copy}
+                      onClick={() => onCopy(post.content, `${activePlatform}-${i}`)}
+                    >
+                      {copied === `${activePlatform}-${i}` ? 'Copied!' : 'Copy'}
+                    </Button>
+                    <Button
+                      variant={libraryItem ? 'secondary' : 'ghost'}
+                      size="sm"
+                      leftIcon={libraryItem ? CheckCircle : Bookmark}
+                      onClick={() => !libraryItem && onSaveToLibrary({
+                        title: `${currentPlatform?.label} - ${post.type || 'Post'}`,
+                        content_type: 'social',
+                        platform: currentPlatform?.id,
+                        content: postContent,
+                        source_stage: 8,
+                        source_sub_stage: currentPlatform?.id,
+                        metadata: { type: post.type, hashtags: post.hashtags },
+                      })}
+                      disabled={!!libraryItem}
+                      title={libraryItem ? 'Already in library' : 'Save to library'}
+                    >
+                      {libraryItem ? 'Saved' : 'Save'}
+                    </Button>
+                    <Button
+                      variant={calendarItem ? 'secondary' : 'ghost'}
+                      size="sm"
+                      leftIcon={calendarItem ? CheckCircle : Calendar}
+                      onClick={() => !calendarItem && onSchedule({
+                        title: `${episodeTitle} - ${currentPlatform?.label}`,
+                        content_type: 'social',
+                        platform: currentPlatform?.id,
+                        content: postContent,
+                        metadata: { type: post.type, hashtags: post.hashtags },
+                      })}
+                      title={calendarItem ? `Scheduled for ${calendarItem.scheduled_date}` : 'Schedule content'}
+                    >
+                      {calendarItem ? 'Scheduled' : 'Schedule'}
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Card>
@@ -1321,13 +1450,19 @@ function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regen
  * - email_body: string (full email body in markdown, 200-350 words)
  * - followup_email: string (optional follow-up email, 100-150 words)
  */
-function EmailTab({ stage, onCopy, copied, onSaveToLibrary, onSchedule, episodeTitle }) {
+function EmailTab({ stage, onCopy, copied, onSaveToLibrary, onSchedule, episodeTitle, getLibraryStatus, getCalendarStatus }) {
   console.log('[EmailTab] Stage 9 data:', {
     hasStage: !!stage,
     stageStatus: stage?.status,
     hasOutputData: !!stage?.output_data,
     emailFields: stage?.output_data ? Object.keys(stage.output_data) : [],
   });
+
+  // Get email content for status check
+  const email = stage?.output_data;
+  const emailContent = email?.email_body || '';
+  const libraryItem = emailContent ? getLibraryStatus('email', null, emailContent) : null;
+  const calendarItem = emailContent ? getCalendarStatus('email', null, emailContent) : null;
 
   if (!stage) {
     return <EmptyState message="No email content generated" details="Stage 9 (Email Campaign) not found." />;
@@ -1336,8 +1471,6 @@ function EmailTab({ stage, onCopy, copied, onSaveToLibrary, onSchedule, episodeT
   if (stage.status !== 'completed') {
     return <EmptyState message="Email content not ready" details={`Stage 9 status: ${stage.status}`} />;
   }
-
-  const email = stage?.output_data;
 
   if (!email) {
     return <EmptyState message="No email content generated" details="Stage 9 completed but has no output data." />;
@@ -1390,6 +1523,23 @@ function EmailTab({ stage, onCopy, copied, onSaveToLibrary, onSchedule, episodeT
       {/* Email Body - Note: field is email_body, not body_content */}
       {email.email_body && (
         <Card title="Email Body" subtitle="Main newsletter content" padding="lg">
+          {/* Status indicators */}
+          {(libraryItem || calendarItem) && (
+            <div className={styles.statusIndicators}>
+              {libraryItem && (
+                <Badge variant="success" className={styles.statusBadge}>
+                  <CheckCircle size={12} />
+                  In Library
+                </Badge>
+              )}
+              {calendarItem && (
+                <Badge variant="primary" className={styles.statusBadge}>
+                  <Calendar size={12} />
+                  Scheduled: {calendarItem.scheduled_date}
+                </Badge>
+              )}
+            </div>
+          )}
           <pre className={styles.emailBody}>{email.email_body}</pre>
           <div className={styles.postActions}>
             <Button
@@ -1401,10 +1551,10 @@ function EmailTab({ stage, onCopy, copied, onSaveToLibrary, onSchedule, episodeT
               {copied === 'body' ? 'Copied!' : 'Copy'}
             </Button>
             <Button
-              variant="ghost"
+              variant={libraryItem ? 'secondary' : 'ghost'}
               size="sm"
-              leftIcon={Bookmark}
-              onClick={() => onSaveToLibrary({
+              leftIcon={libraryItem ? CheckCircle : Bookmark}
+              onClick={() => !libraryItem && onSaveToLibrary({
                 title: `${episodeTitle} - Email`,
                 content_type: 'email',
                 platform: null,
@@ -1415,14 +1565,16 @@ function EmailTab({ stage, onCopy, copied, onSaveToLibrary, onSchedule, episodeT
                   preview_text: email.preview_text,
                 },
               })}
+              disabled={!!libraryItem}
+              title={libraryItem ? 'Already in library' : 'Save to library'}
             >
-              Save
+              {libraryItem ? 'In Library' : 'Save'}
             </Button>
             <Button
-              variant="ghost"
+              variant={calendarItem ? 'secondary' : 'ghost'}
               size="sm"
-              leftIcon={Calendar}
-              onClick={() => onSchedule({
+              leftIcon={calendarItem ? CheckCircle : Calendar}
+              onClick={() => !calendarItem && onSchedule({
                 title: `${episodeTitle} - Email Campaign`,
                 content_type: 'email',
                 platform: null,
@@ -1432,8 +1584,9 @@ function EmailTab({ stage, onCopy, copied, onSaveToLibrary, onSchedule, episodeT
                   preview_text: email.preview_text,
                 },
               })}
+              title={calendarItem ? `Scheduled for ${calendarItem.scheduled_date}` : 'Schedule content'}
             >
-              Schedule
+              {calendarItem ? `Scheduled ${calendarItem.scheduled_date}` : 'Schedule'}
             </Button>
           </div>
         </Card>

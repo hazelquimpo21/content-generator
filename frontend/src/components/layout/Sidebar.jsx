@@ -17,6 +17,8 @@ import {
   Mic,
   LogOut,
   User,
+  Bookmark,
+  Calendar,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useAuth } from '../../contexts/AuthContext';
@@ -33,6 +35,16 @@ const NAV_ITEMS = [
     path: '/episodes/new',
     label: 'New Episode',
     icon: PlusCircle,
+  },
+  {
+    path: '/library',
+    label: 'Library',
+    icon: Bookmark,
+  },
+  {
+    path: '/calendar',
+    label: 'Calendar',
+    icon: Calendar,
   },
   {
     path: '/settings',

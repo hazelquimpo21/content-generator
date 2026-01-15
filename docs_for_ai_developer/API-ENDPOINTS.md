@@ -890,6 +890,363 @@ Get overall API usage statistics.
 
 ---
 
+## Content Library
+
+### GET `/api/library`
+
+List user's saved content items. **Requires authentication.**
+
+**Query Parameters:**
+- `content_type` (optional): Filter by type (blog, social, email, headline, quote)
+- `platform` (optional): Filter by platform (instagram, twitter, linkedin, facebook)
+- `episode_id` (optional): Filter by source episode
+- `favorite` (optional): Set to "true" for favorites only
+- `search` (optional): Search in title and content
+- `limit` (optional): Number of results (default: 50)
+- `offset` (optional): Pagination offset (default: 0)
+
+**Response (200 OK):**
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "user_id": "uuid",
+      "episode_id": "uuid",
+      "title": "Understanding Anxiety - Blog Post",
+      "content_type": "blog",
+      "platform": null,
+      "content": "Full blog post content...",
+      "metadata": {},
+      "source_stage": 7,
+      "source_sub_stage": null,
+      "tags": ["anxiety", "mental-health"],
+      "is_favorite": true,
+      "created_at": "2025-01-12T14:30:00Z",
+      "updated_at": "2025-01-12T14:30:00Z"
+    }
+  ],
+  "total": 25,
+  "limit": 50,
+  "offset": 0
+}
+```
+
+---
+
+### GET `/api/library/stats`
+
+Get library statistics for current user. **Requires authentication.**
+
+**Response (200 OK):**
+```json
+{
+  "stats": {
+    "total_items": 25,
+    "blog_count": 10,
+    "social_count": 12,
+    "email_count": 3,
+    "headline_count": 0,
+    "quote_count": 0,
+    "favorite_count": 5
+  }
+}
+```
+
+---
+
+### POST `/api/library`
+
+Save content to library. **Requires authentication.**
+
+**Request Body:**
+```json
+{
+  "title": "Understanding Anxiety - Blog Post",
+  "content_type": "blog",
+  "platform": null,
+  "content": "Full content text...",
+  "episode_id": "uuid",
+  "source_stage": 7,
+  "source_sub_stage": null,
+  "tags": ["anxiety", "mental-health"],
+  "metadata": {}
+}
+```
+
+**Validation:**
+- `title` (required): 1-500 characters
+- `content_type` (required): blog, social, email, headline, quote
+- `platform` (optional): instagram, twitter, linkedin, facebook
+- `content` (required): 1-100,000 characters
+
+**Response (201 Created):**
+```json
+{
+  "item": {
+    "id": "uuid",
+    "title": "Understanding Anxiety - Blog Post",
+    "content_type": "blog",
+    "is_favorite": false,
+    "created_at": "2025-01-13T15:00:00Z"
+  }
+}
+```
+
+---
+
+### GET `/api/library/:id`
+
+Get single library item. **Requires authentication.**
+
+**Response (200 OK):**
+```json
+{
+  "item": {
+    "id": "uuid",
+    "title": "Understanding Anxiety - Blog Post",
+    "content_type": "blog",
+    "content": "Full content...",
+    "tags": ["anxiety"],
+    "is_favorite": true
+  }
+}
+```
+
+---
+
+### PUT `/api/library/:id`
+
+Update library item. **Requires authentication.**
+
+**Request Body:**
+```json
+{
+  "title": "Updated Title",
+  "content": "Updated content...",
+  "tags": ["new-tag"],
+  "platform": "twitter"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "item": {
+    "id": "uuid",
+    "title": "Updated Title",
+    "updated_at": "2025-01-13T15:30:00Z"
+  }
+}
+```
+
+---
+
+### DELETE `/api/library/:id`
+
+Delete library item. **Requires authentication.**
+
+**Response (204 No Content)**
+
+---
+
+### POST `/api/library/:id/favorite`
+
+Toggle favorite status. **Requires authentication.**
+
+**Response (200 OK):**
+```json
+{
+  "item": { "id": "uuid", "is_favorite": true },
+  "is_favorite": true
+}
+```
+
+---
+
+## Content Calendar
+
+### GET `/api/calendar`
+
+List scheduled content items. **Requires authentication.**
+
+**Query Parameters (Required):**
+- `start_date` (required): Start of date range (YYYY-MM-DD)
+- `end_date` (required): End of date range (YYYY-MM-DD)
+
+**Query Parameters (Optional):**
+- `content_type` (optional): Filter by type (blog, social, email)
+- `platform` (optional): Filter by platform
+- `status` (optional): Filter by status (draft, scheduled, published, cancelled)
+- `limit` (optional): Number of results (default: 100)
+- `offset` (optional): Pagination offset (default: 0)
+
+**Response (200 OK):**
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "user_id": "uuid",
+      "library_item_id": "uuid",
+      "episode_id": "uuid",
+      "scheduled_date": "2025-01-15",
+      "scheduled_time": "10:00",
+      "title": "Understanding Anxiety",
+      "content_type": "blog",
+      "platform": null,
+      "content_preview": "First 200 characters...",
+      "full_content": "Full content...",
+      "status": "scheduled",
+      "published_at": null,
+      "publish_url": null,
+      "notes": "Remember to add image",
+      "metadata": {},
+      "created_at": "2025-01-12T14:30:00Z",
+      "updated_at": "2025-01-12T14:30:00Z"
+    }
+  ],
+  "total": 12,
+  "limit": 100,
+  "offset": 0
+}
+```
+
+---
+
+### POST `/api/calendar`
+
+Schedule content. **Requires authentication.**
+
+**Request Body:**
+```json
+{
+  "title": "Understanding Anxiety",
+  "content_type": "blog",
+  "platform": null,
+  "scheduled_date": "2025-01-15",
+  "scheduled_time": "10:00",
+  "full_content": "Full content text...",
+  "status": "scheduled",
+  "episode_id": "uuid",
+  "library_item_id": "uuid",
+  "notes": "Remember to add image",
+  "metadata": {}
+}
+```
+
+**Validation:**
+- `title` (required): 1-500 characters
+- `content_type` (required): blog, social, email
+- `scheduled_date` (required): YYYY-MM-DD format
+- `scheduled_time` (optional): HH:MM or HH:MM:SS format
+- `status` (optional): draft, scheduled (default: scheduled)
+
+**Response (201 Created):**
+```json
+{
+  "item": {
+    "id": "uuid",
+    "title": "Understanding Anxiety",
+    "scheduled_date": "2025-01-15",
+    "scheduled_time": "10:00",
+    "status": "scheduled",
+    "created_at": "2025-01-13T15:00:00Z"
+  }
+}
+```
+
+---
+
+### GET `/api/calendar/:id`
+
+Get single calendar item. **Requires authentication.**
+
+**Response (200 OK):**
+```json
+{
+  "item": {
+    "id": "uuid",
+    "title": "Understanding Anxiety",
+    "scheduled_date": "2025-01-15",
+    "scheduled_time": "10:00",
+    "full_content": "Full content...",
+    "status": "scheduled"
+  }
+}
+```
+
+---
+
+### PUT `/api/calendar/:id`
+
+Update calendar item. **Requires authentication.**
+
+**Request Body:**
+```json
+{
+  "title": "Updated Title",
+  "scheduled_date": "2025-01-16",
+  "scheduled_time": "14:00",
+  "full_content": "Updated content...",
+  "notes": "New note"
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "item": {
+    "id": "uuid",
+    "title": "Updated Title",
+    "scheduled_date": "2025-01-16",
+    "updated_at": "2025-01-13T15:30:00Z"
+  }
+}
+```
+
+---
+
+### DELETE `/api/calendar/:id`
+
+Delete calendar item. **Requires authentication.**
+
+**Response (204 No Content)**
+
+---
+
+### PATCH `/api/calendar/:id/status`
+
+Update calendar item status. **Requires authentication.**
+
+**Request Body:**
+```json
+{
+  "status": "published",
+  "publish_url": "https://myblog.com/post-123"
+}
+```
+
+**Valid Statuses:**
+- `draft`: Not finalized
+- `scheduled`: Ready to publish
+- `published`: Already published (sets published_at timestamp)
+- `cancelled`: Skipped/cancelled
+
+**Response (200 OK):**
+```json
+{
+  "item": {
+    "id": "uuid",
+    "status": "published",
+    "published_at": "2025-01-15T10:05:00Z",
+    "publish_url": "https://myblog.com/post-123"
+  }
+}
+```
+
+---
+
 ## Error Responses
 
 ### Standard Error Format

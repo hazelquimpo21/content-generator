@@ -426,6 +426,96 @@ const admin = {
   users: (params = {}) => get('/auth/users', params),
 };
 
+/**
+ * Content Library API
+ */
+const library = {
+  /**
+   * List library items
+   * @param {Object} params - Query params (content_type, platform, episode_id, favorite, search, limit, offset)
+   */
+  list: (params = {}) => get('/library', params),
+
+  /**
+   * Get library statistics
+   */
+  stats: () => get('/library/stats'),
+
+  /**
+   * Save content to library
+   * @param {Object} data - Library item data (title, content_type, platform, content, metadata, episode_id, source_stage, tags)
+   */
+  create: (data) => post('/library', data),
+
+  /**
+   * Get single library item
+   * @param {string} id - Library item UUID
+   */
+  get: (id) => get(`/library/${id}`),
+
+  /**
+   * Update library item
+   * @param {string} id - Library item UUID
+   * @param {Object} data - Fields to update (title, content, metadata, tags, platform)
+   */
+  update: (id, data) => put(`/library/${id}`, data),
+
+  /**
+   * Delete library item
+   * @param {string} id - Library item UUID
+   */
+  delete: (id) => del(`/library/${id}`),
+
+  /**
+   * Toggle favorite status
+   * @param {string} id - Library item UUID
+   */
+  toggleFavorite: (id) => post(`/library/${id}/favorite`),
+};
+
+/**
+ * Content Calendar API
+ */
+const calendar = {
+  /**
+   * List calendar items
+   * @param {Object} params - Query params (start_date, end_date, content_type, platform, status, limit, offset)
+   */
+  list: (params = {}) => get('/calendar', params),
+
+  /**
+   * Schedule content
+   * @param {Object} data - Calendar item data (title, content_type, platform, scheduled_date, scheduled_time, full_content, status, episode_id, library_item_id, notes, metadata)
+   */
+  create: (data) => post('/calendar', data),
+
+  /**
+   * Get single calendar item
+   * @param {string} id - Calendar item UUID
+   */
+  get: (id) => get(`/calendar/${id}`),
+
+  /**
+   * Update calendar item
+   * @param {string} id - Calendar item UUID
+   * @param {Object} data - Fields to update (title, scheduled_date, scheduled_time, full_content, platform, notes, metadata)
+   */
+  update: (id, data) => put(`/calendar/${id}`, data),
+
+  /**
+   * Delete calendar item
+   * @param {string} id - Calendar item UUID
+   */
+  delete: (id) => del(`/calendar/${id}`),
+
+  /**
+   * Update calendar item status
+   * @param {string} id - Calendar item UUID
+   * @param {Object} data - Status update (status, publish_url)
+   */
+  updateStatus: (id, data) => patch(`/calendar/${id}/status`, data),
+};
+
 // ============================================================================
 // EXPORT
 // ============================================================================
@@ -437,6 +527,8 @@ const api = {
   stages,
   evergreen,
   admin,
+  library,
+  calendar,
   // Raw helpers for custom endpoints
   get,
   post,

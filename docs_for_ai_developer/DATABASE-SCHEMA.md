@@ -2,7 +2,7 @@
 
 ## Overview
 
-This application uses Supabase (PostgreSQL) with six main tables plus RLS policies for security. The database supports multi-user authentication with user-scoped data isolation.
+This application uses Supabase (PostgreSQL) with eight main tables plus RLS policies for security. The database supports multi-user authentication with user-scoped data isolation.
 
 ## Tables
 
@@ -416,12 +416,198 @@ CREATE INDEX idx_api_usage_date ON api_usage_log(DATE(timestamp));
 
 ---
 
+### `content_library`
+
+Stores saved content pieces from episodes for later use or scheduling.
+
+```sql
+CREATE TABLE content_library (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+  episode_id UUID REFERENCES episodes(id) ON DELETE SET NULL,
+
+  -- Content details
+  title TEXT NOT NULL,
+  content_type TEXT NOT NULL CHECK (content_type IN ('blog', 'social', 'email', 'headline', 'quote')),
+  platform TEXT CHECK (platform IN ('generic', 'instagram', 'twitter', 'linkedin', 'facebook')),
+  content TEXT NOT NULL,
+  metadata JSONB DEFAULT '{}'::jsonb,
+
+  -- Source reference (which stage this came from)
+  source_stage INTEGER CHECK (source_stage >= 0 AND source_stage <= 9),
+  source_sub_stage TEXT CHECK (source_sub_stage IN ('instagram', 'twitter', 'linkedin', 'facebook') OR source_sub_stage IS NULL),
+
+  -- Organization
+  tags TEXT[] DEFAULT '{}',
+  is_favorite BOOLEAN DEFAULT FALSE,
+
+  -- Timestamps
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_content_library_user ON content_library(user_id);
+CREATE INDEX idx_content_library_type ON content_library(content_type);
+CREATE INDEX idx_content_library_platform ON content_library(platform) WHERE platform IS NOT NULL;
+CREATE INDEX idx_content_library_episode ON content_library(episode_id) WHERE episode_id IS NOT NULL;
+CREATE INDEX idx_content_library_favorite ON content_library(user_id, is_favorite) WHERE is_favorite = TRUE;
+CREATE INDEX idx_content_library_created ON content_library(created_at DESC);
+CREATE INDEX idx_content_library_tags ON content_library USING GIN(tags);
+
+-- Trigger to update updated_at
+CREATE TRIGGER content_library_updated_at
+  BEFORE UPDATE ON content_library
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at();
+```
+
+**Field Descriptions:**
+
+- `id`: Unique identifier (UUID v4)
+- `user_id`: Foreign key to user_profiles (data owner)
+- `episode_id`: Optional reference to source episode (null if episode deleted)
+- `title`: User-provided title for the content piece
+- `content_type`: Type of content
+  - `blog`: Full blog post
+  - `social`: Social media post
+  - `email`: Email campaign content
+  - `headline`: Title/headline options
+  - `quote`: Extracted quotes
+- `platform`: For social content, the target platform
+- `content`: The actual content text
+- `metadata`: Additional JSON data (hashtags, character counts, etc.)
+- `source_stage`: Which pipeline stage generated this (0-9)
+- `source_sub_stage`: For social content, which platform variant
+- `tags`: User-defined tags for organization (array)
+- `is_favorite`: Whether user marked as favorite
+- `created_at`: When saved to library
+- `updated_at`: Last modification timestamp
+
+**Example `metadata` for social content:**
+```json
+{
+  "hashtags": ["#anxiety", "#mentalhealth", "#therapy"],
+  "character_count": 142,
+  "post_type": "short"
+}
+```
+
+---
+
+### `content_calendar`
+
+Stores scheduled content items with dates for organized publishing.
+
+```sql
+CREATE TABLE content_calendar (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+
+  -- Content reference (optional - can link to library item or episode)
+  library_item_id UUID REFERENCES content_library(id) ON DELETE SET NULL,
+  episode_id UUID REFERENCES episodes(id) ON DELETE SET NULL,
+
+  -- Scheduling
+  scheduled_date DATE NOT NULL,
+  scheduled_time TIME,
+
+  -- Content details (copied at schedule time for independence)
+  title TEXT NOT NULL,
+  content_type TEXT NOT NULL CHECK (content_type IN ('blog', 'social', 'email')),
+  platform TEXT CHECK (platform IN ('generic', 'instagram', 'twitter', 'linkedin', 'facebook')),
+  content_preview TEXT,
+  full_content TEXT,
+
+  -- Status workflow
+  status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('draft', 'scheduled', 'published', 'cancelled')),
+
+  -- Publishing tracking
+  published_at TIMESTAMP WITH TIME ZONE,
+  publish_url TEXT,
+  notes TEXT,
+
+  -- Metadata for platform-specific info
+  metadata JSONB DEFAULT '{}'::jsonb,
+
+  -- Timestamps
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_content_calendar_user ON content_calendar(user_id);
+CREATE INDEX idx_content_calendar_date ON content_calendar(scheduled_date);
+CREATE INDEX idx_content_calendar_user_date ON content_calendar(user_id, scheduled_date);
+CREATE INDEX idx_content_calendar_status ON content_calendar(status);
+CREATE INDEX idx_content_calendar_type ON content_calendar(content_type);
+CREATE INDEX idx_content_calendar_platform ON content_calendar(platform) WHERE platform IS NOT NULL;
+CREATE INDEX idx_content_calendar_library ON content_calendar(library_item_id) WHERE library_item_id IS NOT NULL;
+CREATE INDEX idx_content_calendar_episode ON content_calendar(episode_id) WHERE episode_id IS NOT NULL;
+
+-- Trigger to update updated_at
+CREATE TRIGGER content_calendar_updated_at
+  BEFORE UPDATE ON content_calendar
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at();
+```
+
+**Field Descriptions:**
+
+- `id`: Unique identifier (UUID v4)
+- `user_id`: Foreign key to user_profiles (data owner)
+- `library_item_id`: Optional reference to source library item
+- `episode_id`: Optional reference to source episode
+- `scheduled_date`: Target publication date (required)
+- `scheduled_time`: Target publication time (optional)
+- `title`: Content title for calendar display
+- `content_type`: Type of content (blog, social, email)
+- `platform`: For social content, target platform
+- `content_preview`: Short preview (first 200 chars) for calendar view
+- `full_content`: Complete content text (copied for independence)
+- `status`: Publishing workflow status
+  - `draft`: Not finalized, needs work
+  - `scheduled`: Ready to publish at scheduled time
+  - `published`: Successfully published
+  - `cancelled`: Skipped/cancelled
+- `published_at`: Actual publication timestamp
+- `publish_url`: Link to published content
+- `notes`: User notes about this scheduled item
+- `metadata`: Platform-specific data (hashtags, etc.)
+- `created_at`: When scheduled
+- `updated_at`: Last modification timestamp
+
+**Example scheduled item:**
+```json
+{
+  "id": "abc123...",
+  "scheduled_date": "2025-01-20",
+  "scheduled_time": "10:00:00",
+  "title": "Understanding Anxiety - Instagram",
+  "content_type": "social",
+  "platform": "instagram",
+  "content_preview": "Anxiety doesn't announce itself politely...",
+  "status": "scheduled",
+  "metadata": {
+    "hashtags": ["#anxiety", "#mentalhealth"]
+  }
+}
+```
+
+---
+
 ## Relationships
 
 ```
 auth.users (1) ─────< (1) user_profiles
                            │
                            ├───< (1) user_settings
+                           │
+                           ├───< (many) content_library ─────> (optional) episodes
+                           │         │
+                           │         └───< (many) content_calendar
+                           │
+                           ├───< (many) content_calendar ─────> (optional) episodes
                            │
                            └───< (many) episodes (1) ─────< (many) stage_outputs
                                                               │
@@ -431,6 +617,14 @@ auth.users (1) ─────< (1) user_profiles
 
 evergreen_content (singleton) ──> (system defaults, used as seed for user_settings)
 ```
+
+### Content Library & Calendar Relationships
+
+- `content_library.user_id` → `user_profiles.id` (owner)
+- `content_library.episode_id` → `episodes.id` (optional source)
+- `content_calendar.user_id` → `user_profiles.id` (owner)
+- `content_calendar.library_item_id` → `content_library.id` (optional source)
+- `content_calendar.episode_id` → `episodes.id` (optional source)
 
 ### User Data Isolation
 
@@ -529,6 +723,54 @@ CREATE POLICY "Users can view own stage outputs" ON stage_outputs
       AND (episodes.user_id = auth.uid() OR is_superadmin())
     )
   );
+```
+
+### Content Library Policies
+
+```sql
+-- Users can view their own library items
+CREATE POLICY "Users can view own library items" ON content_library
+  FOR SELECT USING (auth.uid() = user_id OR is_superadmin());
+
+-- Users can insert their own library items
+CREATE POLICY "Users can insert own library items" ON content_library
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- Users can update their own library items
+CREATE POLICY "Users can update own library items" ON content_library
+  FOR UPDATE USING (auth.uid() = user_id);
+
+-- Users can delete their own library items
+CREATE POLICY "Users can delete own library items" ON content_library
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Service role bypass for backend operations
+CREATE POLICY "Service role full access to library" ON content_library
+  FOR ALL USING (auth.role() = 'service_role');
+```
+
+### Content Calendar Policies
+
+```sql
+-- Users can view their own calendar items
+CREATE POLICY "Users can view own calendar items" ON content_calendar
+  FOR SELECT USING (auth.uid() = user_id OR is_superadmin());
+
+-- Users can insert their own calendar items
+CREATE POLICY "Users can insert own calendar items" ON content_calendar
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- Users can update their own calendar items
+CREATE POLICY "Users can update own calendar items" ON content_calendar
+  FOR UPDATE USING (auth.uid() = user_id);
+
+-- Users can delete their own calendar items
+CREATE POLICY "Users can delete own calendar items" ON content_calendar
+  FOR DELETE USING (auth.uid() = user_id);
+
+-- Service role bypass for backend operations
+CREATE POLICY "Service role full access to calendar" ON content_calendar
+  FOR ALL USING (auth.role() = 'service_role');
 ```
 
 ### Service Role Bypass

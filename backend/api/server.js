@@ -39,6 +39,8 @@ import episodesRouter from './routes/episodes.js';
 import stagesRouter from './routes/stages.js';
 import evergreenRouter from './routes/evergreen.js';
 import adminRouter from './routes/admin.js';
+import libraryRouter from './routes/library.js';
+import calendarRouter from './routes/calendar.js';
 
 // ============================================================================
 // APP CONFIGURATION
@@ -115,6 +117,8 @@ app.get('/', (req, res) => {
       stages: '/api/stages',
       evergreen: '/api/evergreen',
       admin: '/api/admin',
+      library: '/api/library',
+      calendar: '/api/calendar',
     },
     documentation: 'See /docs for API documentation',
   });
@@ -140,6 +144,10 @@ app.use('/api/evergreen', evergreenRouter);
 
 // Admin routes (superadmin only)
 app.use('/api/admin', adminRouter);
+
+// Content Library and Calendar routes (user-scoped)
+app.use('/api/library', libraryRouter);
+app.use('/api/calendar', calendarRouter);
 
 // ============================================================================
 // ERROR HANDLING
@@ -207,6 +215,8 @@ async function startServer() {
       stages: `http://localhost:${PORT}/api/stages`,
       evergreen: `http://localhost:${PORT}/api/evergreen`,
       admin: `http://localhost:${PORT}/api/admin`,
+      library: `http://localhost:${PORT}/api/library`,
+      calendar: `http://localhost:${PORT}/api/calendar`,
     });
 
     if (NODE_ENV === 'development') {

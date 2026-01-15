@@ -676,6 +676,7 @@ function QuotesTab({ stage, onCopy, copied }) {
 
 /**
  * TitlesTab - Displays headlines, subheadings, taglines, and social hooks from Stage 5
+ * Uses pill navigation to switch between categories for reduced scrolling
  *
  * Stage 5 output structure:
  * - headlines: array of strings (10-15 main blog title options)
@@ -684,6 +685,8 @@ function QuotesTab({ stage, onCopy, copied }) {
  * - social_hooks: array of strings (5-7 social media opening lines)
  */
 function TitlesTab({ stage, onCopy, copied }) {
+  const [activeCategory, setActiveCategory] = useState('headlines');
+
   // Debug logging to help identify data issues
   console.log('[TitlesTab] Stage 5 data:', {
     hasStage: !!stage,
@@ -714,91 +717,66 @@ function TitlesTab({ stage, onCopy, copied }) {
 
   const { headlines = [], subheadings = [], taglines = [], social_hooks = [] } = stage.output_data;
 
+  // Category definitions with counts
+  const categories = [
+    { id: 'headlines', label: 'Headlines', count: headlines.length, description: 'Main blog title options' },
+    { id: 'taglines', label: 'Taglines', count: taglines.length, description: 'Short punchy summaries' },
+    { id: 'social_hooks', label: 'Social Hooks', count: social_hooks.length, description: 'Social media opening lines' },
+    { id: 'subheadings', label: 'Subheadings', count: subheadings.length, description: 'Section header options' },
+  ].filter(cat => cat.count > 0);
+
+  // Get current items based on active category
+  const getCurrentItems = () => {
+    switch (activeCategory) {
+      case 'headlines': return headlines;
+      case 'taglines': return taglines;
+      case 'social_hooks': return social_hooks;
+      case 'subheadings': return subheadings;
+      default: return [];
+    }
+  };
+
+  const currentCategory = categories.find(c => c.id === activeCategory) || categories[0];
+  const currentItems = getCurrentItems();
+
   return (
     <div className={styles.tabContent}>
-      {/* Headlines - Main blog title options */}
-      {headlines.length > 0 && (
-        <Card title="Headlines" subtitle="Main blog title options" padding="lg">
-          <div className={styles.titlesList}>
-            {headlines.map((headline, i) => (
-              <div key={i} className={styles.titleItem}>
-                <span className={styles.titleText}>{headline}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  leftIcon={copied === `headline-${i}` ? Check : Copy}
-                  onClick={() => onCopy(headline, `headline-${i}`)}
-                >
-                  {copied === `headline-${i}` ? 'Copied!' : 'Copy'}
-                </Button>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
+      {/* Category pill navigation */}
+      <div className={styles.pillNav}>
+        {categories.map((category) => (
+          <button
+            key={category.id}
+            className={`${styles.pill} ${activeCategory === category.id ? styles.pillActive : ''}`}
+            onClick={() => setActiveCategory(category.id)}
+          >
+            <span>{category.label}</span>
+            <span className={styles.pillCount}>{category.count}</span>
+          </button>
+        ))}
+      </div>
 
-      {/* Taglines - Short punchy summaries */}
-      {taglines.length > 0 && (
-        <Card title="Taglines" subtitle="Short punchy summaries" padding="lg">
-          <div className={styles.titlesList}>
-            {taglines.map((tagline, i) => (
-              <div key={i} className={styles.titleItem}>
-                <span className={styles.titleText}>{tagline}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  leftIcon={copied === `tagline-${i}` ? Check : Copy}
-                  onClick={() => onCopy(tagline, `tagline-${i}`)}
-                >
-                  {copied === `tagline-${i}` ? 'Copied!' : 'Copy'}
-                </Button>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Social Hooks - Social media opening lines */}
-      {social_hooks.length > 0 && (
-        <Card title="Social Hooks" subtitle="Social media opening lines" padding="lg">
-          <div className={styles.titlesList}>
-            {social_hooks.map((hook, i) => (
-              <div key={i} className={styles.titleItem}>
-                <span className={styles.titleText}>{hook}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  leftIcon={copied === `hook-${i}` ? Check : Copy}
-                  onClick={() => onCopy(hook, `hook-${i}`)}
-                >
-                  {copied === `hook-${i}` ? 'Copied!' : 'Copy'}
-                </Button>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Subheadings - Section headers */}
-      {subheadings.length > 0 && (
-        <Card title="Subheadings" subtitle="Section header options" padding="lg">
-          <div className={styles.titlesList}>
-            {subheadings.map((subheading, i) => (
-              <div key={i} className={styles.titleItem}>
-                <span className={styles.titleText}>{subheading}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  leftIcon={copied === `subheading-${i}` ? Check : Copy}
-                  onClick={() => onCopy(subheading, `subheading-${i}`)}
-                >
-                  {copied === `subheading-${i}` ? 'Copied!' : 'Copy'}
-                </Button>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
+      {/* Content area */}
+      <Card
+        title={currentCategory?.label}
+        subtitle={currentCategory?.description}
+        padding="lg"
+      >
+        <div className={styles.titlesList}>
+          {currentItems.map((item, i) => (
+            <div key={i} className={styles.titleItem}>
+              <span className={styles.titleText}>{item}</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={copied === `${activeCategory}-${i}` ? Check : Copy}
+                onClick={() => onCopy(item, `${activeCategory}-${i}`)}
+              >
+                {copied === `${activeCategory}-${i}` ? 'Copied!' : 'Copy'}
+              </Button>
+            </div>
+          ))}
+        </div>
+      </Card>
     </div>
   );
 }
@@ -939,6 +917,7 @@ function BlogTab({
 
 /**
  * SocialTab - Displays platform-specific social media content from Stage 8
+ * Uses platform pills for quick switching between platforms
  *
  * Stage 8 output structure:
  * - instagram: array of { type: 'short'|'medium'|'long', content: string, hashtags: string[] }
@@ -947,6 +926,8 @@ function BlogTab({
  * - facebook: array of { content: string }
  */
 function SocialTab({ stage, onCopy, copied }) {
+  const [activePlatform, setActivePlatform] = useState('instagram');
+
   console.log('[SocialTab] Stage 8 data:', {
     hasStage: !!stage,
     stageStatus: stage?.status,
@@ -968,15 +949,47 @@ function SocialTab({ stage, onCopy, copied }) {
 
   const { instagram = [], twitter = [], linkedin = [], facebook = [] } = stage.output_data;
 
-  // Helper to render a platform section
-  const renderPlatformSection = (platform, posts, platformKey) => {
-    if (!posts || posts.length === 0) return null;
+  // Platform definitions with icons and colors
+  const platforms = [
+    { id: 'instagram', label: 'Instagram', posts: instagram, color: '#E4405F' },
+    { id: 'twitter', label: 'Twitter / X', posts: twitter, color: '#1DA1F2' },
+    { id: 'linkedin', label: 'LinkedIn', posts: linkedin, color: '#0A66C2' },
+    { id: 'facebook', label: 'Facebook', posts: facebook, color: '#1877F2' },
+  ].filter(platform => platform.posts.length > 0);
 
-    return (
-      <Card title={platform} padding="lg" key={platformKey}>
+  const currentPlatform = platforms.find(p => p.id === activePlatform) || platforms[0];
+  const currentPosts = currentPlatform?.posts || [];
+
+  return (
+    <div className={styles.tabContent}>
+      {/* Platform pill navigation */}
+      <div className={styles.pillNav}>
+        {platforms.map((platform) => (
+          <button
+            key={platform.id}
+            className={`${styles.pill} ${styles.platformPill} ${activePlatform === platform.id ? styles.pillActive : ''}`}
+            onClick={() => setActivePlatform(platform.id)}
+            style={activePlatform === platform.id ? { '--platform-color': platform.color } : {}}
+          >
+            <span>{platform.label}</span>
+            <span className={styles.pillCount}>{platform.posts.length}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Posts for selected platform */}
+      <Card
+        title={currentPlatform?.label}
+        subtitle={`${currentPosts.length} post${currentPosts.length !== 1 ? 's' : ''} ready to share`}
+        padding="lg"
+      >
         <div className={styles.socialPlatform}>
-          {posts.map((post, i) => (
-            <div key={i} className={styles.socialPostItem}>
+          {currentPosts.map((post, i) => (
+            <div
+              key={i}
+              className={styles.socialPostItem}
+              style={{ '--platform-accent': currentPlatform?.color }}
+            >
               {post.type && (
                 <Badge variant="secondary" className={styles.postType}>
                   {post.type}
@@ -989,24 +1002,15 @@ function SocialTab({ stage, onCopy, copied }) {
               <Button
                 variant="ghost"
                 size="sm"
-                leftIcon={copied === `${platformKey}-${i}` ? Check : Copy}
-                onClick={() => onCopy(post.content, `${platformKey}-${i}`)}
+                leftIcon={copied === `${activePlatform}-${i}` ? Check : Copy}
+                onClick={() => onCopy(post.content, `${activePlatform}-${i}`)}
               >
-                {copied === `${platformKey}-${i}` ? 'Copied!' : 'Copy'}
+                {copied === `${activePlatform}-${i}` ? 'Copied!' : 'Copy'}
               </Button>
             </div>
           ))}
         </div>
       </Card>
-    );
-  };
-
-  return (
-    <div className={styles.tabContent}>
-      {renderPlatformSection('Instagram', instagram, 'instagram')}
-      {renderPlatformSection('Twitter / X', twitter, 'twitter')}
-      {renderPlatformSection('LinkedIn', linkedin, 'linkedin')}
-      {renderPlatformSection('Facebook', facebook, 'facebook')}
     </div>
   );
 }

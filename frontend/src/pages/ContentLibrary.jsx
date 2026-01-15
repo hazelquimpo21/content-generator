@@ -6,7 +6,7 @@
  * Users can view, edit, delete, and schedule library items.
  *
  * Features:
- * - Filter by content type and platform
+ * - Filter by content type, platform, and topic
  * - Search by title and content
  * - View favorites
  * - Quick actions: schedule, edit, delete
@@ -29,6 +29,7 @@ import {
   Eye,
   AlertCircle,
   ChevronRight,
+  Tag,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { Button, Card, Badge, Spinner, Modal, ConfirmDialog, useToast } from '@components/shared';
@@ -89,6 +90,10 @@ function ContentLibrary() {
   const [platformFilter, setPlatformFilter] = useState('all');
   const [favoriteFilter, setFavoriteFilter] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [topicFilter, setTopicFilter] = useState('all');
+
+  // Topics for filtering
+  const [availableTopics, setAvailableTopics] = useState([]);
 
   // Stats state
   const [stats, setStats] = useState(null);
@@ -102,12 +107,25 @@ function ContentLibrary() {
   // Fetch items on mount and filter change
   useEffect(() => {
     fetchItems();
-  }, [contentTypeFilter, platformFilter, favoriteFilter, searchQuery]);
+  }, [contentTypeFilter, platformFilter, favoriteFilter, searchQuery, topicFilter]);
 
-  // Fetch stats on mount
+  // Fetch stats and topics on mount
   useEffect(() => {
     fetchStats();
+    fetchTopics();
   }, []);
+
+  /**
+   * Fetch available topics for filtering
+   */
+  async function fetchTopics() {
+    try {
+      const data = await api.topics.list();
+      setAvailableTopics(data.topics || []);
+    } catch (err) {
+      console.error('[ContentLibrary] Failed to fetch topics:', err);
+    }
+  }
 
   /**
    * Fetch library items from API
@@ -133,6 +151,9 @@ function ContentLibrary() {
       }
       if (searchQuery) {
         params.search = searchQuery;
+      }
+      if (topicFilter !== 'all') {
+        params.topic_id = topicFilter;
       }
 
       const data = await api.library.list(params);
@@ -209,6 +230,7 @@ function ContentLibrary() {
         library_item_id: scheduleTarget.id,
         episode_id: scheduleTarget.episode_id,
         metadata: scheduleTarget.metadata,
+        topic_ids: scheduleTarget.topic_ids,
         ...scheduleData,
       });
 
@@ -263,6 +285,16 @@ function ContentLibrary() {
       });
       throw err;
     }
+  }
+
+  /**
+   * Get topic names for an item
+   */
+  function getTopicNames(topicIds) {
+    if (!topicIds || topicIds.length === 0) return [];
+    return topicIds
+      .map((id) => availableTopics.find((t) => t.id === id)?.name)
+      .filter(Boolean);
   }
 
   return (
@@ -344,6 +376,25 @@ function ContentLibrary() {
           </select>
         </div>
 
+        {/* Topic filter */}
+        {availableTopics.length > 0 && (
+          <div className={styles.filterGroup}>
+            <Tag className={styles.filterIcon} size={16} />
+            <select
+              value={topicFilter}
+              onChange={(e) => setTopicFilter(e.target.value)}
+              className={styles.filterSelect}
+            >
+              <option value="all">All Topics</option>
+              {availableTopics.map((topic) => (
+                <option key={topic.id} value={topic.id}>
+                  {topic.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Favorites toggle */}
         <button
           className={`${styles.favoriteToggle} ${favoriteFilter ? styles.active : ''}`}
@@ -372,11 +423,11 @@ function ContentLibrary() {
             <Bookmark size={48} className={styles.emptyIcon} />
             <h3>No content saved yet</h3>
             <p>
-              {searchQuery || contentTypeFilter !== 'all' || platformFilter !== 'all' || favoriteFilter
+              {searchQuery || contentTypeFilter !== 'all' || platformFilter !== 'all' || favoriteFilter || topicFilter !== 'all'
                 ? 'Try adjusting your filters'
                 : 'Save content from the Review Hub to build your library'}
             </p>
-            {!searchQuery && contentTypeFilter === 'all' && platformFilter === 'all' && !favoriteFilter && (
+            {!searchQuery && contentTypeFilter === 'all' && platformFilter === 'all' && !favoriteFilter && topicFilter === 'all' && (
               <Button onClick={() => navigate('/')}>
                 Go to Episodes
               </Button>
@@ -389,6 +440,7 @@ function ContentLibrary() {
             <LibraryCard
               key={item.id}
               item={item}
+              topicNames={getTopicNames(item.topic_ids)}
               onClick={() => setViewItem(item)}
               onToggleFavorite={handleToggleFavorite}
               onSchedule={handleScheduleClick}
@@ -427,6 +479,15 @@ function ContentLibrary() {
               <Badge>{viewItem.content_type}</Badge>
               {viewItem.platform && (
                 <Badge variant="secondary">{viewItem.platform}</Badge>
+              )}
+              {getTopicNames(viewItem.topic_ids).length > 0 && (
+                <div className={styles.viewTags}>
+                  {getTopicNames(viewItem.topic_ids).map((name) => (
+                    <span key={name} className={styles.viewTag}>
+                      {name}
+                    </span>
+                  ))}
+                </div>
               )}
               {viewItem.tags?.length > 0 && (
                 <div className={styles.viewTags}>
@@ -471,7 +532,7 @@ function ContentLibrary() {
 /**
  * Library card component
  */
-function LibraryCard({ item, onClick, onToggleFavorite, onSchedule, onDelete }) {
+function LibraryCard({ item, topicNames = [], onClick, onToggleFavorite, onSchedule, onDelete }) {
   const Icon = CONTENT_TYPE_ICONS[item.content_type] || Bookmark;
   const createdAt = item.created_at
     ? format(new Date(item.created_at), 'MMM d, yyyy')
@@ -510,7 +571,22 @@ function LibraryCard({ item, onClick, onToggleFavorite, onSchedule, onDelete }) 
 
       <p className={styles.cardPreview}>{contentPreview}</p>
 
-      {item.tags?.length > 0 && (
+      {/* Display topic names */}
+      {topicNames.length > 0 && (
+        <div className={styles.cardTags}>
+          {topicNames.slice(0, 3).map((name) => (
+            <span key={name} className={styles.cardTag}>
+              {name}
+            </span>
+          ))}
+          {topicNames.length > 3 && (
+            <span className={styles.cardTagMore}>+{topicNames.length - 3}</span>
+          )}
+        </div>
+      )}
+
+      {/* Display free-form tags if no topics */}
+      {topicNames.length === 0 && item.tags?.length > 0 && (
         <div className={styles.cardTags}>
           {item.tags.slice(0, 3).map((tag) => (
             <span key={tag} className={styles.cardTag}>

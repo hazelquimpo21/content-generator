@@ -894,6 +894,81 @@ ORDER BY so.created_at DESC
 LIMIT 20;
 ```
 
+### `content_pillars`
+
+High-level brand themes for organizing content strategy. User-scoped.
+
+```sql
+CREATE TABLE content_pillars (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+
+  -- Pillar details
+  name TEXT NOT NULL,
+  description TEXT,
+  color TEXT DEFAULT '#6B7280', -- For UI badges
+
+  -- Timestamps
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+  -- Ensure unique pillar names per user
+  UNIQUE(user_id, name)
+);
+
+-- Indexes
+CREATE INDEX idx_content_pillars_user ON content_pillars(user_id);
+CREATE INDEX idx_content_pillars_name ON content_pillars(user_id, name);
+```
+
+### `topics`
+
+Granular content tags. User-scoped. Topics can belong to multiple pillars (many-to-many).
+
+```sql
+CREATE TABLE topics (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+
+  -- Topic details
+  name TEXT NOT NULL,
+
+  -- Timestamps
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+  -- Ensure unique topic names per user
+  UNIQUE(user_id, name)
+);
+
+-- Indexes
+CREATE INDEX idx_topics_user ON topics(user_id);
+CREATE INDEX idx_topics_name ON topics(user_id, name);
+```
+
+### `topic_pillar_associations`
+
+Junction table for many-to-many relationship between topics and pillars.
+
+```sql
+CREATE TABLE topic_pillar_associations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  topic_id UUID NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+  pillar_id UUID NOT NULL REFERENCES content_pillars(id) ON DELETE CASCADE,
+
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+  -- Ensure unique associations
+  UNIQUE(topic_id, pillar_id)
+);
+
+-- Indexes for efficient lookups in both directions
+CREATE INDEX idx_topic_pillar_topic ON topic_pillar_associations(topic_id);
+CREATE INDEX idx_topic_pillar_pillar ON topic_pillar_associations(pillar_id);
+```
+
+**Note:** The `content_library` and `content_calendar` tables have a `topic_ids UUID[]` column to store which topics are associated with each content item. This enables filtering content by topic.
+
 ---
 
 ## Migration Strategy

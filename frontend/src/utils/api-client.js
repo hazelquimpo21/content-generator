@@ -474,6 +474,78 @@ const library = {
 };
 
 /**
+ * Topics API
+ */
+const topics = {
+  /**
+   * List all topics with pillar associations
+   */
+  list: () => get('/topics'),
+
+  /**
+   * Create a new topic
+   * @param {Object} data - Topic data (name, pillar_ids)
+   */
+  create: (data) => post('/topics', data),
+
+  /**
+   * Update a topic
+   * @param {string} id - Topic UUID
+   * @param {Object} data - Fields to update (name)
+   */
+  update: (id, data) => put(`/topics/${id}`, data),
+
+  /**
+   * Delete a topic
+   * @param {string} id - Topic UUID
+   */
+  delete: (id) => del(`/topics/${id}`),
+
+  /**
+   * Update pillar associations for a topic
+   * @param {string} id - Topic UUID
+   * @param {string[]} pillarIds - Array of pillar UUIDs
+   */
+  updatePillars: (id, pillarIds) => post(`/topics/${id}/pillars`, { pillar_ids: pillarIds }),
+};
+
+/**
+ * Content Pillars API
+ */
+const pillars = {
+  /**
+   * List all pillars with topic associations
+   */
+  list: () => get('/pillars'),
+
+  /**
+   * Create a new pillar
+   * @param {Object} data - Pillar data (name, description, color, topic_ids)
+   */
+  create: (data) => post('/pillars', data),
+
+  /**
+   * Update a pillar
+   * @param {string} id - Pillar UUID
+   * @param {Object} data - Fields to update (name, description, color)
+   */
+  update: (id, data) => put(`/pillars/${id}`, data),
+
+  /**
+   * Delete a pillar
+   * @param {string} id - Pillar UUID
+   */
+  delete: (id) => del(`/pillars/${id}`),
+
+  /**
+   * Update topic associations for a pillar
+   * @param {string} id - Pillar UUID
+   * @param {string[]} topicIds - Array of topic UUIDs
+   */
+  updateTopics: (id, topicIds) => post(`/pillars/${id}/topics`, { topic_ids: topicIds }),
+};
+
+/**
  * Content Calendar API
  */
 const calendar = {
@@ -530,6 +602,8 @@ const api = {
   admin,
   library,
   calendar,
+  topics,
+  pillars,
   // Raw helpers for custom endpoints
   get,
   post,

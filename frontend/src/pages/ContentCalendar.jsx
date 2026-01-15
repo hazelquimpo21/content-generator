@@ -36,6 +36,7 @@ import {
   Twitter,
   Linkedin,
   Facebook,
+  Tag,
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
 import { Button, Card, Badge, Spinner, Modal, ConfirmDialog, useToast, LibraryPickerModal } from '@components/shared';
@@ -118,6 +119,10 @@ function ContentCalendar() {
   // Filter state
   const [statusFilter, setStatusFilter] = useState('all');
   const [contentTypeFilter, setContentTypeFilter] = useState('all');
+  const [topicFilter, setTopicFilter] = useState('all');
+
+  // Topics for filtering
+  const [availableTopics, setAvailableTopics] = useState([]);
 
   // Modal state
   const [viewItem, setViewItem] = useState(null);
@@ -134,7 +139,24 @@ function ContentCalendar() {
   // Fetch items when month or filters change
   useEffect(() => {
     fetchItems();
-  }, [currentMonth, statusFilter, contentTypeFilter]);
+  }, [currentMonth, statusFilter, contentTypeFilter, topicFilter]);
+
+  // Fetch topics on mount
+  useEffect(() => {
+    fetchTopics();
+  }, []);
+
+  /**
+   * Fetch available topics for filtering
+   */
+  async function fetchTopics() {
+    try {
+      const data = await api.topics.list();
+      setAvailableTopics(data.topics || []);
+    } catch (err) {
+      console.error('[ContentCalendar] Failed to fetch topics:', err);
+    }
+  }
 
   /**
    * Fetch calendar items for current month
@@ -157,6 +179,9 @@ function ContentCalendar() {
       }
       if (contentTypeFilter !== 'all') {
         params.content_type = contentTypeFilter;
+      }
+      if (topicFilter !== 'all') {
+        params.topic_id = topicFilter;
       }
 
       const data = await api.calendar.list(params);
@@ -492,6 +517,25 @@ function ContentCalendar() {
               ))}
             </select>
           </div>
+
+          {/* Topic filter */}
+          {availableTopics.length > 0 && (
+            <div className={styles.filterGroup}>
+              <Tag className={styles.filterIcon} size={16} />
+              <select
+                value={topicFilter}
+                onChange={(e) => setTopicFilter(e.target.value)}
+                className={styles.filterSelect}
+              >
+                <option value="all">All Topics</option>
+                {availableTopics.map((topic) => (
+                  <option key={topic.id} value={topic.id}>
+                    {topic.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 

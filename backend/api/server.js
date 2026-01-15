@@ -41,6 +41,8 @@ import evergreenRouter from './routes/evergreen.js';
 import adminRouter from './routes/admin.js';
 import libraryRouter from './routes/library.js';
 import calendarRouter from './routes/calendar.js';
+import topicsRouter from './routes/topics.js';
+import pillarsRouter from './routes/pillars.js';
 
 // ============================================================================
 // APP CONFIGURATION
@@ -119,6 +121,8 @@ app.get('/', (req, res) => {
       admin: '/api/admin',
       library: '/api/library',
       calendar: '/api/calendar',
+      topics: '/api/topics',
+      pillars: '/api/pillars',
     },
     documentation: 'See /docs for API documentation',
   });
@@ -148,6 +152,10 @@ app.use('/api/admin', adminRouter);
 // Content Library and Calendar routes (user-scoped)
 app.use('/api/library', libraryRouter);
 app.use('/api/calendar', calendarRouter);
+
+// Topics and Pillars routes (user-scoped content organization)
+app.use('/api/topics', topicsRouter);
+app.use('/api/pillars', pillarsRouter);
 
 // ============================================================================
 // ERROR HANDLING
@@ -217,6 +225,8 @@ async function startServer() {
       admin: `http://localhost:${PORT}/api/admin`,
       library: `http://localhost:${PORT}/api/library`,
       calendar: `http://localhost:${PORT}/api/calendar`,
+      topics: `http://localhost:${PORT}/api/topics`,
+      pillars: `http://localhost:${PORT}/api/pillars`,
     });
 
     if (NODE_ENV === 'development') {

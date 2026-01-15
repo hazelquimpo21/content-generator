@@ -123,6 +123,16 @@ function validateLibraryItem(data) {
       throw new ValidationError('tags', 'All tags must be strings');
     }
   }
+
+  // Validate topic_ids if provided
+  if (data.topic_ids !== undefined) {
+    if (!Array.isArray(data.topic_ids)) {
+      throw new ValidationError('topic_ids', 'Topic IDs must be an array');
+    }
+    if (data.topic_ids.some(id => typeof id !== 'string')) {
+      throw new ValidationError('topic_ids', 'All topic IDs must be strings (UUIDs)');
+    }
+  }
 }
 
 // ============================================================================
@@ -139,6 +149,7 @@ function validateLibraryItem(data) {
  * - episode_id: Filter by episode
  * - favorite: Filter favorites only (true)
  * - search: Search in title and content
+ * - topic_id: Filter by topic ID (items that contain this topic)
  * - limit: Max results (default 50)
  * - offset: Pagination offset (default 0)
  */
@@ -150,13 +161,14 @@ router.get('/', requireAuth, async (req, res, next) => {
       episode_id,
       favorite,
       search,
+      topic_id,
       limit = 50,
       offset = 0,
     } = req.query;
 
     logger.debug('Listing library items', {
       userId: req.user.id,
-      filters: { content_type, platform, episode_id, favorite, search },
+      filters: { content_type, platform, episode_id, favorite, search, topic_id },
       pagination: { limit, offset },
     });
 
@@ -183,6 +195,9 @@ router.get('/', requireAuth, async (req, res, next) => {
     }
     if (search) {
       query = query.or(`title.ilike.%${search}%,content.ilike.%${search}%`);
+    }
+    if (topic_id) {
+      query = query.contains('topic_ids', [topic_id]);
     }
 
     const { data: items, error, count } = await query;
@@ -300,6 +315,7 @@ router.post('/', requireAuth, async (req, res, next) => {
       source_stage,
       source_sub_stage,
       tags,
+      topic_ids,
     } = req.body;
 
     logger.info('Saving content to library', {
@@ -309,6 +325,7 @@ router.post('/', requireAuth, async (req, res, next) => {
       contentLength: content?.length,
       hasEpisodeId: !!episode_id,
       sourceStage: source_stage,
+      topicCount: topic_ids?.length || 0,
     });
 
     // Validate input
@@ -319,6 +336,7 @@ router.post('/', requireAuth, async (req, res, next) => {
       content,
       source_stage,
       tags,
+      topic_ids,
     });
 
     // Build insert data
@@ -333,6 +351,7 @@ router.post('/', requireAuth, async (req, res, next) => {
       source_stage: source_stage ?? null,
       source_sub_stage: source_sub_stage || null,
       tags: tags || [],
+      topic_ids: topic_ids || [],
       is_favorite: false,
     };
 
@@ -417,7 +436,7 @@ router.get('/:id', requireAuth, async (req, res, next) => {
 router.put('/:id', requireAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { title, content, metadata, tags, platform } = req.body;
+    const { title, content, metadata, tags, platform, topic_ids } = req.body;
 
     logger.info('Updating library item', {
       itemId: id,
@@ -471,6 +490,12 @@ router.put('/:id', requireAuth, async (req, res, next) => {
         throw new ValidationError('platform', `Platform must be one of: ${VALID_PLATFORMS.join(', ')}`);
       }
       updates.platform = platform;
+    }
+    if (topic_ids !== undefined) {
+      if (!Array.isArray(topic_ids)) {
+        throw new ValidationError('topic_ids', 'Topic IDs must be an array');
+      }
+      updates.topic_ids = topic_ids;
     }
 
     // Perform update

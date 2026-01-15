@@ -104,6 +104,8 @@ backend/
 │   │   ├── episodes.js                      (~350 lines)
 │   │   ├── stages.js                        (~250 lines)
 │   │   ├── evergreen.js                     (~200 lines)
+│   │   ├── library.js                       (~350 lines - content library)
+│   │   ├── calendar.js                      (~400 lines - content calendar)
 │   │   └── admin.js                         (~300 lines)
 │   ├── middleware/
 │   │   ├── error-handler.js                 (~150 lines)
@@ -147,7 +149,9 @@ frontend/
 │   │   ├── Toast.jsx                        (~150 lines)
 │   │   ├── LoadingSpinner.jsx               (~80 lines)
 │   │   ├── ProgressBar.jsx                  (~100 lines)
-│   │   └── Badge.jsx                        (~80 lines)
+│   │   ├── Badge.jsx                        (~80 lines)
+│   │   ├── ScheduleModal.jsx                (~300 lines - content scheduling)
+│   │   └── SaveToLibraryModal.jsx           (~250 lines - save to library)
 │   │
 │   ├── episode/                  # Episode-specific components
 │   │   ├── EpisodeCard.jsx                  (~200 lines)
@@ -168,6 +172,8 @@ frontend/
 │   ├── NewEpisode.jsx                       (~350 lines)
 │   ├── ProcessingScreen.jsx                 (~400 lines)
 │   ├── ReviewHub.jsx                        (~400 lines - tab orchestration)
+│   ├── ContentLibrary.jsx                   (~350 lines - saved content)
+│   ├── ContentCalendar.jsx                  (~400 lines - publishing schedule)
 │   └── AdminDashboard.jsx                   (~400 lines)
 │
 ├── hooks/                        # Custom React hooks
@@ -416,6 +422,8 @@ This design prevents redundant AI calls doing the same summarization work, savin
                │   - episodes          │
                │   - stage_outputs     │
                │   - api_usage_log     │
+               │   - content_library   │
+               │   - content_calendar  │
                └───────────┬───────────┘
                            │
                            ▼ (Real-time subscription)

@@ -33,8 +33,12 @@ import {
   Edit3,
   Save,
   X,
+  Bookmark,
+  Calendar,
 } from 'lucide-react';
-import { Button, Card, Spinner, Badge, ConfirmDialog } from '@components/shared';
+import { Button, Card, Spinner, Badge, ConfirmDialog, useToast } from '@components/shared';
+import ScheduleModal from '@components/shared/ScheduleModal';
+import SaveToLibraryModal from '@components/shared/SaveToLibraryModal';
 import api from '@utils/api-client';
 import styles from './ReviewHub.module.css';
 
@@ -64,6 +68,7 @@ const TABS = [
 function ReviewHub() {
   const { id: episodeId } = useParams();
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   // ============================================================================
   // STATE
@@ -94,6 +99,14 @@ function ReviewHub() {
   const [isEditingBlog, setIsEditingBlog] = useState(false);
   const [editedBlogContent, setEditedBlogContent] = useState('');
   const [savingBlog, setSavingBlog] = useState(false);
+
+  // Save to Library modal state
+  const [saveLibraryData, setSaveLibraryData] = useState(null);
+  const [savingToLibrary, setSavingToLibrary] = useState(false);
+
+  // Schedule modal state
+  const [scheduleData, setScheduleData] = useState(null);
+  const [scheduling, setScheduling] = useState(false);
 
   // ============================================================================
   // EFFECTS
@@ -396,6 +409,111 @@ function ReviewHub() {
     }
   }
 
+  // ============================================================================
+  // LIBRARY & SCHEDULE HANDLERS
+  // ============================================================================
+
+  /**
+   * Open save to library modal
+   * @param {Object} data - Content data to save
+   */
+  function handleOpenSaveLibrary(data) {
+    setSaveLibraryData(data);
+  }
+
+  /**
+   * Save content to library
+   * @param {Object} libraryFormData - Form data from modal (title, tags, is_favorite)
+   */
+  async function handleSaveToLibrary(libraryFormData) {
+    if (!saveLibraryData) return;
+
+    try {
+      setSavingToLibrary(true);
+      console.log('[ReviewHub] Saving to library:', saveLibraryData.content_type);
+
+      await api.library.create({
+        title: libraryFormData.title,
+        content_type: saveLibraryData.content_type,
+        platform: saveLibraryData.platform || null,
+        content: saveLibraryData.content,
+        episode_id: episodeId,
+        source_stage: saveLibraryData.source_stage,
+        source_sub_stage: saveLibraryData.source_sub_stage || null,
+        tags: libraryFormData.tags || [],
+        metadata: saveLibraryData.metadata || {},
+      });
+
+      showToast({
+        message: 'Saved to library!',
+        variant: 'success',
+        action: () => navigate('/library'),
+        actionLabel: 'View library',
+      });
+
+      setSaveLibraryData(null);
+    } catch (err) {
+      console.error('[ReviewHub] Failed to save to library:', err);
+      showToast({
+        message: 'Failed to save to library',
+        description: err.message,
+        variant: 'error',
+      });
+    } finally {
+      setSavingToLibrary(false);
+    }
+  }
+
+  /**
+   * Open schedule modal
+   * @param {Object} data - Content data to schedule
+   */
+  function handleOpenSchedule(data) {
+    setScheduleData(data);
+  }
+
+  /**
+   * Schedule content on calendar
+   * @param {Object} scheduleFormData - Form data from modal (scheduled_date, scheduled_time, status, notes)
+   */
+  async function handleScheduleContent(scheduleFormData) {
+    if (!scheduleData) return;
+
+    try {
+      setScheduling(true);
+      console.log('[ReviewHub] Scheduling content:', scheduleData.content_type);
+
+      await api.calendar.create({
+        title: scheduleData.title,
+        content_type: scheduleData.content_type,
+        platform: scheduleData.platform || null,
+        full_content: scheduleData.content,
+        episode_id: episodeId,
+        metadata: scheduleData.metadata || {},
+        ...scheduleFormData,
+      });
+
+      showToast({
+        message: 'Content scheduled!',
+        description: `Scheduled for ${scheduleFormData.scheduled_date}`,
+        variant: 'success',
+        action: () => navigate('/calendar'),
+        actionLabel: 'View calendar',
+      });
+
+      setScheduleData(null);
+    } catch (err) {
+      console.error('[ReviewHub] Failed to schedule content:', err);
+      showToast({
+        message: 'Failed to schedule content',
+        description: err.message,
+        variant: 'error',
+      });
+    } finally {
+      setScheduling(false);
+    }
+  }
+
   if (loading) {
     return <Spinner centered text="Loading content..." />;
   }
@@ -556,6 +674,10 @@ function ReviewHub() {
             onSaveEdit={handleSaveBlog}
             onCancelEdit={handleCancelEditBlog}
             savingEdit={savingBlog}
+            // Library & schedule props
+            onSaveToLibrary={handleOpenSaveLibrary}
+            onSchedule={handleOpenSchedule}
+            episodeTitle={episodeTitle}
           />
         )}
 
@@ -566,6 +688,10 @@ function ReviewHub() {
             copied={copied}
             onRegeneratePlatform={handleRegeneratePlatform}
             regenerating={regenerating}
+            // Library & schedule props
+            onSaveToLibrary={handleOpenSaveLibrary}
+            onSchedule={handleOpenSchedule}
+            episodeTitle={episodeTitle}
           />
         )}
 
@@ -574,6 +700,10 @@ function ReviewHub() {
             stage={getStage(9)}
             onCopy={copyToClipboard}
             copied={copied}
+            // Library & schedule props
+            onSaveToLibrary={handleOpenSaveLibrary}
+            onSchedule={handleOpenSchedule}
+            episodeTitle={episodeTitle}
           />
         )}
       </div>
@@ -595,6 +725,29 @@ function ReviewHub() {
         confirmLabel="Delete Episode"
         cancelLabel="Cancel"
         variant="danger"
+      />
+
+      {/* Save to Library Modal */}
+      <SaveToLibraryModal
+        isOpen={!!saveLibraryData}
+        onClose={() => setSaveLibraryData(null)}
+        onSave={handleSaveToLibrary}
+        loading={savingToLibrary}
+        contentType={saveLibraryData?.content_type}
+        platform={saveLibraryData?.platform}
+        content={saveLibraryData?.content || ''}
+        initialData={{
+          title: saveLibraryData?.title || '',
+        }}
+      />
+
+      {/* Schedule Modal */}
+      <ScheduleModal
+        isOpen={!!scheduleData}
+        onClose={() => setScheduleData(null)}
+        onSchedule={handleScheduleContent}
+        loading={scheduling}
+        title={`Schedule: ${scheduleData?.title || 'Content'}`}
       />
     </div>
   );
@@ -847,10 +1000,23 @@ function BlogTab({
   onSaveEdit,
   onCancelEdit,
   savingEdit,
+  // Library & schedule props
+  onSaveToLibrary,
+  onSchedule,
+  episodeTitle,
 }) {
   const blogPost = editedStage?.output_text || draftStage?.output_text;
   // Use editedStage if available, otherwise fall back to draftStage for saving
   const stageToUpdate = editedStage || draftStage;
+
+  // Prepare data for save/schedule
+  const blogData = blogPost ? {
+    title: episodeTitle,
+    content_type: 'blog',
+    platform: null,
+    content: blogPost,
+    source_stage: 7,
+  } : null;
 
   return (
     <div className={styles.tabContent}>
@@ -929,6 +1095,22 @@ function BlogTab({
                   >
                     Copy
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={Bookmark}
+                    onClick={() => onSaveToLibrary(blogData)}
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={Calendar}
+                    onClick={() => onSchedule(blogData)}
+                  >
+                    Schedule
+                  </Button>
                 </>
               )}
             </div>
@@ -966,7 +1148,7 @@ function BlogTab({
  * - onRegeneratePlatform: Function(platform, stageId) to regenerate a specific platform
  * - regenerating: Currently regenerating identifier (e.g., '8-instagram')
  */
-function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regenerating }) {
+function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regenerating, onSaveToLibrary, onSchedule, episodeTitle }) {
   const [activePlatform, setActivePlatform] = useState('instagram');
 
   console.log('[SocialTab] Platform stages:', {
@@ -1081,14 +1263,46 @@ function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regen
                 {post.hashtags && post.hashtags.length > 0 && (
                   <p className={styles.hashtags}>{post.hashtags.join(' ')}</p>
                 )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  leftIcon={copied === `${activePlatform}-${i}` ? Check : Copy}
-                  onClick={() => onCopy(post.content, `${activePlatform}-${i}`)}
-                >
-                  {copied === `${activePlatform}-${i}` ? 'Copied!' : 'Copy'}
-                </Button>
+                <div className={styles.postActions}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={copied === `${activePlatform}-${i}` ? Check : Copy}
+                    onClick={() => onCopy(post.content, `${activePlatform}-${i}`)}
+                  >
+                    {copied === `${activePlatform}-${i}` ? 'Copied!' : 'Copy'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={Bookmark}
+                    onClick={() => onSaveToLibrary({
+                      title: `${currentPlatform?.label} - ${post.type || 'Post'}`,
+                      content_type: 'social',
+                      platform: currentPlatform?.id,
+                      content: post.content + (post.hashtags?.length ? '\n\n' + post.hashtags.join(' ') : ''),
+                      source_stage: 8,
+                      source_sub_stage: currentPlatform?.id,
+                      metadata: { type: post.type, hashtags: post.hashtags },
+                    })}
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={Calendar}
+                    onClick={() => onSchedule({
+                      title: `${episodeTitle} - ${currentPlatform?.label}`,
+                      content_type: 'social',
+                      platform: currentPlatform?.id,
+                      content: post.content + (post.hashtags?.length ? '\n\n' + post.hashtags.join(' ') : ''),
+                      metadata: { type: post.type, hashtags: post.hashtags },
+                    })}
+                  >
+                    Schedule
+                  </Button>
+                </div>
               </div>
             ))}
           </div>
@@ -1107,7 +1321,7 @@ function SocialTab({ platformStages, onCopy, copied, onRegeneratePlatform, regen
  * - email_body: string (full email body in markdown, 200-350 words)
  * - followup_email: string (optional follow-up email, 100-150 words)
  */
-function EmailTab({ stage, onCopy, copied }) {
+function EmailTab({ stage, onCopy, copied, onSaveToLibrary, onSchedule, episodeTitle }) {
   console.log('[EmailTab] Stage 9 data:', {
     hasStage: !!stage,
     stageStatus: stage?.status,
@@ -1177,14 +1391,51 @@ function EmailTab({ stage, onCopy, copied }) {
       {email.email_body && (
         <Card title="Email Body" subtitle="Main newsletter content" padding="lg">
           <pre className={styles.emailBody}>{email.email_body}</pre>
-          <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={copied === 'body' ? Check : Copy}
-            onClick={() => onCopy(email.email_body, 'body')}
-          >
-            {copied === 'body' ? 'Copied!' : 'Copy'}
-          </Button>
+          <div className={styles.postActions}>
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={copied === 'body' ? Check : Copy}
+              onClick={() => onCopy(email.email_body, 'body')}
+            >
+              {copied === 'body' ? 'Copied!' : 'Copy'}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={Bookmark}
+              onClick={() => onSaveToLibrary({
+                title: `${episodeTitle} - Email`,
+                content_type: 'email',
+                platform: null,
+                content: email.email_body,
+                source_stage: 9,
+                metadata: {
+                  subject_lines: email.subject_lines,
+                  preview_text: email.preview_text,
+                },
+              })}
+            >
+              Save
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={Calendar}
+              onClick={() => onSchedule({
+                title: `${episodeTitle} - Email Campaign`,
+                content_type: 'email',
+                platform: null,
+                content: email.email_body,
+                metadata: {
+                  subject_lines: email.subject_lines,
+                  preview_text: email.preview_text,
+                },
+              })}
+            >
+              Schedule
+            </Button>
+          </div>
         </Card>
       )}
 

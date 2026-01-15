@@ -36,6 +36,8 @@ import Settings from './pages/Settings';
 import NewEpisode from './pages/NewEpisode';
 import ProcessingScreen from './pages/ProcessingScreen';
 import ReviewHub from './pages/ReviewHub';
+import ContentLibrary from './pages/ContentLibrary';
+import ContentCalendar from './pages/ContentCalendar';
 
 // Admin Pages (superadmin only)
 import AdminDashboard from './pages/AdminDashboard';
@@ -87,6 +89,12 @@ function App() {
 
             {/* Review Hub - view and edit generated content */}
             <Route path="episodes/:id/review" element={<ReviewHub />} />
+
+            {/* Content Library - saved content pieces */}
+            <Route path="library" element={<ContentLibrary />} />
+
+            {/* Content Calendar - scheduled content */}
+            <Route path="calendar" element={<ContentCalendar />} />
           </Route>
         </Route>
 

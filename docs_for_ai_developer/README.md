@@ -69,10 +69,10 @@ You are about to build a sophisticated AI-powered application that transforms po
 ---
 
 #### 4. DATABASE-SCHEMA.md
-**Purpose:** Complete Supabase schema and relationships  
-**Read When:** Setting up database, querying data  
+**Purpose:** Complete Supabase schema and relationships
+**Read When:** Setting up database, querying data
 **Key Content:**
-- All 4 table definitions
+- All 8 table definitions
 - Field descriptions and constraints
 - Indexes for performance
 - Real-time subscription setup
@@ -101,14 +101,16 @@ You are about to build a sophisticated AI-powered application that transforms po
 ---
 
 #### 6. PAGE-SPECIFICATIONS.md
-**Purpose:** Detailed specs for all 6 pages  
-**Read When:** Building frontend pages  
+**Purpose:** Detailed specs for all 8 pages
+**Read When:** Building frontend pages
 **Key Content:**
 - Dashboard layout and states
 - Settings form structure
 - Upload and processing screens
 - Review hub with tabs
 - Admin dashboard
+- Content Library (saved content management)
+- Content Calendar (publishing schedule)
 - All states (loading, error, success)
 
 **Use During:** Frontend phase (Days 17-22)
@@ -444,8 +446,8 @@ A: DESIGN-SYSTEM.md has complete button styles
 **Q: What colors should I use?**  
 A: DESIGN-SYSTEM.md has full color palette (warm beiges, terracotta accent)
 
-**Q: Which database table stores what?**  
-A: DATABASE-SCHEMA.md has all 4 tables with field descriptions
+**Q: Which database table stores what?**
+A: DATABASE-SCHEMA.md has all 8 tables with field descriptions
 
 ---
 

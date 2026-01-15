@@ -158,8 +158,9 @@ function generateContentPreview(content, maxLength = 200) {
  * List calendar items for the authenticated user.
  *
  * Query params:
- * - start_date: Start of date range (required, YYYY-MM-DD)
- * - end_date: End of date range (required, YYYY-MM-DD)
+ * - start_date: Start of date range (YYYY-MM-DD) - required unless episode_id provided
+ * - end_date: End of date range (YYYY-MM-DD) - required unless episode_id provided
+ * - episode_id: Filter by source episode (optional, bypasses date requirement)
  * - content_type: Filter by content type
  * - platform: Filter by platform
  * - status: Filter by status
@@ -171,6 +172,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     const {
       start_date,
       end_date,
+      episode_id,
       content_type,
       platform,
       status,
@@ -181,18 +183,28 @@ router.get('/', requireAuth, async (req, res, next) => {
     logger.debug('Listing calendar items', {
       userId: req.user.id,
       dateRange: { start_date, end_date },
-      filters: { content_type, platform, status },
+      filters: { content_type, platform, status, episode_id },
       pagination: { limit, offset },
     });
 
-    // Validate date range
-    if (!start_date || !end_date) {
-      throw new ValidationError('date_range', 'Both start_date and end_date are required');
-    }
-
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (!dateRegex.test(start_date) || !dateRegex.test(end_date)) {
-      throw new ValidationError('date_range', 'Dates must be in YYYY-MM-DD format');
+
+    // Validate date range - required unless episode_id is provided
+    if (!episode_id) {
+      if (!start_date || !end_date) {
+        throw new ValidationError('date_range', 'Both start_date and end_date are required (or provide episode_id)');
+      }
+      if (!dateRegex.test(start_date) || !dateRegex.test(end_date)) {
+        throw new ValidationError('date_range', 'Dates must be in YYYY-MM-DD format');
+      }
+    } else {
+      // Validate date format if provided with episode_id
+      if (start_date && !dateRegex.test(start_date)) {
+        throw new ValidationError('start_date', 'Date must be in YYYY-MM-DD format');
+      }
+      if (end_date && !dateRegex.test(end_date)) {
+        throw new ValidationError('end_date', 'Date must be in YYYY-MM-DD format');
+      }
     }
 
     // Build query
@@ -200,13 +212,22 @@ router.get('/', requireAuth, async (req, res, next) => {
       .from('content_calendar')
       .select('*', { count: 'exact' })
       .eq('user_id', req.user.id)
-      .gte('scheduled_date', start_date)
-      .lte('scheduled_date', end_date)
       .order('scheduled_date', { ascending: true })
       .order('scheduled_time', { ascending: true, nullsFirst: false })
       .range(parseInt(offset), parseInt(offset) + parseInt(limit) - 1);
 
+    // Apply date range if provided
+    if (start_date) {
+      query = query.gte('scheduled_date', start_date);
+    }
+    if (end_date) {
+      query = query.lte('scheduled_date', end_date);
+    }
+
     // Apply filters
+    if (episode_id) {
+      query = query.eq('episode_id', episode_id);
+    }
     if (content_type) {
       query = query.eq('content_type', content_type);
     }
@@ -225,7 +246,7 @@ router.get('/', requireAuth, async (req, res, next) => {
         error: error.message,
         errorCode: error.code,
         errorDetails: error.details,
-        dateRange: { start_date, end_date },
+        filters: { start_date, end_date, episode_id },
       });
       throw new DatabaseError('select', `Failed to list calendar items: ${error.message}`);
     }
@@ -235,7 +256,7 @@ router.get('/', requireAuth, async (req, res, next) => {
       count: items?.length || 0,
       total: count || 0,
       dateRange: { start_date, end_date },
-      filters: { content_type, platform, status },
+      filters: { content_type, platform, status, episode_id },
     });
 
     res.json({

@@ -476,6 +476,40 @@
 }
 
 /* ============================================================================
+ * STATUS INDICATORS
+ * ============================================================================ */
+
+.statusIndicators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.statusBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+}
+
+.statusBadge svg {
+  flex-shrink: 0;
+}
+
+.postHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.postHeader:empty {
+  display: none;
+}
+
+/* ============================================================================
  * EMAIL TAB
  * ============================================================================ */
 

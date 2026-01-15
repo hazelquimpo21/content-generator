@@ -479,7 +479,8 @@ const library = {
 const calendar = {
   /**
    * List calendar items
-   * @param {Object} params - Query params (start_date, end_date, content_type, platform, status, limit, offset)
+   * @param {Object} params - Query params (start_date, end_date, episode_id, content_type, platform, status, limit, offset)
+   *                          Note: start_date/end_date are required unless episode_id is provided
    */
   list: (params = {}) => get('/calendar', params),
 

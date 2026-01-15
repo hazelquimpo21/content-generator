@@ -42,7 +42,7 @@ import styles from './ReviewHub.module.css';
 const TABS = [
   { id: 'analysis', label: 'Analysis', icon: FileText, stages: [1] },
   { id: 'quotes', label: 'Quotes', icon: Quote, stages: [2] },
-  { id: 'titles', label: 'Titles', icon: Type, stages: [3, 4] },
+  { id: 'titles', label: 'Titles', icon: Type, stages: [5] },
   { id: 'blog', label: 'Blog Post', icon: AlignLeft, stages: [5, 6, 7] },
   { id: 'social', label: 'Social', icon: Share2, stages: [8] },
   { id: 'email', label: 'Email', icon: Mail, stages: [9] },
@@ -483,8 +483,7 @@ function ReviewHub() {
 
         {activeTab === 'titles' && (
           <TitlesTab
-            titleStage={getStage(3)}
-            summaryStage={getStage(4)}
+            stage={getStage(5)}
             onCopy={copyToClipboard}
             copied={copied}
           />
@@ -628,55 +627,103 @@ function QuotesTab({ stage, onCopy, copied }) {
   );
 }
 
-function TitlesTab({ titleStage, summaryStage, onCopy, copied }) {
-  const titles = titleStage?.output_data?.titles || [];
-  const summaries = summaryStage?.output_data || {};
+/**
+ * TitlesTab - Displays headlines, subheadings, taglines, and social hooks from Stage 5
+ *
+ * Stage 5 output structure:
+ * - headlines: array of strings (10-15 main blog title options)
+ * - subheadings: array of strings (8-10 section header options)
+ * - taglines: array of strings (5-7 short punchy summaries)
+ * - social_hooks: array of strings (5-7 social media opening lines)
+ */
+function TitlesTab({ stage, onCopy, copied }) {
+  if (!stage?.output_data) return <EmptyState message="No titles generated" />;
+
+  const { headlines = [], subheadings = [], taglines = [], social_hooks = [] } = stage.output_data;
 
   return (
     <div className={styles.tabContent}>
-      <Card title="Generated Titles" padding="lg">
-        <div className={styles.titlesList}>
-          {titles.map((title, i) => (
-            <div key={i} className={styles.titleItem}>
-              <span className={styles.titleText}>{title.title}</span>
-              <Button
-                variant="ghost"
-                size="sm"
-                leftIcon={copied === `title-${i}` ? Check : Copy}
-                onClick={() => onCopy(title.title, `title-${i}`)}
-              >
-                {copied === `title-${i}` ? 'Copied!' : 'Copy'}
-              </Button>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {summaries.short_summary && (
-        <Card title="Short Summary" subtitle="1-2 sentences" padding="lg">
-          <p>{summaries.short_summary}</p>
-          <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={copied === 'short' ? Check : Copy}
-            onClick={() => onCopy(summaries.short_summary, 'short')}
-          >
-            Copy
-          </Button>
+      {/* Headlines - Main blog title options */}
+      {headlines.length > 0 && (
+        <Card title="Headlines" subtitle="Main blog title options" padding="lg">
+          <div className={styles.titlesList}>
+            {headlines.map((headline, i) => (
+              <div key={i} className={styles.titleItem}>
+                <span className={styles.titleText}>{headline}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={copied === `headline-${i}` ? Check : Copy}
+                  onClick={() => onCopy(headline, `headline-${i}`)}
+                >
+                  {copied === `headline-${i}` ? 'Copied!' : 'Copy'}
+                </Button>
+              </div>
+            ))}
+          </div>
         </Card>
       )}
 
-      {summaries.medium_summary && (
-        <Card title="Medium Summary" subtitle="Paragraph length" padding="lg">
-          <p>{summaries.medium_summary}</p>
-          <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={copied === 'medium' ? Check : Copy}
-            onClick={() => onCopy(summaries.medium_summary, 'medium')}
-          >
-            Copy
-          </Button>
+      {/* Taglines - Short punchy summaries */}
+      {taglines.length > 0 && (
+        <Card title="Taglines" subtitle="Short punchy summaries" padding="lg">
+          <div className={styles.titlesList}>
+            {taglines.map((tagline, i) => (
+              <div key={i} className={styles.titleItem}>
+                <span className={styles.titleText}>{tagline}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={copied === `tagline-${i}` ? Check : Copy}
+                  onClick={() => onCopy(tagline, `tagline-${i}`)}
+                >
+                  {copied === `tagline-${i}` ? 'Copied!' : 'Copy'}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Social Hooks - Social media opening lines */}
+      {social_hooks.length > 0 && (
+        <Card title="Social Hooks" subtitle="Social media opening lines" padding="lg">
+          <div className={styles.titlesList}>
+            {social_hooks.map((hook, i) => (
+              <div key={i} className={styles.titleItem}>
+                <span className={styles.titleText}>{hook}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={copied === `hook-${i}` ? Check : Copy}
+                  onClick={() => onCopy(hook, `hook-${i}`)}
+                >
+                  {copied === `hook-${i}` ? 'Copied!' : 'Copy'}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Subheadings - Section headers */}
+      {subheadings.length > 0 && (
+        <Card title="Subheadings" subtitle="Section header options" padding="lg">
+          <div className={styles.titlesList}>
+            {subheadings.map((subheading, i) => (
+              <div key={i} className={styles.titleItem}>
+                <span className={styles.titleText}>{subheading}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={copied === `subheading-${i}` ? Check : Copy}
+                  onClick={() => onCopy(subheading, `subheading-${i}`)}
+                >
+                  {copied === `subheading-${i}` ? 'Copied!' : 'Copy'}
+                </Button>
+              </div>
+            ))}
+          </div>
         </Card>
       )}
     </div>
@@ -810,34 +857,59 @@ function BlogTab({
   );
 }
 
+/**
+ * SocialTab - Displays platform-specific social media content from Stage 8
+ *
+ * Stage 8 output structure:
+ * - instagram: array of { type: 'short'|'medium'|'long', content: string, hashtags: string[] }
+ * - twitter: array of { content: string, type: 'standalone'|'thread_opener' }
+ * - linkedin: array of { content: string }
+ * - facebook: array of { content: string }
+ */
 function SocialTab({ stage, onCopy, copied }) {
-  const posts = stage?.output_data?.posts || [];
+  if (!stage?.output_data) return <EmptyState message="No social content generated" />;
+
+  const { instagram = [], twitter = [], linkedin = [], facebook = [] } = stage.output_data;
+
+  // Helper to render a platform section
+  const renderPlatformSection = (platform, posts, platformKey) => {
+    if (!posts || posts.length === 0) return null;
+
+    return (
+      <Card title={platform} padding="lg" key={platformKey}>
+        <div className={styles.socialPlatform}>
+          {posts.map((post, i) => (
+            <div key={i} className={styles.socialPostItem}>
+              {post.type && (
+                <Badge variant="secondary" className={styles.postType}>
+                  {post.type}
+                </Badge>
+              )}
+              <p className={styles.socialPost}>{post.content}</p>
+              {post.hashtags && post.hashtags.length > 0 && (
+                <p className={styles.hashtags}>{post.hashtags.join(' ')}</p>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={copied === `${platformKey}-${i}` ? Check : Copy}
+                onClick={() => onCopy(post.content, `${platformKey}-${i}`)}
+              >
+                {copied === `${platformKey}-${i}` ? 'Copied!' : 'Copy'}
+              </Button>
+            </div>
+          ))}
+        </div>
+      </Card>
+    );
+  };
 
   return (
     <div className={styles.tabContent}>
-      {posts.map((post, i) => (
-        <Card
-          key={i}
-          title={post.platform}
-          headerAction={
-            <Badge variant="primary">{post.content_type}</Badge>
-          }
-          padding="lg"
-        >
-          <p className={styles.socialPost}>{post.content}</p>
-          {post.hashtags && (
-            <p className={styles.hashtags}>{post.hashtags.join(' ')}</p>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            leftIcon={copied === `social-${i}` ? Check : Copy}
-            onClick={() => onCopy(post.content, `social-${i}`)}
-          >
-            Copy
-          </Button>
-        </Card>
-      ))}
+      {renderPlatformSection('Instagram', instagram, 'instagram')}
+      {renderPlatformSection('Twitter / X', twitter, 'twitter')}
+      {renderPlatformSection('LinkedIn', linkedin, 'linkedin')}
+      {renderPlatformSection('Facebook', facebook, 'facebook')}
     </div>
   );
 }

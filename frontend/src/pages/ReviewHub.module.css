@@ -439,6 +439,13 @@
   text-align: center;
 }
 
+.emptyStateDetails {
+  font-size: var(--text-sm);
+  color: var(--color-text-quaternary, var(--color-text-tertiary));
+  max-width: 400px;
+  opacity: 0.8;
+}
+
 /* ============================================================================
  * ERROR STATES
  * ============================================================================ */

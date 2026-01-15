@@ -188,7 +188,6 @@ function SourcesEditor({ data = {}, onSave, onClose, saving }) {
       {/* Source tabs */}
       <div className={styles.sourceTabs}>
         {sources.map((source, index) => (
-          <button
           <div
             key={source.id}
             className={clsx(

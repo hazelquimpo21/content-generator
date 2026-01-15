@@ -20,3 +20,4 @@ export { default as ConfirmDialog } from './ConfirmDialog';
 export { default as EditableText } from './EditableText';
 export { default as EditableCard } from './EditableCard';
 export { ToastProvider, useToast } from './Toast';
+export { default as LibraryPickerModal } from './LibraryPickerModal';

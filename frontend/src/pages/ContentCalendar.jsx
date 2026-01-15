@@ -31,9 +31,14 @@ import {
   X,
   Clock,
   AlertCircle,
+  Plus,
+  Instagram,
+  Twitter,
+  Linkedin,
+  Facebook,
 } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, isSameMonth, isSameDay, addMonths, subMonths } from 'date-fns';
-import { Button, Card, Badge, Spinner, Modal, ConfirmDialog, useToast } from '@components/shared';
+import { Button, Card, Badge, Spinner, Modal, ConfirmDialog, useToast, LibraryPickerModal } from '@components/shared';
 import ScheduleModal from '@components/shared/ScheduleModal';
 import api from '@utils/api-client';
 import styles from './ContentCalendar.module.css';
@@ -59,10 +64,35 @@ const CONTENT_TYPE_OPTIONS = [
   { value: 'email', label: 'Emails' },
 ];
 
-const CONTENT_TYPE_ICONS = {
-  blog: BookOpen,
-  social: MessageSquare,
-  email: Mail,
+// Content type configuration with icons and colors
+const CONTENT_TYPE_CONFIG = {
+  blog: {
+    icon: BookOpen,
+    label: 'Blog',
+    color: 'var(--color-sage)',
+    bgColor: 'var(--color-sage-light)',
+  },
+  social: {
+    icon: MessageSquare,
+    label: 'Social',
+    color: 'var(--color-primary)',
+    bgColor: 'var(--color-primary-light)',
+  },
+  email: {
+    icon: Mail,
+    label: 'Email',
+    color: 'var(--color-amber)',
+    bgColor: 'var(--color-amber-light)',
+  },
+};
+
+// Platform configuration with icons and colors
+const PLATFORM_CONFIG = {
+  instagram: { icon: Instagram, label: 'IG', color: '#E4405F', bgColor: '#FCE4EC' },
+  twitter: { icon: Twitter, label: 'X', color: '#1DA1F2', bgColor: '#E3F2FD' },
+  linkedin: { icon: Linkedin, label: 'LI', color: '#0A66C2', bgColor: '#E8EAF6' },
+  facebook: { icon: Facebook, label: 'FB', color: '#1877F2', bgColor: '#E3F2FD' },
+  generic: { icon: MessageSquare, label: '', color: 'var(--color-text-tertiary)', bgColor: 'var(--color-bg-tertiary)' },
 };
 
 const STATUS_COLORS = {
@@ -70,14 +100,6 @@ const STATUS_COLORS = {
   scheduled: 'var(--color-primary)',
   published: 'var(--color-success)',
   cancelled: 'var(--color-error)',
-};
-
-const PLATFORM_COLORS = {
-  instagram: '#E4405F',
-  twitter: '#1DA1F2',
-  linkedin: '#0A66C2',
-  facebook: '#1877F2',
-  generic: 'var(--color-text-tertiary)',
 };
 
 /**
@@ -102,6 +124,12 @@ function ContentCalendar() {
   const [editItem, setEditItem] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [editLoading, setEditLoading] = useState(false);
+
+  // Library picker state
+  const [showLibraryPicker, setShowLibraryPicker] = useState(false);
+  const [selectedLibraryItem, setSelectedLibraryItem] = useState(null);
+  const [scheduleFromLibrary, setScheduleFromLibrary] = useState(false);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
 
   // Fetch items when month or filters change
   useEffect(() => {
@@ -269,6 +297,65 @@ function ContentCalendar() {
   }
 
   /**
+   * Handle library item selection
+   */
+  function handleLibraryItemSelect(item) {
+    setSelectedLibraryItem(item);
+    setShowLibraryPicker(false);
+    setScheduleFromLibrary(true);
+  }
+
+  /**
+   * Handle schedule from library
+   */
+  async function handleScheduleFromLibrary(scheduleData) {
+    if (!selectedLibraryItem) return;
+
+    try {
+      setScheduleLoading(true);
+
+      const result = await api.calendar.create({
+        title: selectedLibraryItem.title,
+        content_type: selectedLibraryItem.content_type,
+        platform: selectedLibraryItem.platform,
+        full_content: selectedLibraryItem.content,
+        content_preview: selectedLibraryItem.content.substring(0, 200),
+        library_item_id: selectedLibraryItem.id,
+        episode_id: selectedLibraryItem.episode_id,
+        metadata: selectedLibraryItem.metadata,
+        ...scheduleData,
+      });
+
+      // Add to items if in current month view
+      const newDate = new Date(scheduleData.scheduled_date + 'T00:00:00');
+      const monthStart = startOfMonth(currentMonth);
+      const monthEnd = endOfMonth(currentMonth);
+
+      if (newDate >= monthStart && newDate <= monthEnd) {
+        setItems((prev) => [...prev, result.item]);
+      }
+
+      showToast({
+        message: 'Content scheduled!',
+        description: `Scheduled for ${scheduleData.scheduled_date}`,
+        variant: 'success',
+      });
+
+      setScheduleFromLibrary(false);
+      setSelectedLibraryItem(null);
+    } catch (err) {
+      console.error('[ContentCalendar] Failed to schedule from library:', err);
+      showToast({
+        message: 'Failed to schedule content',
+        description: err.message,
+        variant: 'error',
+      });
+    } finally {
+      setScheduleLoading(false);
+    }
+  }
+
+  /**
    * Generate calendar grid days
    */
   function generateCalendarDays() {
@@ -301,6 +388,42 @@ function ContentCalendar() {
             Schedule and manage your content publishing
           </p>
         </div>
+
+        {/* Legend */}
+        <div className={styles.legend}>
+          <span className={styles.legendTitle}>Content Types:</span>
+          <div className={styles.legendItems}>
+            {Object.entries(CONTENT_TYPE_CONFIG).map(([key, config]) => {
+              const Icon = config.icon;
+              return (
+                <div key={key} className={styles.legendItem}>
+                  <span
+                    className={styles.legendIcon}
+                    style={{ backgroundColor: config.bgColor, color: config.color }}
+                  >
+                    <Icon size={10} />
+                  </span>
+                  <span className={styles.legendLabel}>{config.label}</span>
+                </div>
+              );
+            })}
+          </div>
+          <span className={styles.legendDivider}>|</span>
+          <span className={styles.legendTitle}>Platforms:</span>
+          <div className={styles.legendItems}>
+            {Object.entries(PLATFORM_CONFIG)
+              .filter(([key]) => key !== 'generic')
+              .map(([key, config]) => {
+                const Icon = config.icon;
+                return (
+                  <div key={key} className={styles.legendItem}>
+                    <Icon size={14} style={{ color: config.color }} />
+                    <span className={styles.legendLabel}>{config.label}</span>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
       </header>
 
       {/* Calendar Controls */}
@@ -328,6 +451,15 @@ function ContentCalendar() {
 
           <Button variant="secondary" size="sm" onClick={goToToday}>
             Today
+          </Button>
+
+          <Button
+            variant="primary"
+            size="sm"
+            leftIcon={Plus}
+            onClick={() => setShowLibraryPicker(true)}
+          >
+            Schedule from Library
           </Button>
         </div>
 
@@ -531,39 +663,74 @@ function ContentCalendar() {
         cancelLabel="Cancel"
         variant="danger"
       />
+
+      {/* Library Picker Modal */}
+      <LibraryPickerModal
+        isOpen={showLibraryPicker}
+        onClose={() => setShowLibraryPicker(false)}
+        onSelect={handleLibraryItemSelect}
+        title="Schedule from Library"
+      />
+
+      {/* Schedule from Library Modal */}
+      <ScheduleModal
+        isOpen={scheduleFromLibrary}
+        onClose={() => {
+          setScheduleFromLibrary(false);
+          setSelectedLibraryItem(null);
+        }}
+        onSchedule={handleScheduleFromLibrary}
+        loading={scheduleLoading}
+        title={`Schedule: ${selectedLibraryItem?.title || 'Content'}`}
+      />
     </div>
   );
 }
 
 /**
- * Calendar item component
+ * Calendar item component with enhanced icons
  */
 function CalendarItem({ item, onClick }) {
-  const Icon = CONTENT_TYPE_ICONS[item.content_type] || CalendarIcon;
+  const typeConfig = CONTENT_TYPE_CONFIG[item.content_type] || CONTENT_TYPE_CONFIG.blog;
+  const platformConfig = item.platform ? PLATFORM_CONFIG[item.platform] || PLATFORM_CONFIG.generic : null;
   const statusColor = STATUS_COLORS[item.status] || 'var(--color-text-tertiary)';
-  const platformColor = PLATFORM_COLORS[item.platform] || null;
+
+  const TypeIcon = typeConfig.icon;
+  const PlatformIcon = platformConfig?.icon;
 
   return (
     <button
       className={styles.calendarItem}
       onClick={onClick}
       style={{ borderLeftColor: statusColor }}
-      title={item.title}
+      title={`${item.title} (${typeConfig.label}${platformConfig ? ` - ${platformConfig.label}` : ''})`}
     >
-      <span className={styles.itemIcon}>
-        <Icon size={10} />
+      {/* Content type icon badge */}
+      <span
+        className={styles.itemTypeBadge}
+        style={{ backgroundColor: typeConfig.bgColor, color: typeConfig.color }}
+        title={typeConfig.label}
+      >
+        <TypeIcon size={10} />
       </span>
+
+      {/* Platform icon for social content */}
+      {platformConfig && platformConfig.label && (
+        <span
+          className={styles.itemPlatformBadge}
+          style={{ color: platformConfig.color }}
+          title={platformConfig.label}
+        >
+          <PlatformIcon size={11} />
+        </span>
+      )}
+
       <span className={styles.itemTitle}>{item.title}</span>
+
       {item.scheduled_time && (
         <span className={styles.itemTime}>
           {item.scheduled_time.substring(0, 5)}
         </span>
-      )}
-      {platformColor && (
-        <span
-          className={styles.itemPlatform}
-          style={{ backgroundColor: platformColor }}
-        />
       )}
     </button>
   );

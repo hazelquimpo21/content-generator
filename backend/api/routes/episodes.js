@@ -270,6 +270,11 @@ router.get('/:id', requireAuth, async (req, res, next) => {
     // Check authorization
     checkEpisodeAccess(episode, req.user, 'view');
 
+    // Prevent browser caching - episode data changes during processing
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+
     res.json({ episode, stages: episode.stages });
   } catch (error) {
     next(error);
@@ -305,6 +310,12 @@ router.get('/:id/stages', requireAuth, async (req, res, next) => {
       completedCount: stages.filter(s => s.status === 'completed').length,
       processingCount: stages.filter(s => s.status === 'processing').length,
     });
+
+    // Prevent browser caching - stages data changes during processing
+    // Without this, browser may serve stale 304 responses after processing completes
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
 
     // Return full episode object to match frontend expectations
     res.json({
@@ -480,6 +491,11 @@ router.get('/:id/status', requireAuth, async (req, res, next) => {
     checkEpisodeAccess(episode, req.user, 'view');
 
     const status = await getProcessingStatus(id);
+
+    // Prevent browser caching - status changes during processing
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
 
     res.json(status);
   } catch (error) {

@@ -10,7 +10,8 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { Save, RefreshCw, User, Mic, BookOpen, Tag, Layers } from 'lucide-react';
+import { Save, RefreshCw, User, Mic, BookOpen, Tag, Layers, ChevronDown, Settings as SettingsIcon } from 'lucide-react';
+import clsx from 'clsx';
 import { Button, Card, Input, Spinner, TagManager, useToast } from '@components/shared';
 import { BrandDiscoveryStudio } from '@components/brand-discovery';
 import api from '@utils/api-client';
@@ -53,6 +54,9 @@ function Settings() {
   const [pillars, setPillars] = useState([]);
   const [topicsLoading, setTopicsLoading] = useState(false);
   const [pillarsLoading, setPillarsLoading] = useState(false);
+
+  // UI state
+  const [profileSectionExpanded, setProfileSectionExpanded] = useState(false);
 
   // Load all settings on mount
   useEffect(() => {
@@ -260,18 +264,19 @@ function Settings() {
         <div className={styles.headerContent}>
           <h1 className={styles.title}>Settings</h1>
           <p className={styles.subtitle}>
-            Configure your profile, podcast information, and content organization
+            Define your brand identity and configure content generation preferences
           </p>
         </div>
 
         <div className={styles.headerActions}>
           <Button
-            variant="secondary"
+            variant="ghost"
+            size="sm"
             leftIcon={RefreshCw}
             onClick={loadAllSettings}
             disabled={saving}
           >
-            Reset
+            Reload
           </Button>
           <Button
             leftIcon={Save}
@@ -296,7 +301,7 @@ function Settings() {
         </div>
       )}
 
-      {/* Brand Discovery - Onboarding for brand identity */}
+      {/* Brand Discovery - Primary onboarding for brand identity */}
       <BrandDiscoveryStudio
         defaultExpanded={true}
         onBrandDnaChange={(brandDna) => {
@@ -304,179 +309,216 @@ function Settings() {
         }}
       />
 
-      {/* Settings sections */}
-      <div className={styles.sections}>
-        {/* Content Pillars */}
-        <Card
-          title="Content Pillars"
-          subtitle="High-level brand themes that organize your content strategy"
-          headerAction={<Layers className={styles.sectionIcon} />}
+      {/* Content Organization Section */}
+      <div className={styles.sectionGroup}>
+        <div className={styles.sectionGroupHeader}>
+          <Layers className={styles.sectionGroupIcon} />
+          <h2 className={styles.sectionGroupTitle}>Content Organization</h2>
+        </div>
+
+        <div className={styles.sectionGrid}>
+          {/* Content Pillars */}
+          <Card
+            title="Content Pillars"
+            subtitle="High-level brand themes"
+            headerAction={<Layers className={styles.sectionIcon} />}
+          >
+            <div className={styles.form}>
+              <TagManager
+                items={pillars}
+                onAdd={handleAddPillar}
+                onUpdate={handleUpdatePillar}
+                onDelete={handleDeletePillar}
+                placeholder="Add new pillar"
+                showColors={true}
+                showCount={true}
+                emptyMessage="No content pillars yet. Add your first one!"
+                loading={pillarsLoading}
+              />
+              <p className={styles.helperText}>
+                Core themes of your podcast (e.g., "Anxiety", "Relationships", "Self-Care")
+              </p>
+            </div>
+          </Card>
+
+          {/* Topics */}
+          <Card
+            title="Topics"
+            subtitle="Granular content tags"
+            headerAction={<Tag className={styles.sectionIcon} />}
+          >
+            <div className={styles.form}>
+              <TagManager
+                items={topics}
+                onAdd={handleAddTopic}
+                onUpdate={handleUpdateTopic}
+                onDelete={handleDeleteTopic}
+                placeholder="Add new topic"
+                showCount={true}
+                emptyMessage="No topics yet. Add your first one!"
+                loading={topicsLoading}
+              />
+              <p className={styles.helperText}>
+                Specific tags for filtering content (e.g., "Work Anxiety", "CBT Techniques")
+              </p>
+            </div>
+          </Card>
+        </div>
+      </div>
+
+      {/* Profile & Podcast Section - Collapsible */}
+      <div className={styles.collapsibleSection}>
+        <button
+          className={styles.collapsibleHeader}
+          onClick={() => setProfileSectionExpanded(!profileSectionExpanded)}
+          aria-expanded={profileSectionExpanded}
         >
-          <div className={styles.form}>
-            <TagManager
-              items={pillars}
-              onAdd={handleAddPillar}
-              onUpdate={handleUpdatePillar}
-              onDelete={handleDeletePillar}
-              placeholder="Add new pillar"
-              showColors={true}
-              showCount={true}
-              emptyMessage="No content pillars yet. Add your first one!"
-              loading={pillarsLoading}
-            />
-            <p className={styles.helperText}>
-              Content pillars are the core themes of your podcast (e.g., "Anxiety", "Relationships", "Self-Care").
-            </p>
+          <div className={styles.collapsibleHeaderLeft}>
+            <SettingsIcon className={styles.sectionGroupIcon} />
+            <div className={styles.collapsibleHeaderText}>
+              <h2 className={styles.collapsibleTitle}>Profile & Voice Settings</h2>
+              <p className={styles.collapsibleSubtitle}>
+                Therapist info, podcast details, and voice guidelines
+              </p>
+            </div>
           </div>
-        </Card>
+          <ChevronDown
+            className={clsx(
+              styles.collapsibleIcon,
+              profileSectionExpanded && styles.expanded
+            )}
+          />
+        </button>
 
-        {/* Topics */}
-        <Card
-          title="Topics"
-          subtitle="Granular tags for categorizing and filtering content"
-          headerAction={<Tag className={styles.sectionIcon} />}
-        >
-          <div className={styles.form}>
-            <TagManager
-              items={topics}
-              onAdd={handleAddTopic}
-              onUpdate={handleUpdateTopic}
-              onDelete={handleDeleteTopic}
-              placeholder="Add new topic"
-              showCount={true}
-              emptyMessage="No topics yet. Add your first one!"
-              loading={topicsLoading}
-            />
-            <p className={styles.helperText}>
-              Topics are specific tags for content (e.g., "Work Anxiety", "Boundary Setting", "CBT Techniques").
-              Topics can belong to multiple content pillars.
-            </p>
+        {profileSectionExpanded && (
+          <div className={styles.collapsibleContent}>
+            <div className={styles.sections}>
+              {/* Therapist Profile */}
+              <Card
+                title="Therapist Profile"
+                subtitle="Your professional information for content personalization"
+                headerAction={<User className={styles.sectionIcon} />}
+              >
+                <div className={styles.form}>
+                  <Input
+                    label="Name"
+                    placeholder="Dr. Emily Carter"
+                    value={therapistProfile.name}
+                    onChange={(e) =>
+                      setTherapistProfile({ ...therapistProfile, name: e.target.value })
+                    }
+                  />
+
+                  <Input
+                    label="Credentials"
+                    placeholder="PhD, LMFT, Certified Gottman Therapist"
+                    value={therapistProfile.credentials}
+                    onChange={(e) =>
+                      setTherapistProfile({ ...therapistProfile, credentials: e.target.value })
+                    }
+                  />
+
+                  <Input
+                    label="Bio"
+                    placeholder="A brief professional bio..."
+                    multiline
+                    rows={3}
+                    value={therapistProfile.bio}
+                    onChange={(e) =>
+                      setTherapistProfile({ ...therapistProfile, bio: e.target.value })
+                    }
+                  />
+
+                  <Input
+                    label="Website"
+                    type="url"
+                    placeholder="https://yourwebsite.com"
+                    value={therapistProfile.website}
+                    onChange={(e) =>
+                      setTherapistProfile({ ...therapistProfile, website: e.target.value })
+                    }
+                  />
+                </div>
+              </Card>
+
+              {/* Podcast Info */}
+              <Card
+                title="Podcast Information"
+                subtitle="Details about your podcast for content generation"
+                headerAction={<Mic className={styles.sectionIcon} />}
+              >
+                <div className={styles.form}>
+                  <Input
+                    label="Podcast Name"
+                    placeholder="The Mindful Therapist"
+                    value={podcastInfo.name}
+                    onChange={(e) =>
+                      setPodcastInfo({ ...podcastInfo, name: e.target.value })
+                    }
+                  />
+
+                  <Input
+                    label="Tagline"
+                    placeholder="Real conversations about therapy and mental health"
+                    value={podcastInfo.tagline}
+                    onChange={(e) =>
+                      setPodcastInfo({ ...podcastInfo, tagline: e.target.value })
+                    }
+                  />
+
+                  <Input
+                    label="Target Audience"
+                    placeholder="Therapists, counselors, and mental health professionals"
+                    value={podcastInfo.target_audience}
+                    onChange={(e) =>
+                      setPodcastInfo({ ...podcastInfo, target_audience: e.target.value })
+                    }
+                  />
+                </div>
+              </Card>
+
+              {/* Voice Guidelines */}
+              <Card
+                title="Voice & Style Guidelines"
+                subtitle="Customize the tone and style of generated content"
+                headerAction={<BookOpen className={styles.sectionIcon} />}
+              >
+                <div className={styles.form}>
+                  <Input
+                    label="Tone"
+                    placeholder="warm, professional, conversational, empathetic"
+                    helperText="Comma-separated list of tone descriptors"
+                    value={voiceGuidelines.tone}
+                    onChange={(e) =>
+                      setVoiceGuidelines({ ...voiceGuidelines, tone: e.target.value })
+                    }
+                  />
+
+                  <Input
+                    label="Style Notes"
+                    placeholder="Use concrete examples. Avoid jargon when possible..."
+                    multiline
+                    rows={3}
+                    value={voiceGuidelines.style_notes}
+                    onChange={(e) =>
+                      setVoiceGuidelines({ ...voiceGuidelines, style_notes: e.target.value })
+                    }
+                  />
+
+                  <Input
+                    label="Words/Phrases to Avoid"
+                    placeholder="leverage, synergy, game-changer"
+                    helperText="Comma-separated list of terms to avoid"
+                    value={voiceGuidelines.avoid}
+                    onChange={(e) =>
+                      setVoiceGuidelines({ ...voiceGuidelines, avoid: e.target.value })
+                    }
+                  />
+                </div>
+              </Card>
+            </div>
           </div>
-        </Card>
-
-        {/* Therapist Profile */}
-        <Card
-          title="Therapist Profile"
-          subtitle="Your professional information for content personalization"
-          headerAction={<User className={styles.sectionIcon} />}
-        >
-          <div className={styles.form}>
-            <Input
-              label="Name"
-              placeholder="Dr. Emily Carter"
-              value={therapistProfile.name}
-              onChange={(e) =>
-                setTherapistProfile({ ...therapistProfile, name: e.target.value })
-              }
-            />
-
-            <Input
-              label="Credentials"
-              placeholder="PhD, LMFT, Certified Gottman Therapist"
-              value={therapistProfile.credentials}
-              onChange={(e) =>
-                setTherapistProfile({ ...therapistProfile, credentials: e.target.value })
-              }
-            />
-
-            <Input
-              label="Bio"
-              placeholder="A brief professional bio..."
-              multiline
-              rows={3}
-              value={therapistProfile.bio}
-              onChange={(e) =>
-                setTherapistProfile({ ...therapistProfile, bio: e.target.value })
-              }
-            />
-
-            <Input
-              label="Website"
-              type="url"
-              placeholder="https://yourwebsite.com"
-              value={therapistProfile.website}
-              onChange={(e) =>
-                setTherapistProfile({ ...therapistProfile, website: e.target.value })
-              }
-            />
-          </div>
-        </Card>
-
-        {/* Podcast Info */}
-        <Card
-          title="Podcast Information"
-          subtitle="Details about your podcast for content generation"
-          headerAction={<Mic className={styles.sectionIcon} />}
-        >
-          <div className={styles.form}>
-            <Input
-              label="Podcast Name"
-              placeholder="The Mindful Therapist"
-              value={podcastInfo.name}
-              onChange={(e) =>
-                setPodcastInfo({ ...podcastInfo, name: e.target.value })
-              }
-            />
-
-            <Input
-              label="Tagline"
-              placeholder="Real conversations about therapy and mental health"
-              value={podcastInfo.tagline}
-              onChange={(e) =>
-                setPodcastInfo({ ...podcastInfo, tagline: e.target.value })
-              }
-            />
-
-            <Input
-              label="Target Audience"
-              placeholder="Therapists, counselors, and mental health professionals"
-              value={podcastInfo.target_audience}
-              onChange={(e) =>
-                setPodcastInfo({ ...podcastInfo, target_audience: e.target.value })
-              }
-            />
-          </div>
-        </Card>
-
-        {/* Voice Guidelines */}
-        <Card
-          title="Voice & Style Guidelines"
-          subtitle="Customize the tone and style of generated content"
-          headerAction={<BookOpen className={styles.sectionIcon} />}
-        >
-          <div className={styles.form}>
-            <Input
-              label="Tone"
-              placeholder="warm, professional, conversational, empathetic"
-              helperText="Comma-separated list of tone descriptors"
-              value={voiceGuidelines.tone}
-              onChange={(e) =>
-                setVoiceGuidelines({ ...voiceGuidelines, tone: e.target.value })
-              }
-            />
-
-            <Input
-              label="Style Notes"
-              placeholder="Use concrete examples. Avoid jargon when possible..."
-              multiline
-              rows={3}
-              value={voiceGuidelines.style_notes}
-              onChange={(e) =>
-                setVoiceGuidelines({ ...voiceGuidelines, style_notes: e.target.value })
-              }
-            />
-
-            <Input
-              label="Words/Phrases to Avoid"
-              placeholder="leverage, synergy, game-changer"
-              helperText="Comma-separated list of terms to avoid"
-              value={voiceGuidelines.avoid}
-              onChange={(e) =>
-                setVoiceGuidelines({ ...voiceGuidelines, avoid: e.target.value })
-              }
-            />
-          </div>
-        </Card>
+        )}
       </div>
     </div>
   );

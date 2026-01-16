@@ -2,9 +2,8 @@
  * ============================================================================
  * VIBE EDITOR STYLES
  * ============================================================================
- * Human-centered slider design with clear visual feedback:
- * - Tick marks for scale reference
- * - "Balanced" label at center point
+ * Clean slider design with clear visual feedback:
+ * - Center indicator for balanced position
  * - Value bubble showing current position
  * - Smooth interactions and transitions
  * ============================================================================
@@ -38,7 +37,6 @@
 
 .infoBanner p {
   margin: 0;
-  font-size: var(--text-sm);
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
   line-height: 1.6;
@@ -53,13 +51,11 @@
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
-  background-color: var(--color-bg-tertiary);
   background-color: var(--color-surface-hover);
   border-radius: var(--radius-md);
 }
 
 .summaryLabel {
-  font-size: var(--text-sm);
   font-size: var(--font-size-sm);
   font-weight: var(--font-medium);
   color: var(--color-text-secondary);
@@ -79,8 +75,7 @@
 .sliders {
   display: flex;
   flex-direction: column;
-  gap: var(--space-8);
-  gap: var(--space-6);
+  gap: var(--space-5);
 }
 
 .sliderGroup {
@@ -88,40 +83,33 @@
   flex-direction: column;
   gap: var(--space-3);
   padding: var(--space-4);
-  background-color: #FFFFFF;
+  background-color: var(--color-surface);
   border-radius: var(--radius-lg);
-  border: 1px solid var(--color-bg-accent);
-  transition: box-shadow var(--transition-base);
+  border: 1px solid var(--color-border-light);
+  transition: box-shadow var(--transition-base), border-color var(--transition-base);
 }
 
 .sliderGroup:hover {
   box-shadow: var(--shadow-sm);
+  border-color: var(--color-border);
 }
 
 .sliderHeader {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-bottom: var(--space-1);
+  gap: var(--space-3);
+  flex-wrap: wrap;
 }
 
 .sliderLabel {
   font-family: var(--font-heading);
   font-size: var(--text-lg);
-}
-
-.sliderLabel {
   font-weight: var(--font-semibold);
   color: var(--color-text-primary);
 }
 
 .sliderValue {
-  font-size: var(--text-sm);
-  color: var(--color-primary);
-  font-weight: var(--font-medium);
-  padding: var(--space-1) var(--space-2);
-  background-color: var(--color-primary-light);
-  border-radius: var(--radius-sm);
   font-size: var(--font-size-sm);
   color: var(--color-text-tertiary);
   font-style: italic;
@@ -129,138 +117,48 @@
 
 .sliderRow {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-4);
+  align-items: center;
+  gap: var(--space-3);
   padding-top: var(--space-2);
 }
 
 /* Endpoint labels */
-.endpointLeft,
-.endpointRight {
-  min-width: 120px;
-  padding-top: var(--space-3);
+.endpoint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  min-width: 140px;
+  line-height: 1.4;
 }
 
-.endpointLeft {
+.endpoint:first-child {
   text-align: right;
 }
 
-.endpointRight {
+.endpoint:last-child {
   text-align: left;
 }
 
-.endpointLabel {
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  color: var(--color-text-secondary);
-  line-height: 1.3;
-  display: block;
-}
-
-/* Slider wrapper with all visual elements */
+/* Slider wrapper */
 .sliderWrapper {
   flex: 1;
   position: relative;
-  padding: var(--space-3) 0 var(--space-6) 0;
+  padding: var(--space-2) 0 var(--space-6) 0;
   min-width: 200px;
 }
 
-/* Background track with zones */
-.sliderTrack {
-  position: absolute;
-  top: var(--space-3);
-  left: 0;
-  right: 0;
-  height: 10px;
+/* Custom slider styling */
+.slider {
+  width: 100%;
+  height: 8px;
+  appearance: none;
   background: linear-gradient(
     to right,
     var(--color-primary-light) 0%,
-    var(--color-bg-tertiary) 35%,
-    var(--color-bg-tertiary) 65%,
+    var(--color-surface-hover) 50%,
     var(--color-primary-light) 100%
   );
   border-radius: var(--radius-full);
-  pointer-events: none;
-}
-
-/* Filled portion showing current value */
-.sliderFill {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  background: linear-gradient(
-    to right,
-    var(--color-primary) 0%,
-    var(--color-primary-dark) 100%
-  );
-  border-radius: var(--radius-full);
-  opacity: 0.3;
-  transition: width 0.1s ease-out;
-}
-
-/* Tick marks container */
-.tickMarks {
-  position: absolute;
-  top: calc(var(--space-3) + 14px);
-  left: 0;
-  right: 0;
-  display: flex;
-  justify-content: space-between;
-  pointer-events: none;
-}
-
-/* Individual tick marks */
-.tick {
-  width: 2px;
-  height: 8px;
-  background-color: var(--color-bg-accent);
-  border-radius: 1px;
-  position: relative;
-}
-
-.tick[data-position="start"],
-.tick[data-position="end"] {
-  height: 10px;
-  background-color: var(--color-text-tertiary);
-}
-
-.tick[data-position="quarter"],
-.tick[data-position="three-quarter"] {
-  height: 6px;
-  background-color: var(--color-bg-accent);
-}
-
-/* Center tick is more prominent */
-.tickCenter {
-  width: 2px;
-  height: 12px;
-  background-color: var(--color-primary);
-}
-
-/* Center "Balanced" label */
-.tickLabel {
-  position: absolute;
-  top: 16px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 10px;
-  font-weight: var(--font-medium);
-  color: var(--color-text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  white-space: nowrap;
-}
-
-/* The actual range input - invisible but interactive */
-.slider {
-  width: 100%;
-  height: 10px;
-  appearance: none;
-  background: transparent;
   cursor: pointer;
-  position: relative;
-  z-index: 2;
   margin: 0;
 }
 
@@ -277,63 +175,6 @@
 /* Webkit slider thumb */
 .slider::-webkit-slider-thumb {
   appearance: none;
-  width: 26px;
-  height: 26px;
-  background-color: #FFFFFF;
-  border: 3px solid var(--color-primary);
-  border-radius: 50%;
-  box-shadow:
-    var(--shadow-md),
-    0 0 0 4px rgba(196, 112, 77, 0.1);
-  cursor: grab;
-  transition:
-    transform var(--transition-fast),
-    box-shadow var(--transition-fast),
-    border-color var(--transition-fast);
-  position: relative;
-  z-index: 3;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.endpoint {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  min-width: 140px;
-  text-align: center;
-}
-
-.endpoint:first-child {
-  text-align: right;
-}
-
-.endpoint:last-child {
-  text-align: left;
-}
-
-.sliderWrapper {
-  flex: 1;
-  position: relative;
-  padding: var(--space-2) 0;
-}
-
-/* Custom slider styling */
-.slider {
-  width: 100%;
-  height: 8px;
-  appearance: none;
-  background: linear-gradient(
-    to right,
-    var(--color-primary-light) 0%,
-    var(--color-surface-hover) 50%,
-    var(--color-primary-light) 100%
-  );
-  border-radius: var(--radius-full);
-  cursor: pointer;
-}
-
-.slider::-webkit-slider-thumb {
-  appearance: none;
   width: 24px;
   height: 24px;
   background-color: var(--color-primary);
@@ -341,33 +182,21 @@
   border-radius: 50%;
   box-shadow: var(--shadow-md);
   cursor: grab;
-  transition: transform var(--transition-fast);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .slider::-webkit-slider-thumb:hover {
   transform: scale(1.1);
-  box-shadow:
-    var(--shadow-lg),
-    0 0 0 6px rgba(196, 112, 77, 0.15);
-  border-color: var(--color-primary-dark);
+  box-shadow: var(--shadow-lg), 0 0 0 6px rgba(196, 112, 77, 0.15);
 }
 
 .slider::-webkit-slider-thumb:active {
   cursor: grabbing;
   transform: scale(1.15);
-  box-shadow:
-    var(--shadow-lg),
-    0 0 0 8px rgba(196, 112, 77, 0.2);
+  box-shadow: var(--shadow-lg), 0 0 0 8px rgba(196, 112, 77, 0.2);
 }
 
 /* Firefox slider thumb */
-.slider::-moz-range-thumb {
-  width: 26px;
-  height: 26px;
-  background-color: #FFFFFF;
-  border: 3px solid var(--color-primary);
-}
-
 .slider::-moz-range-thumb {
   width: 24px;
   height: 24px;
@@ -382,10 +211,23 @@
   transform: scale(1.1);
 }
 
+/* Center indicator */
+.sliderCenter {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, calc(-50% - var(--space-2)));
+  width: 2px;
+  height: 16px;
+  background-color: var(--color-border);
+  pointer-events: none;
+  opacity: 0.6;
+}
+
 /* Value bubble that follows the thumb */
 .valueBubble {
   position: absolute;
-  top: calc(var(--space-3) + 10px + 18px);
+  top: 32px;
   transform: translateX(-50%);
   opacity: 0;
   transition: opacity var(--transition-fast);
@@ -409,6 +251,7 @@
   border-radius: var(--radius-sm);
   white-space: nowrap;
   box-shadow: var(--shadow-md);
+  position: relative;
 }
 
 /* Bubble arrow */
@@ -420,18 +263,6 @@
   transform: translateX(-50%);
   border: 5px solid transparent;
   border-bottom-color: var(--color-text-primary);
-}
-
-/* Center indicator */
-.sliderCenter {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 2px;
-  height: 12px;
-  background-color: var(--color-border);
-  pointer-events: none;
 }
 
 /* ============================================================================

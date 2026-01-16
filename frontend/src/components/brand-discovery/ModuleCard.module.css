@@ -4,6 +4,7 @@
  * ============================================================================
  * Styles for individual brand discovery module cards.
  * Uses CSS custom property --module-color for accent colors.
+ * Enhanced with better visual feedback and interactions.
  * ============================================================================
  */
 
@@ -19,12 +20,22 @@
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    border-color var(--transition-fast),
+    background-color var(--transition-fast);
+  min-height: 220px;
 }
 
 .card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  background-color: var(--color-surface);
+}
+
+.card:focus-within {
+  box-shadow: var(--shadow-lg), 0 0 0 2px var(--color-primary-light);
 }
 
 /* Status-based border colors */
@@ -32,14 +43,20 @@
   border-color: var(--color-border);
 }
 
+.card.status-not_started:hover {
+  border-color: var(--module-color, var(--color-primary));
+}
+
 .card.status-in_progress {
   border-color: var(--color-warning);
   border-width: 2px;
+  background: linear-gradient(to bottom right, var(--color-surface) 0%, rgba(255, 193, 7, 0.03) 100%);
 }
 
 .card.status-complete {
   border-color: var(--color-success);
   border-width: 2px;
+  background: linear-gradient(to bottom right, var(--color-surface) 0%, rgba(40, 167, 69, 0.03) 100%);
 }
 
 /* ============================================================================
@@ -54,11 +71,16 @@
   align-items: center;
   gap: var(--space-1);
   padding: var(--space-1) var(--space-2);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-medium);
+  font-size: 10px;
+  font-weight: var(--font-semibold);
   border-radius: var(--radius-full);
   text-transform: uppercase;
-  letter-spacing: 0.025em;
+  letter-spacing: 0.05em;
+  transition: transform var(--transition-fast);
+}
+
+.card:hover .statusBadge {
+  transform: scale(1.05);
 }
 
 .badge-default {
@@ -93,19 +115,25 @@
 }
 
 .iconWrapper {
-  width: 48px;
-  height: 48px;
+  width: 52px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-lg);
   margin-bottom: var(--space-3);
-  opacity: 0.9;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+}
+
+.card:hover .iconWrapper {
+  transform: scale(1.05);
+  box-shadow: var(--shadow-md);
 }
 
 .icon {
-  width: 24px;
-  height: 24px;
+  width: 26px;
+  height: 26px;
   color: white;
 }
 
@@ -133,6 +161,15 @@
   margin-top: auto;
   padding-top: var(--space-2);
   border-top: 1px solid var(--color-border-light);
+  font-style: italic;
+}
+
+/* Preview with data shows bolder */
+.card.status-complete .preview,
+.card.status-in_progress .preview {
+  color: var(--color-text-secondary);
+  font-style: normal;
+  font-weight: var(--font-medium);
 }
 
 /* ============================================================================
@@ -142,4 +179,39 @@
 .actionButton {
   margin-top: var(--space-3);
   width: 100%;
+  transition: transform var(--transition-fast);
+}
+
+.card:hover .actionButton {
+  transform: translateY(-1px);
+}
+
+/* ============================================================================
+ * RESPONSIVE
+ * ============================================================================ */
+
+@media (max-width: 640px) {
+  .card {
+    min-height: 200px;
+    padding: var(--space-3);
+  }
+
+  .iconWrapper {
+    width: 44px;
+    height: 44px;
+  }
+
+  .icon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .title {
+    font-size: var(--text-base);
+  }
+
+  .statusBadge {
+    font-size: 9px;
+    padding: 2px var(--space-2);
+  }
 }

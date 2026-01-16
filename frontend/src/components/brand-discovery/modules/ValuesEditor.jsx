@@ -206,7 +206,7 @@ function ValuesEditor({ data = {}, referenceData, onSave, onClose, saving }) {
    * Get value details by ID
    */
   const getValueById = useCallback(
-    (id) => valuesDeck.find((v) => v.id === id) || { id, name: id },
+    (id) => valuesDeck.find((v) => v.id === id) || { id, label: id, description: '' },
     [valuesDeck]
   );
 
@@ -269,7 +269,7 @@ function ValuesEditor({ data = {}, referenceData, onSave, onClose, saving }) {
                   <Check className={styles.checkIcon} />
                 </div>
               )}
-              <h4 className={styles.valueName}>{value.name}</h4>
+              <h4 className={styles.valueName}>{value.label}</h4>
               <p className={styles.valueDescription}>{value.description}</p>
               <span className={styles.valueCategory}>{value.category}</span>
             </button>
@@ -327,7 +327,7 @@ function ValuesEditor({ data = {}, referenceData, onSave, onClose, saving }) {
                 {index + 1}
               </span>
               <div className={styles.rankContent}>
-                <span className={styles.rankName}>{value.name}</span>
+                <span className={styles.rankName}>{value.label}</span>
                 <span className={styles.rankDescription}>{value.description}</span>
               </div>
               {isTop && <Sparkles className={styles.topIcon} />}
@@ -375,12 +375,12 @@ function ValuesEditor({ data = {}, referenceData, onSave, onClose, saving }) {
               <div key={valueId} className={styles.reviewItem}>
                 <div className={styles.reviewHeader}>
                   <span className={styles.reviewRank}>#{index + 1}</span>
-                  <h4 className={styles.reviewName}>{value.name}</h4>
+                  <h4 className={styles.reviewName}>{value.label}</h4>
                 </div>
                 <p className={styles.reviewDescription}>{value.description}</p>
                 <textarea
                   className={styles.whyTextarea}
-                  placeholder={`Why is "${value.name}" important to your brand? (optional)`}
+                  placeholder={`Why is "${value.label}" important to your brand? (optional)`}
                   value={whyNotes[valueId] || ''}
                   onChange={(e) => updateWhyNote(valueId, e.target.value)}
                   rows={2}

@@ -2,10 +2,15 @@
  * ============================================================================
  * SETTINGS PAGE STYLES
  * ============================================================================
+ * Organized layout with Brand Discovery as the primary focus,
+ * followed by content organization and profile settings.
+ * ============================================================================
  */
 
 .page {
   animation: fadeIn var(--transition-base) ease-out;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 /* ============================================================================
@@ -19,6 +24,8 @@
   gap: var(--space-4);
   margin-bottom: var(--space-6);
   flex-wrap: wrap;
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border-light);
 }
 
 .headerContent {
@@ -28,17 +35,21 @@
 
 .title {
   font-size: var(--text-3xl);
-  margin-bottom: var(--space-1);
+  margin-bottom: var(--space-2);
+  color: var(--color-text-primary);
 }
 
 .subtitle {
   color: var(--color-text-secondary);
   margin: 0;
+  font-size: var(--font-size-base);
+  line-height: 1.5;
 }
 
 .headerActions {
   display: flex;
   gap: var(--space-3);
+  align-items: center;
 }
 
 /* ============================================================================
@@ -52,6 +63,9 @@
   border-radius: var(--radius-md);
   color: var(--color-error);
   margin-bottom: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .successMessage {
@@ -61,6 +75,40 @@
   border-radius: var(--radius-md);
   color: var(--color-success);
   margin-bottom: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ============================================================================
+ * SECTION GROUPS
+ * ============================================================================ */
+
+.sectionGroup {
+  margin-top: var(--space-8);
+}
+
+.sectionGroupHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.sectionGroupTitle {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.sectionGroupIcon {
+  width: 20px;
+  height: 20px;
+  color: var(--color-primary);
 }
 
 /* ============================================================================
@@ -70,14 +118,21 @@
 .sections {
   display: flex;
   flex-direction: column;
-  gap: var(--space-6);
+  gap: var(--space-5);
   margin-top: var(--space-6);
 }
 
 .sectionIcon {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   color: var(--color-primary);
+}
+
+/* Two-column layout for related cards */
+.sectionGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-5);
 }
 
 /* ============================================================================
@@ -95,6 +150,108 @@
   color: var(--color-text-tertiary);
   margin: 0;
   line-height: 1.5;
+  padding: var(--space-2) var(--space-3);
+  background-color: var(--color-surface-hover);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--color-primary-light);
+}
+
+/* ============================================================================
+ * COLLAPSIBLE SECTION
+ * ============================================================================ */
+
+.collapsibleSection {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-top: var(--space-6);
+}
+
+.collapsibleHeader {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-4) var(--space-5);
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
+}
+
+.collapsibleHeader:hover {
+  background-color: var(--color-surface-hover);
+}
+
+.collapsibleHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.collapsibleHeaderText {
+  text-align: left;
+}
+
+.collapsibleIcon {
+  width: 20px;
+  height: 20px;
+  color: var(--color-text-tertiary);
+  transition: transform var(--transition-fast);
+}
+
+.collapsibleIcon.expanded {
+  transform: rotate(180deg);
+}
+
+.collapsibleTitle {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.collapsibleSubtitle {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+  margin-top: var(--space-1);
+}
+
+.collapsibleContent {
+  padding: 0 var(--space-5) var(--space-5);
+  border-top: 1px solid var(--color-border-light);
+  animation: slideDown var(--transition-base) ease-out;
+}
+
+/* ============================================================================
+ * RESPONSIVE
+ * ============================================================================ */
+
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .headerActions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .sectionGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .collapsibleHeader {
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .collapsibleContent {
+    padding: 0 var(--space-4) var(--space-4);
+  }
 }
 
 /* ============================================================================
@@ -104,4 +261,15 @@
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

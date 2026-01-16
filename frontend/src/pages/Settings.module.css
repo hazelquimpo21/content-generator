@@ -2,8 +2,7 @@
  * ============================================================================
  * SETTINGS PAGE STYLES
  * ============================================================================
- * Organized layout with Brand Discovery as the primary focus,
- * followed by content organization and profile settings.
+ * Tab-based layout with Brand Identity, Content, and Profile tabs.
  * ============================================================================
  */
 
@@ -22,10 +21,8 @@
   justify-content: space-between;
   align-items: flex-start;
   gap: var(--space-4);
-  margin-bottom: var(--space-6);
+  margin-bottom: var(--space-5);
   flex-wrap: wrap;
-  padding-bottom: var(--space-4);
-  border-bottom: 1px solid var(--color-border-light);
 }
 
 .headerContent {
@@ -81,34 +78,60 @@
 }
 
 /* ============================================================================
- * SECTION GROUPS
+ * TAB NAVIGATION
  * ============================================================================ */
 
-.sectionGroup {
-  margin-top: var(--space-8);
+.tabNav {
+  display: flex;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: var(--space-6);
 }
 
-.sectionGroupHeader {
+.tab {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  margin-bottom: var(--space-4);
-  padding-bottom: var(--space-2);
-  border-bottom: 1px solid var(--color-border-light);
+  padding: var(--space-3) var(--space-4);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-medium);
+  color: var(--color-text-secondary);
+  transition:
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    background-color var(--transition-fast);
 }
 
-.sectionGroupTitle {
-  font-family: var(--font-heading);
-  font-size: var(--text-lg);
-  font-weight: var(--font-semibold);
+.tab:hover {
   color: var(--color-text-primary);
-  margin: 0;
+  background-color: var(--color-surface-hover);
 }
 
-.sectionGroupIcon {
-  width: 20px;
-  height: 20px;
+.tab.activeTab {
   color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.tabIcon {
+  width: 18px;
+  height: 18px;
+}
+
+/* ============================================================================
+ * TAB CONTENT
+ * ============================================================================ */
+
+.tabContent {
+  min-height: 400px;
+}
+
+.tabPanel {
+  animation: fadeIn var(--transition-base) ease-out;
 }
 
 /* ============================================================================
@@ -119,7 +142,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
-  margin-top: var(--space-6);
 }
 
 .sectionIcon {
@@ -157,76 +179,6 @@
 }
 
 /* ============================================================================
- * COLLAPSIBLE SECTION
- * ============================================================================ */
-
-.collapsibleSection {
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  margin-top: var(--space-6);
-}
-
-.collapsibleHeader {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--space-4) var(--space-5);
-  background: none;
-  border: none;
-  cursor: pointer;
-  transition: background-color var(--transition-fast);
-}
-
-.collapsibleHeader:hover {
-  background-color: var(--color-surface-hover);
-}
-
-.collapsibleHeaderLeft {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.collapsibleHeaderText {
-  text-align: left;
-}
-
-.collapsibleIcon {
-  width: 20px;
-  height: 20px;
-  color: var(--color-text-tertiary);
-  transition: transform var(--transition-fast);
-}
-
-.collapsibleIcon.expanded {
-  transform: rotate(180deg);
-}
-
-.collapsibleTitle {
-  font-family: var(--font-heading);
-  font-size: var(--text-lg);
-  font-weight: var(--font-semibold);
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
-.collapsibleSubtitle {
-  font-size: var(--font-size-sm);
-  color: var(--color-text-secondary);
-  margin: 0;
-  margin-top: var(--space-1);
-}
-
-.collapsibleContent {
-  padding: 0 var(--space-5) var(--space-5);
-  border-top: 1px solid var(--color-border-light);
-  animation: slideDown var(--transition-base) ease-out;
-}
-
-/* ============================================================================
  * RESPONSIVE
  * ============================================================================ */
 
@@ -241,16 +193,44 @@
     justify-content: flex-end;
   }
 
+  .tabNav {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .tabNav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-size-sm);
+    white-space: nowrap;
+  }
+
+  .tabIcon {
+    width: 16px;
+    height: 16px;
+  }
+
   .sectionGrid {
     grid-template-columns: 1fr;
   }
+}
 
-  .collapsibleHeader {
-    padding: var(--space-3) var(--space-4);
+@media (max-width: 480px) {
+  .tab span {
+    display: none;
   }
 
-  .collapsibleContent {
-    padding: 0 var(--space-4) var(--space-4);
+  .tab {
+    padding: var(--space-3);
+  }
+
+  .tabIcon {
+    width: 20px;
+    height: 20px;
   }
 }
 
@@ -261,15 +241,4 @@
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }

@@ -9,13 +9,20 @@
  * ============================================================================
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { Save, RefreshCw, User, Mic, BookOpen, Tag, Layers, ChevronDown, Settings as SettingsIcon } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Save, RefreshCw, User, Mic, BookOpen, Tag, Layers, Sparkles } from 'lucide-react';
 import clsx from 'clsx';
 import { Button, Card, Input, Spinner, TagManager, useToast } from '@components/shared';
 import { BrandDiscoveryStudio } from '@components/brand-discovery';
 import api from '@utils/api-client';
 import styles from './Settings.module.css';
+
+// Tab configuration
+const TABS = [
+  { id: 'brand', label: 'Brand Identity', icon: Sparkles },
+  { id: 'content', label: 'Content', icon: Layers },
+  { id: 'profile', label: 'Profile', icon: User },
+];
 
 /**
  * Settings page component
@@ -28,6 +35,9 @@ function Settings() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+
+  // Active tab
+  const [activeTab, setActiveTab] = useState('brand');
 
   // Form data for evergreen content
   const [therapistProfile, setTherapistProfile] = useState({
@@ -54,9 +64,6 @@ function Settings() {
   const [pillars, setPillars] = useState([]);
   const [topicsLoading, setTopicsLoading] = useState(false);
   const [pillarsLoading, setPillarsLoading] = useState(false);
-
-  // UI state
-  const [profileSectionExpanded, setProfileSectionExpanded] = useState(false);
 
   // Load all settings on mount
   useEffect(() => {
@@ -301,97 +308,96 @@ function Settings() {
         </div>
       )}
 
-      {/* Brand Discovery - Primary onboarding for brand identity */}
-      <BrandDiscoveryStudio
-        defaultExpanded={true}
-        onBrandDnaChange={(brandDna) => {
-          console.log('[Settings] Brand DNA updated:', brandDna);
-        }}
-      />
+      {/* Tab Navigation */}
+      <nav className={styles.tabNav} role="tablist">
+        {TABS.map((tab) => {
+          const Icon = tab.icon;
+          return (
+            <button
+              key={tab.id}
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              className={clsx(styles.tab, activeTab === tab.id && styles.activeTab)}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              <Icon className={styles.tabIcon} />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </nav>
 
-      {/* Content Organization Section */}
-      <div className={styles.sectionGroup}>
-        <div className={styles.sectionGroupHeader}>
-          <Layers className={styles.sectionGroupIcon} />
-          <h2 className={styles.sectionGroupTitle}>Content Organization</h2>
-        </div>
+      {/* Tab Content */}
+      <div className={styles.tabContent}>
+        {/* Brand Identity Tab */}
+        {activeTab === 'brand' && (
+          <div className={styles.tabPanel}>
+            <BrandDiscoveryStudio
+              defaultExpanded={true}
+              onBrandDnaChange={(brandDna) => {
+                console.log('[Settings] Brand DNA updated:', brandDna);
+              }}
+            />
+          </div>
+        )}
 
-        <div className={styles.sectionGrid}>
-          {/* Content Pillars */}
-          <Card
-            title="Content Pillars"
-            subtitle="High-level brand themes"
-            headerAction={<Layers className={styles.sectionIcon} />}
-          >
-            <div className={styles.form}>
-              <TagManager
-                items={pillars}
-                onAdd={handleAddPillar}
-                onUpdate={handleUpdatePillar}
-                onDelete={handleDeletePillar}
-                placeholder="Add new pillar"
-                showColors={true}
-                showCount={true}
-                emptyMessage="No content pillars yet. Add your first one!"
-                loading={pillarsLoading}
-              />
-              <p className={styles.helperText}>
-                Core themes of your podcast (e.g., "Anxiety", "Relationships", "Self-Care")
-              </p>
-            </div>
-          </Card>
+        {/* Content Tab */}
+        {activeTab === 'content' && (
+          <div className={styles.tabPanel}>
+            <div className={styles.sectionGrid}>
+              {/* Content Pillars */}
+              <Card
+                title="Content Pillars"
+                subtitle="High-level brand themes that organize your content strategy"
+                headerAction={<Layers className={styles.sectionIcon} />}
+              >
+                <div className={styles.form}>
+                  <TagManager
+                    items={pillars}
+                    onAdd={handleAddPillar}
+                    onUpdate={handleUpdatePillar}
+                    onDelete={handleDeletePillar}
+                    placeholder="Add new pillar"
+                    showColors={true}
+                    showCount={true}
+                    emptyMessage="No content pillars yet. Add your first one!"
+                    loading={pillarsLoading}
+                  />
+                  <p className={styles.helperText}>
+                    Core themes of your podcast (e.g., "Anxiety", "Relationships", "Self-Care")
+                  </p>
+                </div>
+              </Card>
 
-          {/* Topics */}
-          <Card
-            title="Topics"
-            subtitle="Granular content tags"
-            headerAction={<Tag className={styles.sectionIcon} />}
-          >
-            <div className={styles.form}>
-              <TagManager
-                items={topics}
-                onAdd={handleAddTopic}
-                onUpdate={handleUpdateTopic}
-                onDelete={handleDeleteTopic}
-                placeholder="Add new topic"
-                showCount={true}
-                emptyMessage="No topics yet. Add your first one!"
-                loading={topicsLoading}
-              />
-              <p className={styles.helperText}>
-                Specific tags for filtering content (e.g., "Work Anxiety", "CBT Techniques")
-              </p>
-            </div>
-          </Card>
-        </div>
-      </div>
-
-      {/* Profile & Podcast Section - Collapsible */}
-      <div className={styles.collapsibleSection}>
-        <button
-          className={styles.collapsibleHeader}
-          onClick={() => setProfileSectionExpanded(!profileSectionExpanded)}
-          aria-expanded={profileSectionExpanded}
-        >
-          <div className={styles.collapsibleHeaderLeft}>
-            <SettingsIcon className={styles.sectionGroupIcon} />
-            <div className={styles.collapsibleHeaderText}>
-              <h2 className={styles.collapsibleTitle}>Profile & Voice Settings</h2>
-              <p className={styles.collapsibleSubtitle}>
-                Therapist info, podcast details, and voice guidelines
-              </p>
+              {/* Topics */}
+              <Card
+                title="Topics"
+                subtitle="Granular tags for categorizing and filtering content"
+                headerAction={<Tag className={styles.sectionIcon} />}
+              >
+                <div className={styles.form}>
+                  <TagManager
+                    items={topics}
+                    onAdd={handleAddTopic}
+                    onUpdate={handleUpdateTopic}
+                    onDelete={handleDeleteTopic}
+                    placeholder="Add new topic"
+                    showCount={true}
+                    emptyMessage="No topics yet. Add your first one!"
+                    loading={topicsLoading}
+                  />
+                  <p className={styles.helperText}>
+                    Specific tags for filtering content (e.g., "Work Anxiety", "CBT Techniques")
+                  </p>
+                </div>
+              </Card>
             </div>
           </div>
-          <ChevronDown
-            className={clsx(
-              styles.collapsibleIcon,
-              profileSectionExpanded && styles.expanded
-            )}
-          />
-        </button>
+        )}
 
-        {profileSectionExpanded && (
-          <div className={styles.collapsibleContent}>
+        {/* Profile Tab */}
+        {activeTab === 'profile' && (
+          <div className={styles.tabPanel}>
             <div className={styles.sections}>
               {/* Therapist Profile */}
               <Card

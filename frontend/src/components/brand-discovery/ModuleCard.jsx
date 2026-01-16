@@ -147,42 +147,45 @@ function ModuleCard({
    * Get preview text based on module data
    */
   const getPreviewText = useCallback(() => {
+    // Ensure data is never null/undefined for safe property access
+    const safeData = data || {};
+
     switch (moduleId) {
       case 'sources':
-        if (data.sources?.length > 0) {
-          return `${data.sources.length} source(s) added`;
+        if (safeData.sources?.length > 0) {
+          return `${safeData.sources.length} source(s) added`;
         }
         return 'No sources yet';
 
       case 'vibe':
-        if (data.warmth !== undefined) {
+        if (safeData.warmth !== undefined) {
           return 'Tone configured';
         }
         return 'Set your tone';
 
       case 'values':
-        if (data.selected?.length > 0) {
-          return `${data.selected.length} values selected`;
+        if (safeData.selected?.length > 0) {
+          return `${safeData.selected.length} values selected`;
         }
         return 'Select your values';
 
       case 'method':
-        const modCount = data.modalities?.length || 0;
-        const specCount = data.specialties?.length || 0;
+        const modCount = safeData.modalities?.length || 0;
+        const specCount = safeData.specialties?.length || 0;
         if (modCount > 0 || specCount > 0) {
           return `${modCount} modalities, ${specCount} specialties`;
         }
         return 'Define your approach';
 
       case 'audience':
-        if (data.primary_archetype) {
-          return data.primary_archetype;
+        if (safeData.primary_archetype) {
+          return safeData.primary_archetype;
         }
         return 'Identify your audience';
 
       case 'channels':
-        if (data.priorities?.length > 0) {
-          return `${data.priorities.length} platforms ranked`;
+        if (safeData.priorities?.length > 0) {
+          return `${safeData.priorities.length} platforms ranked`;
         }
         return 'Rank your platforms';
 

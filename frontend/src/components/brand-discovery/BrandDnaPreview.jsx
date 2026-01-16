@@ -76,12 +76,25 @@ function BrandDnaPreview({
     platform_adaptations,
   } = brandDna;
 
+  /**
+   * Handle keyboard navigation for expand/collapse
+   */
+  const handleHeaderKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      setExpanded(!expanded);
+    }
+  };
+
   return (
     <div className={styles.container}>
       {/* Header */}
-      <button
+      <div
         className={styles.header}
         onClick={() => setExpanded(!expanded)}
+        onKeyDown={handleHeaderKeyDown}
+        role="button"
+        tabIndex={0}
         aria-expanded={expanded}
       >
         <div className={styles.headerLeft}>
@@ -116,7 +129,7 @@ function BrandDnaPreview({
             <ChevronDown className={styles.chevron} />
           )}
         </div>
-      </button>
+      </div>
 
       {/* Content */}
       {expanded && (
@@ -129,7 +142,7 @@ function BrandDnaPreview({
                 <h4 className={styles.sectionTitle}>Brand Promise</h4>
               </div>
               <blockquote className={styles.brandPromise}>
-                {brand_promise}
+                {typeof brand_promise === 'string' ? brand_promise : brand_promise.filled || ''}
               </blockquote>
             </section>
           )}
@@ -230,9 +243,9 @@ function BrandDnaPreview({
                 <h4 className={styles.sectionTitle}>What to Avoid</h4>
               </div>
               <ul className={styles.antiPatterns}>
-                {anti_patterns.map((pattern, index) => (
+                {anti_patterns.map((item, index) => (
                   <li key={index} className={styles.antiPattern}>
-                    {pattern}
+                    {typeof item === 'string' ? item : item.pattern || item.why || ''}
                   </li>
                 ))}
               </ul>

@@ -345,15 +345,16 @@ router.get('/reference-data', async (req, res) => {
   try {
     logger.debug('Fetching reference data', logContext);
 
+    // Map to camelCase property names expected by frontend
     res.json({
-      values: VALUES_DECK,
-      shuffled_values: getShuffledDeck(),
-      brand_archetypes: BRAND_ARCHETYPES,
-      audience_archetypes: AUDIENCE_ARCHETYPES,
+      valuesDeck: VALUES_DECK,
+      shuffledValues: getShuffledDeck(),
+      brandArchetypes: BRAND_ARCHETYPES,
+      audienceArchetypes: AUDIENCE_ARCHETYPES,
       modalities: MODALITIES,
       specialties: SPECIALTIES,
       platforms: PLATFORMS,
-      default_platform_order: DEFAULT_PLATFORM_ORDER,
+      defaultPlatformOrder: DEFAULT_PLATFORM_ORDER,
     });
   } catch (error) {
     logger.error('Failed to fetch reference data', { ...logContext, error: error.message });

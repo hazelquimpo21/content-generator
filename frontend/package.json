@@ -4,7 +4,7 @@
   "description": "Frontend for Podcast-to-Content Pipeline - Beautiful UI for managing podcast content generation",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "NODE_OPTIONS='--max-http-header-size=32768' vite",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0"

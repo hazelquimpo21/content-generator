@@ -617,6 +617,67 @@ const brandDiscovery = {
 };
 
 /**
+ * Podcast RSS Feed API - for importing and managing podcast feeds
+ */
+const podcasts = {
+  /**
+   * Check API availability and configuration
+   */
+  status: () => get('/podcasts/status'),
+
+  /**
+   * Search for podcasts by name using PodcastIndex API
+   * @param {string} query - Search query
+   * @param {number} [limit=10] - Maximum results
+   */
+  search: (query, limit = 10) => post('/podcasts/search', { query, limit }),
+
+  /**
+   * Look up podcast metadata by RSS feed URL
+   * @param {string} url - RSS feed URL
+   */
+  lookup: (url) => post('/podcasts/lookup', { url }),
+
+  /**
+   * List connected podcast feeds
+   */
+  listFeeds: () => get('/podcasts/feeds'),
+
+  /**
+   * Connect a new podcast feed
+   * @param {Object} data - Feed data (feedUrl, podcastIndexId)
+   */
+  connectFeed: (data) => post('/podcasts/feeds', data),
+
+  /**
+   * Get feed with episodes
+   * @param {string} feedId - Feed UUID
+   * @param {Object} params - Query params (status, limit, offset)
+   */
+  getFeed: (feedId, params = {}) => get(`/podcasts/feeds/${feedId}`, params),
+
+  /**
+   * Sync feed (fetch new episodes)
+   * @param {string} feedId - Feed UUID
+   */
+  syncFeed: (feedId) => post(`/podcasts/feeds/${feedId}/sync`),
+
+  /**
+   * Disconnect a podcast feed
+   * @param {string} feedId - Feed UUID
+   */
+  disconnectFeed: (feedId) => del(`/podcasts/feeds/${feedId}`),
+
+  /**
+   * Transcribe a feed episode
+   * @param {string} episodeId - Feed episode UUID
+   * @param {Object} options - Options (title, startProcessing)
+   */
+  transcribeEpisode: (episodeId, options = {}) =>
+    post(`/podcasts/episodes/${episodeId}/transcribe`, options),
+};
+
+/**
  * Content Calendar API
  */
 const calendar = {
@@ -676,6 +737,7 @@ const api = {
   topics,
   pillars,
   brandDiscovery,
+  podcasts,
   // Raw helpers for custom endpoints
   get,
   post,

@@ -10,10 +10,11 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Save, RefreshCw, User, Mic, BookOpen, Tag, Layers, Sparkles } from 'lucide-react';
+import { Save, RefreshCw, User, Mic, BookOpen, Tag, Layers, Sparkles, Rss, Plus } from 'lucide-react';
 import clsx from 'clsx';
 import { Button, Card, Input, Spinner, TagManager, useToast } from '@components/shared';
 import { BrandDiscoveryStudio } from '@components/brand-discovery';
+import { ConnectPodcastModal, ConnectedFeedCard, FeedEpisodesList } from '@components/podcast';
 import api from '@utils/api-client';
 import styles from './Settings.module.css';
 
@@ -65,6 +66,12 @@ function Settings() {
   const [topicsLoading, setTopicsLoading] = useState(false);
   const [pillarsLoading, setPillarsLoading] = useState(false);
 
+  // Podcast feeds state
+  const [podcastFeeds, setPodcastFeeds] = useState([]);
+  const [feedsLoading, setFeedsLoading] = useState(false);
+  const [showConnectModal, setShowConnectModal] = useState(false);
+  const [selectedFeed, setSelectedFeed] = useState(null); // For viewing episodes
+
   // Load all settings on mount
   useEffect(() => {
     loadAllSettings();
@@ -78,11 +85,12 @@ function Settings() {
       setLoading(true);
       setError(null);
 
-      // Load evergreen settings, topics, and pillars in parallel
-      const [evergreenData, topicsData, pillarsData] = await Promise.all([
+      // Load evergreen settings, topics, pillars, and podcast feeds in parallel
+      const [evergreenData, topicsData, pillarsData, feedsData] = await Promise.all([
         api.evergreen.get(),
         api.topics.list().catch(() => ({ topics: [] })),
         api.pillars.list().catch(() => ({ pillars: [] })),
+        api.podcasts.listFeeds().catch(() => ({ feeds: [] })),
       ]);
 
       // Populate evergreen form fields
@@ -116,6 +124,9 @@ function Settings() {
       // Set topics and pillars
       setTopics(topicsData.topics || []);
       setPillars(pillarsData.pillars || []);
+
+      // Set podcast feeds
+      setPodcastFeeds(feedsData.feeds || []);
 
       console.log('[Settings] All settings loaded successfully');
     } catch (err) {
@@ -260,6 +271,23 @@ function Settings() {
     }
   }
 
+  // ============================================================================
+  // PODCAST FEED HANDLERS
+  // ============================================================================
+
+  function handleFeedConnect(feed) {
+    setPodcastFeeds((prev) => [feed, ...prev]);
+  }
+
+  function handleFeedSync(result) {
+    // Refresh feeds list to get updated data
+    loadAllSettings();
+  }
+
+  function handleFeedDisconnect(feedId) {
+    setPodcastFeeds((prev) => prev.filter((f) => f.id !== feedId));
+  }
+
   if (loading) {
     return <Spinner centered text="Loading settings..." />;
   }
@@ -398,9 +426,56 @@ function Settings() {
         {/* Profile Tab */}
         {activeTab === 'profile' && (
           <div className={styles.tabPanel}>
-            <div className={styles.sections}>
-              {/* Therapist Profile */}
-              <Card
+            {/* Show episodes list if a feed is selected */}
+            {selectedFeed ? (
+              <FeedEpisodesList
+                feed={selectedFeed}
+                onBack={() => setSelectedFeed(null)}
+                onEpisodeProcessed={() => loadAllSettings()}
+              />
+            ) : (
+              <div className={styles.sections}>
+                {/* Connected Podcast Feeds */}
+                <Card
+                  title="Connected Podcast Feeds"
+                  subtitle="Import episode history and transcribe directly from your RSS feed"
+                  headerAction={<Rss className={styles.sectionIcon} />}
+                >
+                  <div className={styles.form}>
+                    {podcastFeeds.length > 0 ? (
+                      <div className={styles.feedsList}>
+                        {podcastFeeds.map((feed) => (
+                          <ConnectedFeedCard
+                            key={feed.id}
+                            feed={feed}
+                            onSync={handleFeedSync}
+                            onDisconnect={handleFeedDisconnect}
+                            onViewEpisodes={(f) => setSelectedFeed(f)}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className={styles.emptyFeeds}>
+                        <Rss className={styles.emptyIcon} />
+                        <p>No podcast feeds connected yet.</p>
+                        <p className={styles.emptyHint}>
+                          Connect your podcast's RSS feed to import episode history and easily transcribe past episodes.
+                        </p>
+                      </div>
+                    )}
+                    <Button
+                      variant={podcastFeeds.length > 0 ? 'ghost' : 'primary'}
+                      leftIcon={Plus}
+                      onClick={() => setShowConnectModal(true)}
+                      className={styles.connectButton}
+                    >
+                      {podcastFeeds.length > 0 ? 'Connect Another Podcast' : 'Connect Your Podcast'}
+                    </Button>
+                  </div>
+                </Card>
+
+                {/* Therapist Profile */}
+                <Card
                 title="Therapist Profile"
                 subtitle="Your professional information for content personalization"
                 headerAction={<User className={styles.sectionIcon} />}
@@ -522,10 +597,18 @@ function Settings() {
                   />
                 </div>
               </Card>
-            </div>
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* Connect Podcast Modal */}
+      <ConnectPodcastModal
+        isOpen={showConnectModal}
+        onClose={() => setShowConnectModal(false)}
+        onConnect={handleFeedConnect}
+      />
     </div>
   );
 }

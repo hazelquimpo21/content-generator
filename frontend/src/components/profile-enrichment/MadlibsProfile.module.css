@@ -75,6 +75,7 @@
 
 .madlibsText > span {
   white-space: nowrap;
+  padding: var(--spacing-1) 0;
 }
 
 /* ============================================================================
@@ -83,6 +84,7 @@
 .inlineInput {
   display: inline-block;
   min-width: 150px;
+  margin: var(--spacing-1) var(--spacing-2);
   padding: var(--spacing-3) var(--spacing-4);
   border: 1.5px solid var(--color-border);
   border-bottom: 2.5px solid var(--color-primary);
@@ -130,18 +132,19 @@
   flex-direction: column;
   position: relative;
   vertical-align: baseline;
+  margin: var(--spacing-1) var(--spacing-2);
 }
 
 .selectorTrigger {
   display: inline-flex;
   align-items: center;
-  gap: var(--spacing-2);
-  min-width: 180px;
-  padding: var(--spacing-3) var(--spacing-4);
-  border: 1.5px dashed var(--color-primary);
-  border-bottom-width: 2.5px;
+  gap: var(--spacing-3);
+  min-width: 200px;
+  padding: var(--spacing-3) var(--spacing-5);
+  border: 2px dashed var(--color-primary);
+  border-bottom-width: 3px;
   background: linear-gradient(to bottom, var(--color-surface), white);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   cursor: pointer;
   font-family: inherit;
   font-size: inherit;

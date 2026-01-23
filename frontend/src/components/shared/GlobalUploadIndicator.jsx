@@ -4,13 +4,19 @@
  * ============================================================================
  * Floating indicator that shows upload progress on all pages.
  * Allows users to navigate freely while uploads continue in background.
+ *
+ * Shows:
+ * - Progress indicator during upload/transcription (bottom-left)
+ * - Toast notification on completion/error (via toast system)
  * ============================================================================
  */
 
-import { useEffect, useState } from 'react';
-import { Upload, Loader2, Check, AlertCircle, X, Maximize2, Clock, Zap } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Upload, Loader2, X, Maximize2, Clock, Zap } from 'lucide-react';
 import clsx from 'clsx';
 import { useUpload, UPLOAD_STATE } from '../../contexts/UploadContext';
+import { useToast } from './Toast';
 import styles from './GlobalUploadIndicator.module.css';
 
 // Tips shown during transcription
@@ -53,12 +59,15 @@ function formatSpeed(bytesPerSecond) {
  * Global Upload Indicator component
  */
 function GlobalUploadIndicator() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { showToast } = useToast();
+
   const {
     state,
     file,
     error,
     uploadProgress,
-    bytesUploaded,
     uploadSpeed,
     timeRemaining,
     isMinimized,
@@ -68,6 +77,7 @@ function GlobalUploadIndicator() {
   } = useUpload();
 
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
+  const prevStateRef = useRef(state);
 
   // Rotate tips during transcription
   useEffect(() => {
@@ -80,50 +90,66 @@ function GlobalUploadIndicator() {
     return () => clearInterval(interval);
   }, [state]);
 
-  // Don't show when idle or when not minimized (component handles its own UI)
-  if (state === UPLOAD_STATE.IDLE) return null;
-  if (!isMinimized && state !== UPLOAD_STATE.COMPLETE && state !== UPLOAD_STATE.ERROR) return null;
+  // Show toast on state changes (completion/error)
+  useEffect(() => {
+    const prevState = prevStateRef.current;
+    prevStateRef.current = state;
 
-  // Show completion toast
-  if (state === UPLOAD_STATE.COMPLETE) {
-    return (
-      <div className={clsx(styles.indicator, styles.complete)}>
-        <div className={styles.content}>
-          <Check size={18} className={styles.successIcon} />
-          <span className={styles.text}>Transcription complete!</span>
-        </div>
-        <button
-          className={styles.closeButton}
-          onClick={reset}
-          title="Dismiss"
-        >
-          <X size={16} />
-        </button>
-      </div>
-    );
-  }
+    // Only react to state transitions
+    if (prevState === state) return;
 
-  // Show error toast
-  if (state === UPLOAD_STATE.ERROR) {
-    return (
-      <div className={clsx(styles.indicator, styles.error)}>
-        <div className={styles.content}>
-          <AlertCircle size={18} className={styles.errorIcon} />
-          <span className={styles.text}>{error || 'Upload failed'}</span>
-        </div>
-        <button
-          className={styles.closeButton}
-          onClick={reset}
-          title="Dismiss"
-        >
-          <X size={16} />
-        </button>
-      </div>
-    );
-  }
+    // On completion - show toast with action to go to new episode page
+    if (state === UPLOAD_STATE.COMPLETE && prevState === UPLOAD_STATE.TRANSCRIBING) {
+      const isOnNewEpisodePage = location.pathname === '/episodes/new';
+
+      showToast({
+        message: 'Transcription complete!',
+        description: isOnNewEpisodePage
+          ? 'Your transcript is ready. You can now generate content.'
+          : 'Your transcript is ready. Return to continue.',
+        variant: 'success',
+        duration: 8000,
+        action: isOnNewEpisodePage ? undefined : () => navigate('/episodes/new'),
+        actionLabel: isOnNewEpisodePage ? undefined : 'Go to Episode',
+      });
+
+      // Reset the upload state after showing toast (unless on new episode page)
+      if (!isOnNewEpisodePage) {
+        // Keep state for a bit so user can navigate
+        setTimeout(() => {
+          // Don't reset if user already went to the page
+          if (location.pathname !== '/episodes/new') {
+            reset();
+          }
+        }, 10000);
+      }
+    }
+
+    // On error - show error toast
+    if (state === UPLOAD_STATE.ERROR && prevState !== UPLOAD_STATE.IDLE) {
+      showToast({
+        message: 'Upload failed',
+        description: error || 'Something went wrong. Please try again.',
+        variant: 'error',
+        duration: 8000,
+        action: () => navigate('/episodes/new'),
+        actionLabel: 'Try Again',
+      });
+
+      // Reset after a delay
+      setTimeout(() => reset(), 5000);
+    }
+  }, [state, error, location.pathname, navigate, showToast, reset]);
+
+  // Only show indicator during active upload/transcription when minimized
+  const showIndicator =
+    isMinimized &&
+    (state === UPLOAD_STATE.UPLOADING || state === UPLOAD_STATE.TRANSCRIBING);
+
+  if (!showIndicator) return null;
 
   // Minimized uploading state
-  if (state === UPLOAD_STATE.UPLOADING && isMinimized) {
+  if (state === UPLOAD_STATE.UPLOADING) {
     return (
       <div
         className={clsx(styles.indicator, styles.uploading)}
@@ -187,7 +213,7 @@ function GlobalUploadIndicator() {
   }
 
   // Minimized transcribing state
-  if (state === UPLOAD_STATE.TRANSCRIBING && isMinimized) {
+  if (state === UPLOAD_STATE.TRANSCRIBING) {
     return (
       <div
         className={clsx(styles.indicator, styles.transcribing)}
@@ -199,7 +225,7 @@ function GlobalUploadIndicator() {
         <div className={styles.content}>
           <Loader2 size={16} className={clsx(styles.icon, styles.spinner)} />
           <div className={styles.progressInfo}>
-            <span className={styles.text}>Transcribing...</span>
+            <span className={styles.text}>Transcribing audio...</span>
             <span className={styles.tip}>{TRANSCRIPTION_TIPS[currentTipIndex]}</span>
           </div>
         </div>

@@ -27,12 +27,19 @@ import {
   Trash2,
   Play,
   X,
+  Mic,
+  ArrowRight,
+  Zap,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Button, Card, Badge, Spinner, ConfirmDialog, useToast } from '@components/shared';
 import { useUpload, UPLOAD_STATE } from '../contexts/UploadContext';
 import api from '@utils/api-client';
 import styles from './Dashboard.module.css';
+
+// Transcription progress estimation constants
+// Based on observed data: ~4 seconds processing per MB of audio file
+const SECONDS_PER_MB = 4;
 
 // ============================================================================
 // CONSTANTS
@@ -82,6 +89,45 @@ function Dashboard() {
   // Polling ref for processing episodes
   const pollIntervalRef = useRef(null);
   const previousStatusRef = useRef({});
+
+  // Track transcription elapsed time for progress estimation
+  const [transcriptionElapsed, setTranscriptionElapsed] = useState(0);
+  const transcriptionStartRef = useRef(null);
+
+  // Track transcription elapsed time
+  useEffect(() => {
+    if (upload.state === UPLOAD_STATE.TRANSCRIBING) {
+      if (!transcriptionStartRef.current) {
+        transcriptionStartRef.current = Date.now();
+      }
+
+      const timer = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - transcriptionStartRef.current) / 1000);
+        setTranscriptionElapsed(elapsed);
+      }, 1000);
+
+      return () => clearInterval(timer);
+    } else if (upload.state !== UPLOAD_STATE.TRANSCRIBING) {
+      transcriptionStartRef.current = null;
+      setTranscriptionElapsed(0);
+    }
+  }, [upload.state]);
+
+  // Calculate transcription progress estimate
+  const fileSizeMB = upload.file ? upload.file.size / (1024 * 1024) : 0;
+  const estimatedTotalSeconds = Math.ceil(fileSizeMB * SECONDS_PER_MB);
+  const transcriptionProgress = estimatedTotalSeconds > 0
+    ? Math.min(95, Math.round((transcriptionElapsed / estimatedTotalSeconds) * 100))
+    : 0;
+
+  // Calculate time remaining estimate
+  const getTimeEstimate = () => {
+    if (upload.state !== UPLOAD_STATE.TRANSCRIBING) return null;
+    const remaining = Math.max(0, estimatedTotalSeconds - transcriptionElapsed);
+    if (remaining > 60) return `~${Math.ceil(remaining / 60)}m remaining`;
+    if (remaining > 0) return `~${remaining}s remaining`;
+    return 'Almost done...';
+  };
 
   // Fetch episodes on mount and filter change
   useEffect(() => {
@@ -253,6 +299,23 @@ function Dashboard() {
         </Button>
       </header>
 
+      {/* Transcription Progress Banner - prominently shows when upload is processing or ready */}
+      {(upload.isProcessing || upload.hasReadyTranscript) && (
+        <TranscriptionBanner
+          upload={upload}
+          onContinue={() => navigate('/episodes/new')}
+          onDismiss={() => {
+            upload.reset();
+            showToast({
+              message: 'Draft dismissed',
+              description: 'Upload a new audio file when you\'re ready.',
+              variant: 'info',
+              duration: 4000,
+            });
+          }}
+        />
+      )}
+
       {/* Filters */}
       <div className={styles.filters}>
         {/* Search */}
@@ -323,6 +386,8 @@ function Dashboard() {
               file={upload.file}
               progress={upload.uploadProgress}
               isComplete={upload.hasReadyTranscript}
+              transcriptionProgress={transcriptionProgress}
+              timeEstimate={getTimeEstimate()}
               onClick={() => {
                 if (upload.hasReadyTranscript) {
                   // Draft ready - navigate to form to complete setup
@@ -500,6 +565,157 @@ function EpisodeCard({ episode, onClick, onDelete }) {
 }
 
 /**
+ * Transcription Banner component
+ * Prominently shows at top of dashboard when upload/transcription is in progress or ready.
+ * More visible than the card and includes progress estimation.
+ *
+ * @param {Object} upload - Upload context object
+ * @param {Function} onContinue - Handler when user clicks to continue to form
+ * @param {Function} onDismiss - Handler to dismiss the draft
+ */
+function TranscriptionBanner({ upload, onContinue, onDismiss }) {
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const startTimeRef = useRef(null);
+
+  // Track elapsed time during transcription
+  useEffect(() => {
+    if (upload.state === UPLOAD_STATE.TRANSCRIBING) {
+      if (!startTimeRef.current) {
+        startTimeRef.current = Date.now();
+      }
+
+      const timer = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+        setElapsedSeconds(elapsed);
+      }, 1000);
+
+      return () => clearInterval(timer);
+    } else if (upload.state === UPLOAD_STATE.COMPLETE) {
+      startTimeRef.current = null;
+      setElapsedSeconds(0);
+    }
+  }, [upload.state]);
+
+  // Estimate total transcription time based on file size
+  const fileSizeMB = upload.file ? upload.file.size / (1024 * 1024) : 0;
+  const estimatedTotalSeconds = Math.ceil(fileSizeMB * SECONDS_PER_MB);
+  // Progress percentage during transcription (capped at 95% until complete)
+  const transcriptionProgress = estimatedTotalSeconds > 0
+    ? Math.min(95, Math.round((elapsedSeconds / estimatedTotalSeconds) * 100))
+    : 0;
+
+  const isUploading = upload.state === UPLOAD_STATE.UPLOADING;
+  const isTranscribing = upload.state === UPLOAD_STATE.TRANSCRIBING;
+  const isComplete = upload.hasReadyTranscript;
+
+  // Calculate remaining time estimate
+  const getRemainingTime = () => {
+    if (isUploading && upload.timeRemaining > 0) {
+      const secs = Math.ceil(upload.timeRemaining);
+      if (secs > 60) return `~${Math.ceil(secs / 60)}m remaining`;
+      return `~${secs}s remaining`;
+    }
+    if (isTranscribing && estimatedTotalSeconds > 0) {
+      const remaining = Math.max(0, estimatedTotalSeconds - elapsedSeconds);
+      if (remaining > 60) return `~${Math.ceil(remaining / 60)}m remaining`;
+      if (remaining > 0) return `~${remaining}s remaining`;
+      return 'Almost done...';
+    }
+    return null;
+  };
+
+  const handleDismiss = (e) => {
+    e.stopPropagation();
+    onDismiss?.();
+  };
+
+  if (isComplete) {
+    return (
+      <div className={styles.transcriptionBanner} data-status="ready">
+        <div className={styles.bannerContent}>
+          <div className={styles.bannerIcon}>
+            <CheckCircle2 size={24} />
+          </div>
+          <div className={styles.bannerInfo}>
+            <h3 className={styles.bannerTitle}>Transcript Ready</h3>
+            <p className={styles.bannerDescription}>
+              {upload.file?.name || 'Audio file'} has been transcribed. Fill in the episode details to start generating content.
+            </p>
+          </div>
+          <div className={styles.bannerActions}>
+            <Button
+              variant="primary"
+              size="sm"
+              rightIcon={ArrowRight}
+              onClick={onContinue}
+            >
+              Continue Setup
+            </Button>
+            <button
+              className={styles.bannerDismiss}
+              onClick={handleDismiss}
+              title="Dismiss draft"
+              aria-label="Dismiss draft"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Progress bar value
+  const progressValue = isUploading ? upload.uploadProgress : transcriptionProgress;
+  const remainingTime = getRemainingTime();
+
+  return (
+    <div className={styles.transcriptionBanner} data-status="processing">
+      <div className={styles.bannerContent}>
+        <div className={styles.bannerIcon}>
+          {isUploading ? <Mic size={24} /> : <Loader2 size={24} className={styles.spinning} />}
+        </div>
+        <div className={styles.bannerInfo}>
+          <h3 className={styles.bannerTitle}>
+            {isUploading ? 'Uploading Audio' : 'Transcribing Audio'}
+          </h3>
+          <p className={styles.bannerDescription}>
+            {upload.file?.name || 'Audio file'}
+            {upload.uploadSpeed > 0 && isUploading && (
+              <span className={styles.bannerSpeed}>
+                <Zap size={12} />
+                {(upload.uploadSpeed / 1024).toFixed(1)} KB/s
+              </span>
+            )}
+          </p>
+          <div className={styles.bannerProgress}>
+            <div className={styles.bannerProgressBar}>
+              <div
+                className={styles.bannerProgressFill}
+                style={{ width: `${progressValue}%` }}
+              />
+            </div>
+            <span className={styles.bannerProgressText}>
+              {progressValue}%
+              {remainingTime && ` · ${remainingTime}`}
+            </span>
+          </div>
+        </div>
+        <div className={styles.bannerActions}>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onContinue}
+          >
+            View Details
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Upload progress card component
  * Shows when an audio file is being uploaded/transcribed or ready.
  * Persists on dashboard until form is submitted.
@@ -508,10 +724,12 @@ function EpisodeCard({ episode, onClick, onDelete }) {
  * @param {File} file - The file being uploaded
  * @param {number} progress - Upload progress percentage
  * @param {boolean} isComplete - Whether transcription is complete
+ * @param {number} transcriptionProgress - Estimated transcription progress
+ * @param {string} timeEstimate - Estimated time remaining
  * @param {Function} onClick - Handler for card click
  * @param {Function} onDismiss - Handler for dismiss button click
  */
-function UploadProgressCard({ state, file, progress, isComplete, onClick, onDismiss }) {
+function UploadProgressCard({ state, file, progress, isComplete, transcriptionProgress, timeEstimate, onClick, onDismiss }) {
   const isUploading = state === UPLOAD_STATE.UPLOADING;
   const isTranscribing = state === UPLOAD_STATE.TRANSCRIBING;
 
@@ -519,6 +737,9 @@ function UploadProgressCard({ state, file, progress, isComplete, onClick, onDism
     e.stopPropagation();
     onDismiss?.();
   };
+
+  // Use transcription progress during transcribing phase
+  const displayProgress = isUploading ? progress : transcriptionProgress;
 
   return (
     <Card
@@ -560,22 +781,20 @@ function UploadProgressCard({ state, file, progress, isComplete, onClick, onDism
           </>
         ) : (
           <>
-            {isUploading && (
-              <div className={styles.progressWrapper}>
-                <div className={styles.progressBar}>
-                  <div
-                    className={styles.progressFill}
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-                <span className={styles.progressText}>{progress}%</span>
+            <div className={styles.progressWrapper}>
+              <div className={styles.progressBar}>
+                <div
+                  className={styles.progressFill}
+                  style={{ width: `${displayProgress}%` }}
+                />
               </div>
-            )}
+              <span className={styles.progressText}>{displayProgress}%</span>
+            </div>
             <p className={styles.timeEstimate}>
               <Loader2 className={styles.miniSpinner} size={12} />
               {isUploading
                 ? 'Uploading audio file...'
-                : 'Transcribing audio... This may take a few minutes'}
+                : timeEstimate || 'Transcribing audio...'}
             </p>
           </>
         )}

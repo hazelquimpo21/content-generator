@@ -26,6 +26,7 @@ import {
   ChevronRight,
   Trash2,
   Play,
+  X,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Button, Card, Badge, Spinner, ConfirmDialog, useToast } from '@components/shared';
@@ -315,7 +316,7 @@ function Dashboard() {
         </Card>
       ) : (
         <div className={styles.grid}>
-          {/* Upload in progress or completed card - shows at top */}
+          {/* Upload in progress or draft card - shows at top */}
           {(upload.isProcessing || upload.hasReadyTranscript) && (
             <UploadProgressCard
               state={upload.state}
@@ -324,13 +325,23 @@ function Dashboard() {
               isComplete={upload.hasReadyTranscript}
               onClick={() => {
                 if (upload.hasReadyTranscript) {
-                  // Transcript ready - navigate to form
+                  // Draft ready - navigate to form to complete setup
                   navigate('/episodes/new');
                 } else {
-                  // Still processing - expand the indicator to show progress
+                  // Still transcribing - expand the indicator to show progress
                   upload.expand();
                   navigate('/episodes/new');
                 }
+              }}
+              onDismiss={() => {
+                // Allow dismissing the draft card (clears the pending transcript)
+                upload.reset();
+                showToast({
+                  message: 'Draft dismissed',
+                  description: 'Upload a new audio file when you\'re ready.',
+                  variant: 'info',
+                  duration: 4000,
+                });
               }}
             />
           )}
@@ -491,41 +502,62 @@ function EpisodeCard({ episode, onClick, onDelete }) {
 /**
  * Upload progress card component
  * Shows when an audio file is being uploaded/transcribed or ready.
+ * Persists on dashboard until form is submitted.
  *
  * @param {string} state - Upload state (uploading/transcribing/complete)
  * @param {File} file - The file being uploaded
  * @param {number} progress - Upload progress percentage
  * @param {boolean} isComplete - Whether transcription is complete
  * @param {Function} onClick - Handler for card click
+ * @param {Function} onDismiss - Handler for dismiss button click
  */
-function UploadProgressCard({ state, file, progress, isComplete, onClick }) {
+function UploadProgressCard({ state, file, progress, isComplete, onClick, onDismiss }) {
   const isUploading = state === UPLOAD_STATE.UPLOADING;
   const isTranscribing = state === UPLOAD_STATE.TRANSCRIBING;
 
+  const handleDismiss = (e) => {
+    e.stopPropagation();
+    onDismiss?.();
+  };
+
   return (
     <Card
-      className={`${styles.episodeCard} ${styles.uploadCard} ${isComplete ? styles.uploadCompleteCard : ''}`}
+      className={`${styles.episodeCard} ${styles.uploadCard} ${isComplete ? styles.draftCard : styles.transcribingCard}`}
       hoverable
       onClick={onClick}
       padding="md"
     >
       <div className={styles.cardHeader}>
-        <Badge status={isComplete ? 'completed' : 'processing'} dot>
-          {isComplete ? 'Ready' : isUploading ? 'Uploading...' : 'Transcribing...'}
+        <Badge status={isComplete ? 'pending' : 'processing'} dot>
+          {isComplete ? 'Draft' : isUploading ? 'Uploading' : 'Transcribing'}
         </Badge>
-        <span className={styles.cardDate}>{isComplete ? 'Tap to continue' : 'In Progress'}</span>
+        {isComplete && (
+          <button
+            className={styles.dismissButton}
+            onClick={handleDismiss}
+            title="Dismiss draft"
+            aria-label="Dismiss draft"
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
 
       <h3 className={styles.cardTitle}>
-        {file?.name || 'Audio Upload'}
+        {file?.name || 'New Audio Episode'}
       </h3>
 
       <div className={styles.processingStatus}>
         {isComplete ? (
-          <p className={styles.timeEstimate}>
-            <CheckCircle2 className={styles.statusIconSuccess} size={14} />
-            Transcript ready! Click to fill in details and generate content.
-          </p>
+          <>
+            <p className={styles.draftMessage}>
+              <CheckCircle2 className={styles.statusIconSuccess} size={14} />
+              Transcript ready
+            </p>
+            <p className={styles.draftHint}>
+              Fill in episode details to generate content
+            </p>
+          </>
         ) : (
           <>
             {isUploading && (
@@ -551,7 +583,7 @@ function UploadProgressCard({ state, file, progress, isComplete, onClick }) {
 
       <div className={styles.cardFooter}>
         <div className={styles.cardAction}>
-          <span>{isComplete ? 'Continue to Form' : 'View Progress'}</span>
+          <span>{isComplete ? 'Continue Setup' : 'View Progress'}</span>
           <ChevronRight size={16} />
         </div>
       </div>

@@ -14,8 +14,8 @@
  * ============================================================================
  */
 
-import { useState, useRef, useCallback } from 'react';
-import { Mic, Upload, Loader2, AlertCircle, Check, X, RefreshCw } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { Mic, Upload, Loader2, AlertCircle, Check, X, RefreshCw, Clock, Zap, Minimize2, Maximize2 } from 'lucide-react';
 import clsx from 'clsx';
 import Button from './Button';
 import ProgressBar from './ProgressBar';
@@ -90,6 +90,38 @@ function formatFileSize(bytes) {
 }
 
 /**
+ * Formats seconds into human-readable time
+ * @param {number} seconds - Time in seconds
+ * @returns {string}
+ */
+function formatTimeRemaining(seconds) {
+  if (seconds < 5) return 'almost done';
+  if (seconds < 60) return `about ${Math.ceil(seconds / 5) * 5} seconds left`;
+  const minutes = Math.ceil(seconds / 60);
+  return `about ${minutes} minute${minutes > 1 ? 's' : ''} left`;
+}
+
+/**
+ * Formats upload speed for display
+ * @param {number} bytesPerSecond - Speed in bytes per second
+ * @returns {string}
+ */
+function formatSpeed(bytesPerSecond) {
+  if (bytesPerSecond < 1024) return `${bytesPerSecond.toFixed(0)} B/s`;
+  if (bytesPerSecond < 1024 * 1024) return `${(bytesPerSecond / 1024).toFixed(1)} KB/s`;
+  return `${(bytesPerSecond / (1024 * 1024)).toFixed(1)} MB/s`;
+}
+
+// Tips shown during transcription wait
+const TRANSCRIPTION_TIPS = [
+  'Transcription uses AI to convert speech to text with high accuracy',
+  'Longer audio files are automatically split into chunks for processing',
+  'The transcript will be used to generate your episode content',
+  'You can edit the transcript after upload if needed',
+  'Transcription cost is based on audio duration (~$0.006/minute)',
+];
+
+/**
  * Gets auth token from Supabase session
  */
 function getAuthToken() {
@@ -125,9 +157,29 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
   const [transcriptionResult, setTranscriptionResult] = useState(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
+  // Upload progress details
+  const [bytesUploaded, setBytesUploaded] = useState(0);
+  const [uploadSpeed, setUploadSpeed] = useState(0);
+  const [timeRemaining, setTimeRemaining] = useState(null);
+  const [currentTipIndex, setCurrentTipIndex] = useState(0);
+  const [isMinimized, setIsMinimized] = useState(false);
+
   // Refs
   const fileInputRef = useRef(null);
   const abortControllerRef = useRef(null);
+  const uploadStartTimeRef = useRef(null);
+  const lastProgressRef = useRef({ time: 0, bytes: 0 });
+
+  // Rotate tips during transcription
+  useEffect(() => {
+    if (state !== STATE.TRANSCRIBING) return;
+
+    const interval = setInterval(() => {
+      setCurrentTipIndex((prev) => (prev + 1) % TRANSCRIPTION_TIPS.length);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [state]);
 
   // ============================================================================
   // HANDLERS
@@ -151,6 +203,11 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
     setError(null);
     setState(STATE.UPLOADING);
     setUploadProgress(0);
+    setBytesUploaded(0);
+    setUploadSpeed(0);
+    setTimeRemaining(null);
+    uploadStartTimeRef.current = Date.now();
+    lastProgressRef.current = { time: Date.now(), bytes: 0 };
 
     try {
       // Create form data
@@ -174,8 +231,28 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
           if (e.lengthComputable) {
             const percent = Math.round((e.loaded / e.total) * 100);
             setUploadProgress(percent);
+            setBytesUploaded(e.loaded);
+
+            // Calculate upload speed and ETA
+            const now = Date.now();
+            const timeDelta = (now - lastProgressRef.current.time) / 1000; // seconds
+            const bytesDelta = e.loaded - lastProgressRef.current.bytes;
+
+            if (timeDelta >= 0.5) { // Update speed every 500ms for smoother display
+              const speed = bytesDelta / timeDelta;
+              setUploadSpeed(speed);
+
+              const bytesRemaining = e.total - e.loaded;
+              if (speed > 0) {
+                setTimeRemaining(bytesRemaining / speed);
+              }
+
+              lastProgressRef.current = { time: now, bytes: e.loaded };
+            }
+
             if (percent === 100) {
               setState(STATE.TRANSCRIBING);
+              setCurrentTipIndex(0);
             }
           }
         });
@@ -300,6 +377,21 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
     setState(STATE.IDLE);
     setUploadProgress(0);
     setTranscriptionResult(null);
+    setIsMinimized(false);
+  }, []);
+
+  /**
+   * Minimizes the upload UI
+   */
+  const handleMinimize = useCallback(() => {
+    setIsMinimized(true);
+  }, []);
+
+  /**
+   * Expands the minimized upload UI
+   */
+  const handleExpand = useCallback(() => {
+    setIsMinimized(false);
   }, []);
 
   /**
@@ -340,8 +432,51 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
         className={styles.hiddenInput}
       />
 
+      {/* Minimized state - Compact floating bar */}
+      {isMinimized && (state === STATE.UPLOADING || state === STATE.TRANSCRIBING) && (
+        <div
+          className={styles.minimizedBar}
+          onClick={handleExpand}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === 'Enter' && handleExpand()}
+        >
+          <div className={styles.minimizedContent}>
+            {state === STATE.UPLOADING ? (
+              <>
+                <Upload size={16} className={styles.minimizedIcon} />
+                <span className={styles.minimizedText}>
+                  Uploading {uploadProgress}%
+                </span>
+                <div className={styles.minimizedProgress}>
+                  <div
+                    className={styles.minimizedProgressFill}
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <Loader2 size={16} className={clsx(styles.minimizedIcon, styles.spinner)} />
+                <span className={styles.minimizedText}>Transcribing...</span>
+              </>
+            )}
+          </div>
+          <button
+            className={styles.expandButton}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleExpand();
+            }}
+            title="Expand"
+          >
+            <Maximize2 size={14} />
+          </button>
+        </div>
+      )}
+
       {/* Idle state - Drop zone */}
-      {state === STATE.IDLE && (
+      {state === STATE.IDLE && !isMinimized && (
         <div
           className={clsx(styles.dropZone, isDragOver && styles.dragOver)}
           onClick={handleClick}
@@ -362,33 +497,63 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
       )}
 
       {/* Uploading state */}
-      {state === STATE.UPLOADING && (
+      {state === STATE.UPLOADING && !isMinimized && (
         <div className={styles.progressContainer}>
           <div className={styles.fileInfo}>
             <Upload className={styles.fileIcon} />
             <div className={styles.fileDetails}>
               <span className={styles.fileName}>{file?.name}</span>
-              <span className={styles.fileSize}>{formatFileSize(file?.size || 0)}</span>
+              <span className={styles.fileSize}>
+                {formatFileSize(bytesUploaded)} / {formatFileSize(file?.size || 0)}
+              </span>
             </div>
-            <button
-              className={styles.cancelButton}
-              onClick={handleCancel}
-              title="Cancel upload"
-            >
-              <X size={18} />
-            </button>
+            <div className={styles.fileActions}>
+              <button
+                className={styles.minimizeButton}
+                onClick={handleMinimize}
+                title="Minimize - upload continues in background"
+              >
+                <Minimize2 size={16} />
+              </button>
+              <button
+                className={styles.cancelButton}
+                onClick={handleCancel}
+                title="Cancel upload"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
           <ProgressBar
             value={uploadProgress}
             max={100}
-            label="Uploading..."
+            label={`Uploading... ${uploadProgress}%`}
             animated
           />
+          <div className={styles.uploadStats}>
+            {uploadSpeed > 0 && (
+              <>
+                <span className={styles.uploadSpeed}>
+                  <Zap size={14} />
+                  {formatSpeed(uploadSpeed)}
+                </span>
+                {timeRemaining !== null && timeRemaining > 0 && (
+                  <span className={styles.uploadEta}>
+                    <Clock size={14} />
+                    {formatTimeRemaining(timeRemaining)}
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+          <span className={styles.backgroundHint}>
+            You can minimize this and continue browsing
+          </span>
         </div>
       )}
 
       {/* Transcribing state */}
-      {state === STATE.TRANSCRIBING && (
+      {state === STATE.TRANSCRIBING && !isMinimized && (
         <div className={styles.progressContainer}>
           <div className={styles.fileInfo}>
             <Mic className={styles.fileIcon} />
@@ -396,6 +561,13 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
               <span className={styles.fileName}>{file?.name}</span>
               <span className={styles.fileSize}>{formatFileSize(file?.size || 0)}</span>
             </div>
+            <button
+              className={styles.minimizeButton}
+              onClick={handleMinimize}
+              title="Minimize - transcription continues in background"
+            >
+              <Minimize2 size={16} />
+            </button>
           </div>
           <div className={styles.transcribingStatus}>
             <Loader2 className={styles.spinner} />
@@ -406,6 +578,13 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
                 : ' This may take 1-2 minutes.'}
             </span>
           </div>
+          <div className={styles.tipContainer}>
+            <span className={styles.tipLabel}>Did you know?</span>
+            <span className={styles.tipText}>{TRANSCRIPTION_TIPS[currentTipIndex]}</span>
+          </div>
+          <span className={styles.backgroundHint}>
+            You can minimize this and continue browsing
+          </span>
         </div>
       )}
 

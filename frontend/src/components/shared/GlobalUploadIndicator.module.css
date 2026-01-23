@@ -9,7 +9,7 @@
 .indicator {
   position: fixed;
   bottom: var(--space-4);
-  right: var(--space-4);
+  left: var(--space-4);
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -214,8 +214,8 @@
 @media (max-width: 480px) {
   .indicator {
     left: var(--space-4);
-    right: var(--space-4);
-    max-width: none;
+    right: auto;
+    max-width: calc(100vw - var(--space-8));
   }
 
   .progressBar {

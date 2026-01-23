@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Button, Card, Badge, Spinner, ConfirmDialog, useToast } from '@components/shared';
+import { useUpload, UPLOAD_STATE } from '../contexts/UploadContext';
 import api from '@utils/api-client';
 import styles from './Dashboard.module.css';
 
@@ -64,6 +65,7 @@ const STATUS_OPTIONS = [
 function Dashboard() {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const upload = useUpload();
 
   // State for episode list
   const [episodes, setEpisodes] = useState([]);
@@ -313,6 +315,15 @@ function Dashboard() {
         </Card>
       ) : (
         <div className={styles.grid}>
+          {/* Upload in progress card */}
+          {upload.isProcessing && (
+            <UploadProgressCard
+              state={upload.state}
+              file={upload.file}
+              progress={upload.uploadProgress}
+              onClick={() => navigate('/episodes/new')}
+            />
+          )}
           {filteredEpisodes.map((episode) => (
             <EpisodeCard
               key={episode.id}
@@ -462,6 +473,67 @@ function EpisodeCard({ episode, onClick, onDelete }) {
             <Trash2 size={16} />
           </button>
         )}
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Upload progress card component
+ * Shows when an audio file is being uploaded/transcribed.
+ *
+ * @param {string} state - Upload state (uploading/transcribing)
+ * @param {File} file - The file being uploaded
+ * @param {number} progress - Upload progress percentage
+ * @param {Function} onClick - Handler for card click
+ */
+function UploadProgressCard({ state, file, progress, onClick }) {
+  const isUploading = state === UPLOAD_STATE.UPLOADING;
+  const isTranscribing = state === UPLOAD_STATE.TRANSCRIBING;
+
+  return (
+    <Card
+      className={`${styles.episodeCard} ${styles.uploadCard}`}
+      hoverable
+      onClick={onClick}
+      padding="md"
+    >
+      <div className={styles.cardHeader}>
+        <Badge status="processing" dot>
+          {isUploading ? 'Uploading...' : 'Transcribing...'}
+        </Badge>
+        <span className={styles.cardDate}>In Progress</span>
+      </div>
+
+      <h3 className={styles.cardTitle}>
+        {file?.name || 'Audio Upload'}
+      </h3>
+
+      <div className={styles.processingStatus}>
+        {isUploading && (
+          <div className={styles.progressWrapper}>
+            <div className={styles.progressBar}>
+              <div
+                className={styles.progressFill}
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <span className={styles.progressText}>{progress}%</span>
+          </div>
+        )}
+        <p className={styles.timeEstimate}>
+          <Loader2 className={styles.miniSpinner} size={12} />
+          {isUploading
+            ? 'Uploading audio file...'
+            : 'Transcribing audio... This may take a few minutes'}
+        </p>
+      </div>
+
+      <div className={styles.cardFooter}>
+        <div className={styles.cardAction}>
+          <span>View Progress</span>
+          <ChevronRight size={16} />
+        </div>
       </div>
     </Card>
   );

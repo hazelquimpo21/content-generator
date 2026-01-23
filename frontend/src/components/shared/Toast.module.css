@@ -4,12 +4,12 @@
  * ============================================================================
  */
 
-/* Container - fixed position at bottom right */
+/* Container - fixed position at bottom right, above sidebar */
 .container {
   position: fixed;
   bottom: var(--space-6);
   right: var(--space-6);
-  z-index: var(--z-toast);
+  z-index: 9999; /* Must be above sidebar (1030) and all other elements */
   display: flex;
   flex-direction: column;
   gap: var(--space-3);

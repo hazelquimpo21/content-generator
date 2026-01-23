@@ -1,0 +1,265 @@
+/**
+ * ============================================================================
+ * AUDIO UPLOAD COMPONENT STYLES
+ * ============================================================================
+ */
+
+.container {
+  width: 100%;
+}
+
+.hiddenInput {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ============================================================================
+ * DROP ZONE
+ * ============================================================================ */
+
+.dropZone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-8);
+  background-color: var(--color-bg-tertiary);
+  border: 2px dashed var(--color-bg-accent);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.dropZone:hover {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-light);
+}
+
+.dropZone:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.dropZone.dragOver {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-light);
+  border-style: solid;
+}
+
+.icon {
+  width: 40px;
+  height: 40px;
+  color: var(--color-text-tertiary);
+}
+
+.dropZone:hover .icon,
+.dropZone.dragOver .icon {
+  color: var(--color-primary);
+}
+
+.title {
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+}
+
+.subtitle {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.formats {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  margin-top: var(--space-2);
+}
+
+/* ============================================================================
+ * PROGRESS CONTAINER
+ * ============================================================================ */
+
+.progressContainer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid var(--color-bg-accent);
+  border-radius: var(--radius-lg);
+}
+
+.fileInfo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.fileIcon {
+  width: 24px;
+  height: 24px;
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.fileDetails {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fileName {
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fileSize {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+}
+
+.cancelButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: none;
+  border: 1px solid var(--color-bg-accent);
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cancelButton:hover {
+  background-color: var(--color-error-light);
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+/* ============================================================================
+ * TRANSCRIBING STATUS
+ * ============================================================================ */
+
+.transcribingStatus {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background-color: var(--color-primary-light);
+  border-radius: var(--radius-md);
+  color: var(--color-primary);
+  font-size: var(--text-sm);
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
+ * COMPLETE STATE
+ * ============================================================================ */
+
+.completeContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-lg);
+}
+
+.successHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.successIcon {
+  width: 24px;
+  height: 24px;
+  color: var(--color-success);
+}
+
+.successTitle {
+  font-weight: var(--font-semibold);
+  color: var(--color-success);
+}
+
+.resultStats {
+  display: flex;
+  gap: var(--space-6);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-bg-primary);
+  border-radius: var(--radius-md);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.statLabel {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.statValue {
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+}
+
+/* ============================================================================
+ * ERROR STATE
+ * ============================================================================ */
+
+.errorContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  background-color: var(--color-error-light);
+  border: 1px solid var(--color-error);
+  border-radius: var(--radius-lg);
+}
+
+.errorIcon {
+  width: 32px;
+  height: 32px;
+  color: var(--color-error);
+}
+
+.errorMessage {
+  text-align: center;
+  color: var(--color-error);
+  font-size: var(--text-sm);
+}
+
+.errorActions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}

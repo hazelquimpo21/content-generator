@@ -210,10 +210,14 @@ router.get('/', requireAuth, async (req, res, next) => {
  * POST /api/episodes
  * Create a new episode from transcript.
  * The episode is automatically owned by the authenticated user.
+ *
+ * Supports audio uploads with source_type and audio_metadata:
+ * - source_type: 'transcript' (default) or 'audio'
+ * - audio_metadata: { original_filename, duration_seconds, file_size_bytes, ... }
  */
 router.post('/', requireAuth, async (req, res, next) => {
   try {
-    const { transcript, episode_context } = req.body;
+    const { transcript, episode_context, source_type, audio_metadata } = req.body;
 
     // Validate transcript
     validateTranscript(transcript);
@@ -221,14 +225,27 @@ router.post('/', requireAuth, async (req, res, next) => {
     logger.info('Creating episode', {
       userId: req.user.id,
       transcriptLength: transcript.length,
+      sourceType: source_type || 'transcript',
+      hasAudioMetadata: !!audio_metadata,
     });
 
-    // Create episode with user ownership
-    const episode = await episodeRepo.create({
+    // Build episode data
+    const episodeData = {
       transcript,
       episode_context: episode_context || {},
-      user_id: req.user.id,  // Associate with authenticated user
-    });
+      user_id: req.user.id,
+    };
+
+    // Add audio source fields if provided
+    if (source_type === 'audio') {
+      episodeData.source_type = 'audio';
+      if (audio_metadata) {
+        episodeData.audio_metadata = audio_metadata;
+      }
+    }
+
+    // Create episode with user ownership
+    const episode = await episodeRepo.create(episodeData);
 
     // Calculate cost estimate
     const estimate = estimateEpisodeCost(transcript);
@@ -236,6 +253,7 @@ router.post('/', requireAuth, async (req, res, next) => {
     logger.info('Episode created', {
       episodeId: episode.id,
       userId: req.user.id,
+      sourceType: source_type || 'transcript',
     });
 
     res.status(201).json({

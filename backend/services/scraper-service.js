@@ -8,9 +8,27 @@
  */
 
 import * as cheerio from 'cheerio';
+import { createClient } from '@supabase/supabase-js';
 import logger from '../lib/logger.js';
-import { getServiceClient } from '../lib/supabase-client.js';
 import { callClaude } from '../lib/api-client-anthropic.js';
+
+// ============================================================================
+// SUPABASE CLIENT
+// ============================================================================
+
+/**
+ * Get Supabase client with service role for backend operations.
+ */
+function getSupabaseClient() {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Missing Supabase configuration');
+  }
+
+  return createClient(supabaseUrl, supabaseServiceKey);
+}
 
 // ============================================================================
 // CONFIGURATION
@@ -102,7 +120,7 @@ const SCRAPER_CONFIG = {
  * @returns {Promise<Object>} Created job record
  */
 async function createScrapeJob(userId, { type, url, text }) {
-  const supabase = getServiceClient();
+  const supabase = getSupabaseClient();
 
   const { data, error } = await supabase
     .from('scrape_jobs')
@@ -133,7 +151,7 @@ async function createScrapeJob(userId, { type, url, text }) {
  * @returns {Promise<Object|null>} Job record or null
  */
 async function getScrapeJob(userId, jobId) {
-  const supabase = getServiceClient();
+  const supabase = getSupabaseClient();
 
   const { data, error } = await supabase
     .from('scrape_jobs')
@@ -158,7 +176,7 @@ async function getScrapeJob(userId, jobId) {
  * @returns {Promise<Array>} Array of job records
  */
 async function getUserScrapeJobs(userId, limit = 10) {
-  const supabase = getServiceClient();
+  const supabase = getSupabaseClient();
 
   const { data, error } = await supabase
     .from('scrape_jobs')
@@ -182,7 +200,7 @@ async function getUserScrapeJobs(userId, limit = 10) {
  * @returns {Promise<Object>} Updated job record
  */
 async function updateScrapeJob(jobId, updates) {
-  const supabase = getServiceClient();
+  const supabase = getSupabaseClient();
 
   const { data, error } = await supabase
     .from('scrape_jobs')
@@ -208,7 +226,7 @@ async function updateScrapeJob(jobId, updates) {
  * @param {string} jobId - Job ID to process
  */
 async function processScrapeJob(jobId) {
-  const supabase = getServiceClient();
+  const supabase = getSupabaseClient();
 
   // Get the job
   const { data: job, error } = await supabase

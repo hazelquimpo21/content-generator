@@ -77,7 +77,18 @@ function Dashboard() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const upload = useUpload();
-  const { hasActiveTranscription, activeTranscription, startTranscription } = useTranscription();
+  const {
+    hasActiveTranscription,
+    activeTranscription,
+    startTranscription,
+    progress: feedTranscriptionProgress,
+    timeRemaining: feedTimeRemaining,
+    hasReadyDraft,
+    draftEpisode,
+    draftFeedEpisode,
+    clearDraft,
+    consumeDraft,
+  } = useTranscription();
 
   // State for episode list
   const [episodes, setEpisodes] = useState([]);
@@ -352,6 +363,48 @@ function Dashboard() {
         />
       )}
 
+      {/* Feed Transcription Banner - shows when transcribing from RSS feed or draft ready */}
+      {(hasActiveTranscription || hasReadyDraft) && (
+        <FeedTranscriptionBanner
+          isTranscribing={hasActiveTranscription}
+          activeTranscription={activeTranscription}
+          progress={feedTranscriptionProgress}
+          timeRemaining={feedTimeRemaining}
+          isComplete={hasReadyDraft}
+          draftEpisode={draftEpisode}
+          draftFeedEpisode={draftFeedEpisode}
+          onStartProcessing={async () => {
+            if (draftEpisode) {
+              try {
+                await api.episodes.process(draftEpisode.id);
+                clearDraft();
+                navigate(`/episodes/${draftEpisode.id}/processing`);
+              } catch (err) {
+                showToast({
+                  message: 'Failed to start processing',
+                  description: err.message,
+                  variant: 'error',
+                });
+              }
+            }
+          }}
+          onViewEpisode={() => {
+            if (draftEpisode) {
+              navigate(`/episodes/${draftEpisode.id}/review`);
+            }
+          }}
+          onDismiss={() => {
+            clearDraft();
+            showToast({
+              message: 'Draft dismissed',
+              description: 'You can transcribe another episode when ready.',
+              variant: 'info',
+              duration: 4000,
+            });
+          }}
+        />
+      )}
+
       {/* From Your Podcast - Quick access to import feed episodes */}
       {!feedsLoading && podcastFeeds.length > 0 && recentFeedEpisodes.length > 0 && (
         <PodcastQuickImport
@@ -362,18 +415,8 @@ function Dashboard() {
           onTranscribe={async (episode) => {
             const result = await startTranscription(episode);
             if (result.success) {
-              showToast({
-                message: 'Transcription complete!',
-                description: `"${episode.title}" is ready.`,
-                variant: 'success',
-                action: async () => {
-                  await api.episodes.process(result.episode.id);
-                  navigate(`/episodes/${result.episode.id}/processing`);
-                },
-                actionLabel: 'Start Processing',
-                duration: 15000,
-              });
-              fetchPodcastFeeds(); // Refresh to update episode counts
+              // Banner will show completion state - just refresh feed list
+              fetchPodcastFeeds();
             } else if (result.activeEpisode) {
               showToast({
                 message: 'Transcription in progress',
@@ -939,16 +982,6 @@ function PodcastQuickImport({
         </Button>
       </div>
 
-      {/* Active transcription banner */}
-      {hasActiveTranscription && (
-        <div className={styles.transcribingBanner}>
-          <Loader2 size={14} className={styles.spinning} />
-          <span>
-            Transcribing: <strong>{activeTranscription?.title}</strong>
-          </span>
-        </div>
-      )}
-
       <div className={styles.podcastEpisodes}>
         {episodes.map((episode) => {
           const isThisTranscribing = transcribingId === episode.id;
@@ -985,6 +1018,102 @@ function PodcastQuickImport({
       </div>
     </div>
   );
+}
+
+/**
+ * FeedTranscriptionBanner component
+ * Shows progress when transcribing from RSS feed, or draft state when complete.
+ */
+function FeedTranscriptionBanner({
+  isTranscribing,
+  activeTranscription,
+  progress,
+  timeRemaining,
+  isComplete,
+  draftEpisode,
+  draftFeedEpisode,
+  onStartProcessing,
+  onViewEpisode,
+  onDismiss,
+}) {
+  const handleDismiss = (e) => {
+    e.stopPropagation();
+    onDismiss?.();
+  };
+
+  // Show "ready" state when transcription is complete
+  if (isComplete && draftEpisode) {
+    return (
+      <div className={styles.transcriptionBanner} data-status="ready">
+        <div className={styles.bannerContent}>
+          <div className={styles.bannerIcon}>
+            <CheckCircle2 size={24} />
+          </div>
+          <div className={styles.bannerInfo}>
+            <h3 className={styles.bannerTitle}>Episode Ready</h3>
+            <p className={styles.bannerDescription}>
+              <strong>{draftFeedEpisode?.title || draftEpisode.title}</strong> has been transcribed.
+              Start processing to generate content.
+            </p>
+          </div>
+          <div className={styles.bannerActions}>
+            <Button
+              variant="primary"
+              size="sm"
+              rightIcon={ArrowRight}
+              onClick={onStartProcessing}
+            >
+              Start Processing
+            </Button>
+            <button
+              className={styles.bannerDismiss}
+              onClick={handleDismiss}
+              title="Dismiss draft"
+              aria-label="Dismiss draft"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show progress state when transcribing
+  if (isTranscribing && activeTranscription) {
+    return (
+      <div className={styles.transcriptionBanner} data-status="processing">
+        <div className={styles.bannerContent}>
+          <div className={styles.bannerIcon}>
+            <Rss size={24} />
+          </div>
+          <div className={styles.bannerInfo}>
+            <h3 className={styles.bannerTitle}>Transcribing from Feed</h3>
+            <p className={styles.bannerDescription}>
+              {activeTranscription.title}
+            </p>
+            <div className={styles.bannerProgress}>
+              <div className={styles.bannerProgressBar}>
+                <div
+                  className={styles.bannerProgressFill}
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <span className={styles.bannerProgressText}>
+                {progress}%
+                {timeRemaining && ` · ${timeRemaining}`}
+              </span>
+            </div>
+          </div>
+          <div className={styles.bannerActions}>
+            <Loader2 size={20} className={styles.spinning} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 }
 
 export default Dashboard;

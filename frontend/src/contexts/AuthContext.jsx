@@ -136,6 +136,9 @@ export function AuthProvider({ children }) {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
         },
+        // Don't send cookies - we use Bearer token authentication
+        // This prevents 431 errors from accumulated localhost cookies
+        credentials: 'omit',
       });
 
       if (!response.ok) {

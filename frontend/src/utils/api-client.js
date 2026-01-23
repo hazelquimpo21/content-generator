@@ -103,6 +103,9 @@ async function fetchAPI(endpoint, options = {}) {
 
   const config = {
     headers,
+    // Don't send cookies - we use Bearer token authentication
+    // This prevents 431 errors from accumulated localhost cookies
+    credentials: 'omit',
     ...options,
   };
 

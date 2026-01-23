@@ -553,7 +553,9 @@ function NewEpisode() {
   // COMPUTED VALUES
   // ============================================================================
 
-  const isSubmitDisabled = loading || analyzing || !episodeContext.title.trim();
+  const isUploadInProgress = upload.isProcessing && inputMode === 'audio';
+  const hasTranscript = transcript.trim().length >= 500;
+  const isSubmitDisabled = loading || analyzing || !episodeContext.title.trim() || !hasTranscript || isUploadInProgress;
   const showAnalyzingStatus = analyzing && transcript.length >= minTranscriptLength;
   const canRegenerate =
     !isRegenerating &&
@@ -931,11 +933,15 @@ function NewEpisode() {
           </Button>
 
           <p className={styles.actionsHint}>
-            {analyzing
-              ? 'Please wait while we analyze your transcript'
-              : !hasTitle
-                ? 'A title is required to continue'
-                : 'This will process your transcript through our AI pipeline'}
+            {isUploadInProgress
+              ? 'Waiting for audio transcription to complete...'
+              : analyzing
+                ? 'Please wait while we analyze your transcript'
+                : !hasTranscript
+                  ? 'A transcript is required to continue'
+                  : !hasTitle
+                    ? 'A title is required to continue'
+                    : 'This will process your transcript through our AI pipeline'}
           </p>
         </div>
       </form>

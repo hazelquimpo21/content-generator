@@ -273,18 +273,71 @@
   100% { left: 100%; }
 }
 
-/* Upload complete card - ready for form */
-.uploadCompleteCard {
-  border: 2px solid var(--color-success);
+/* Transcribing card - audio being processed */
+.transcribingCard {
+  border: 2px solid var(--color-info, #60a5fa);
   background: linear-gradient(
     135deg,
     var(--color-bg-secondary) 0%,
-    var(--color-success-light, rgba(72, 184, 92, 0.15)) 100%
+    rgba(96, 165, 250, 0.1) 100%
   );
 }
 
-.uploadCompleteCard::before {
-  display: none; /* No shimmer animation when complete */
+/* Draft card - transcript ready, waiting for form submission */
+.draftCard {
+  border: 2px solid var(--color-warning, #fbbf24);
+  background: linear-gradient(
+    135deg,
+    var(--color-bg-secondary) 0%,
+    rgba(251, 191, 36, 0.1) 100%
+  );
+}
+
+.draftCard::before {
+  display: none; /* No shimmer animation for draft */
+}
+
+/* Dismiss button on draft card */
+.dismissButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.dismissButton:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+  color: var(--color-text-primary);
+}
+
+.dismissButton:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Draft message styling */
+.draftMessage {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-success);
+  margin: 0;
+}
+
+.draftHint {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
 }
 
 .processingStatus {

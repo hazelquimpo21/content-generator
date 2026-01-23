@@ -106,18 +106,21 @@ function GlobalUploadIndicator() {
     if (state === UPLOAD_STATE.COMPLETE &&
         (prevState === UPLOAD_STATE.TRANSCRIBING || prevState === UPLOAD_STATE.UPLOADING)) {
       const isOnNewEpisodePage = location.pathname === '/episodes/new';
+      const isOnDashboard = location.pathname === '/';
 
-      console.log('[GlobalUploadIndicator] Showing completion toast', { prevState, state, isOnNewEpisodePage });
+      console.log('[GlobalUploadIndicator] Showing completion toast', { prevState, state, isOnNewEpisodePage, isOnDashboard });
 
       showToast({
         message: 'Transcript ready!',
         description: isOnNewEpisodePage
-          ? 'Your transcript is ready. Fill in the details to generate content.'
-          : 'Your audio has been transcribed. Continue to generate content.',
+          ? 'Fill in episode details below to generate content.'
+          : isOnDashboard
+            ? 'Click the draft card to continue setting up your episode.'
+            : 'Continue to the form to set up your episode.',
         variant: 'success',
-        duration: 10000,
-        action: isOnNewEpisodePage ? undefined : () => navigate('/episodes/new'),
-        actionLabel: isOnNewEpisodePage ? undefined : 'Continue',
+        duration: isOnDashboard ? 8000 : 10000,
+        action: isOnNewEpisodePage || isOnDashboard ? undefined : () => navigate('/episodes/new'),
+        actionLabel: isOnNewEpisodePage || isOnDashboard ? undefined : 'Continue',
       });
 
       // Don't auto-reset - let the form consume the transcript

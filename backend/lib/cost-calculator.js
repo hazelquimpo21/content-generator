@@ -54,6 +54,17 @@ const OPENAI_PRICING = {
 };
 
 /**
+ * OpenAI Whisper (Audio Transcription) pricing
+ * Source: https://openai.com/pricing
+ * Pricing is per minute of audio, not per token
+ */
+const WHISPER_PRICING = {
+  'whisper-1': {
+    perMinute: 0.006,  // $0.006 per minute of audio
+  },
+};
+
+/**
  * Anthropic Claude pricing per 1 million tokens
  * Source: https://www.anthropic.com/pricing
  */
@@ -460,6 +471,74 @@ export function formatTokens(tokens) {
 }
 
 // ============================================================================
+// WHISPER (AUDIO TRANSCRIPTION) COST CALCULATION
+// ============================================================================
+
+/**
+ * Calculates the cost of audio transcription using Whisper.
+ *
+ * @param {number} durationSeconds - Audio duration in seconds
+ * @param {string} [model='whisper-1'] - Whisper model (currently only whisper-1)
+ * @returns {Object} Cost breakdown
+ *
+ * @example
+ * const cost = calculateWhisperCost(300); // 5 minute audio
+ * console.log(cost.formattedCost); // "$0.03"
+ */
+export function calculateWhisperCost(durationSeconds, model = 'whisper-1') {
+  const pricing = WHISPER_PRICING[model];
+
+  if (!pricing) {
+    console.warn(`Unknown Whisper model: ${model}`);
+    return {
+      durationSeconds,
+      durationMinutes: durationSeconds / 60,
+      cost: 0,
+      formattedCost: '$0.00',
+    };
+  }
+
+  const durationMinutes = durationSeconds / 60;
+  const cost = durationMinutes * pricing.perMinute;
+
+  return {
+    model,
+    durationSeconds,
+    durationMinutes: Math.round(durationMinutes * 100) / 100,
+    cost: Math.round(cost * 10000) / 10000,
+    formattedCost: `$${cost.toFixed(4)}`,
+    pricePerMinute: pricing.perMinute,
+  };
+}
+
+/**
+ * Estimates Whisper transcription cost from file size.
+ * Uses bitrate assumption to estimate duration.
+ *
+ * @param {number} fileSizeBytes - Audio file size in bytes
+ * @param {Object} [options] - Options
+ * @param {number} [options.bitrate=128] - Assumed bitrate in kbps
+ * @param {string} [options.model='whisper-1'] - Whisper model
+ * @returns {Object} Cost estimate
+ */
+export function estimateWhisperCost(fileSizeBytes, options = {}) {
+  const { bitrate = 128, model = 'whisper-1' } = options;
+
+  // Calculate estimated duration
+  // duration (seconds) = file size (bits) / bitrate (bits per second)
+  const fileSizeBits = fileSizeBytes * 8;
+  const bitrateBps = bitrate * 1000;
+  const estimatedDurationSeconds = fileSizeBits / bitrateBps;
+
+  return {
+    ...calculateWhisperCost(estimatedDurationSeconds, model),
+    estimated: true,
+    bitrate,
+    fileSizeMB: Math.round((fileSizeBytes / (1024 * 1024)) * 100) / 100,
+  };
+}
+
+// ============================================================================
 // EXPORTS
 // ============================================================================
 
@@ -470,8 +549,11 @@ export default {
   estimateEpisodeCost,
   formatCost,
   formatTokens,
+  calculateWhisperCost,
+  estimateWhisperCost,
   OPENAI_PRICING,
   ANTHROPIC_PRICING,
+  WHISPER_PRICING,
   STAGE_MODELS,
   STAGE_8_PLATFORM_MODELS,
   STAGE_8_PLATFORM_ESTIMATES,

@@ -1,0 +1,331 @@
+/**
+ * ============================================================================
+ * VOICE STYLE EDITOR STYLES
+ * ============================================================================
+ * Styles for the "This, Not That" voice style selection interface.
+ */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-height: 75vh;
+  overflow-y: auto;
+}
+
+/* ============================================================================
+ * INFO BANNER
+ * ============================================================================ */
+
+.infoBanner {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: linear-gradient(135deg, var(--color-primary-light), var(--color-surface-hover));
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-light);
+}
+
+.infoIcon {
+  width: 20px;
+  height: 20px;
+  color: var(--color-primary);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.infoTitle {
+  font-family: var(--font-heading);
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-1) 0;
+}
+
+.infoText {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* ============================================================================
+ * SELECTION COUNTER
+ * ============================================================================ */
+
+.selectionCounter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background-color: var(--color-surface-hover);
+  border-radius: var(--radius-md);
+}
+
+.counterIcon {
+  width: 18px;
+  height: 18px;
+  color: var(--color-primary);
+}
+
+.counterText {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-secondary);
+}
+
+.completeTag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-success);
+  background-color: var(--color-success-light);
+  border-radius: var(--radius-full);
+}
+
+.checkIcon {
+  width: 12px;
+  height: 12px;
+}
+
+/* ============================================================================
+ * VOICE SUMMARY
+ * ============================================================================ */
+
+.voiceSummary {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+}
+
+.summaryIcon {
+  width: 18px;
+  height: 18px;
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.summaryContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.summaryLabel {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.summaryTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.summaryTag {
+  display: inline-block;
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-primary);
+  background-color: var(--color-primary-light);
+  border-radius: var(--radius-sm);
+}
+
+/* ============================================================================
+ * CARDS GRID
+ * ============================================================================ */
+
+.cardsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-3);
+  max-height: 420px;
+  overflow-y: auto;
+  padding: var(--space-1);
+}
+
+/* ============================================================================
+ * STATEMENT CARD
+ * ============================================================================ */
+
+.statementCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background-color: var(--color-surface);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.statementCard:hover:not(.disabled) {
+  border-color: var(--color-primary);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.statementCard.selected {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-light);
+}
+
+.statementCard.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Selection badge */
+.selectedBadge {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background-color: var(--color-primary);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-sm);
+}
+
+.badgeIcon {
+  width: 14px;
+  height: 14px;
+  color: white;
+}
+
+/* Card header: "This, not That" */
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding-right: var(--space-8);
+}
+
+.thisLabel {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--color-success);
+}
+
+.notThatSeparator {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-tertiary);
+  text-transform: lowercase;
+}
+
+.notThatLabel {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--color-text-tertiary);
+  text-decoration: line-through;
+  text-decoration-color: var(--color-error);
+  text-decoration-thickness: 2px;
+}
+
+/* Card description */
+.cardDescription {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  margin: 0;
+  flex: 1;
+}
+
+/* Card example */
+.cardExample {
+  font-size: var(--font-size-xs);
+  font-style: italic;
+  color: var(--color-text-tertiary);
+  line-height: 1.5;
+  margin: 0;
+  padding: var(--space-2);
+  background-color: var(--color-surface-hover);
+  border-radius: var(--radius-sm);
+}
+
+.statementCard.selected .cardExample {
+  background-color: var(--color-surface);
+}
+
+/* Category tag */
+.categoryTag {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 2px var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-medium);
+  color: var(--color-text-tertiary);
+  background-color: var(--color-surface-hover);
+  border-radius: var(--radius-full);
+}
+
+.statementCard.selected .categoryTag {
+  background-color: var(--color-surface);
+}
+
+/* ============================================================================
+ * FOOTER
+ * ============================================================================ */
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.footerActions {
+  display: flex;
+  gap: var(--space-3);
+}
+
+/* ============================================================================
+ * RESPONSIVE ADJUSTMENTS
+ * ============================================================================ */
+
+@media (max-width: 768px) {
+  .cardsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .cardHeader {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .footer {
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .footerActions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .footerActions button {
+    flex: 1;
+  }
+}

@@ -22,6 +22,7 @@ import {
   Compass,
   Users,
   Share2,
+  MessageSquare,
   Check,
   Clock,
   ChevronRight,
@@ -33,6 +34,7 @@ import styles from './ModuleCard.module.css';
 // Lazy load module editors for code splitting
 const SourcesEditor = lazy(() => import('./modules/SourcesEditor'));
 const VibeEditor = lazy(() => import('./modules/VibeEditor'));
+const VoiceStyleEditor = lazy(() => import('./modules/VoiceStyleEditor'));
 const ValuesEditor = lazy(() => import('./modules/ValuesEditor'));
 const MethodEditor = lazy(() => import('./modules/MethodEditor'));
 const AudienceEditor = lazy(() => import('./modules/AudienceEditor'));
@@ -42,6 +44,7 @@ const ChannelsEditor = lazy(() => import('./modules/ChannelsEditor'));
 const ICON_MAP = {
   FileText,
   Sliders,
+  MessageSquare,
   Heart,
   Compass,
   Users,
@@ -52,6 +55,7 @@ const ICON_MAP = {
 const EDITOR_MAP = {
   sources: SourcesEditor,
   vibe: VibeEditor,
+  voice: VoiceStyleEditor,
   values: ValuesEditor,
   method: MethodEditor,
   audience: AudienceEditor,
@@ -162,6 +166,12 @@ function ModuleCard({
           return 'Tone configured';
         }
         return 'Set your tone';
+
+      case 'voice':
+        if (safeData.selected_statements?.length > 0) {
+          return `${safeData.selected_statements.length} guidelines selected`;
+        }
+        return 'Define your voice';
 
       case 'values':
         if (safeData.selected?.length > 0) {

@@ -94,7 +94,7 @@ function formatSpeed(bytesPerSecond) {
  * @param {boolean} props.showSpeakerOption - Show speaker diarization toggle (default: true)
  * @param {boolean} props.defaultWithSpeakers - Default value for speaker diarization
  */
-function AudioUpload({ onTranscriptReady, onError, className, showSpeakerOption = true, defaultWithSpeakers = true }) {
+function AudioUpload({ onTranscriptReady, onError, className, showSpeakerOption = false, defaultWithSpeakers = false }) {
   // Global upload state from context
   const {
     state,

@@ -199,17 +199,33 @@ function NewEpisode() {
   }, [regenerateCooldown]);
 
   // ============================================================================
-  // CHECK FOR PENDING TRANSCRIPT ON MOUNT
+  // POPULATE FROM PENDING TRANSCRIPT (without consuming)
   // ============================================================================
 
+  // Track if we've already populated from a pending transcript
+  const hasPopulatedFromUploadRef = useRef(false);
+
   useEffect(() => {
-    // Check if there's a completed transcript waiting to be consumed
-    if (upload.hasReadyTranscript) {
-      const result = upload.consumeTranscript();
-      if (result) {
+    // Check if there's a completed transcript waiting - populate but don't consume yet
+    // Consumption happens on successful form submit
+    if (upload.hasReadyTranscript && !hasPopulatedFromUploadRef.current) {
+      const transcriptData = upload.transcriptionResult;
+      if (transcriptData) {
+        hasPopulatedFromUploadRef.current = true;
         setInputMode('audio');
-        setTranscript(result.transcript);
-        setAudioMetadata(result.metadata);
+        setTranscript(transcriptData.transcript);
+        setAudioMetadata({
+          audioDurationMinutes: transcriptData.audioDurationMinutes,
+          audioDurationSeconds: transcriptData.audioDurationSeconds,
+          estimatedCost: transcriptData.estimatedCost,
+          formattedCost: transcriptData.formattedCost,
+          chunked: transcriptData.chunked,
+          totalChunks: transcriptData.totalChunks,
+          filename: upload.file?.name,
+          fileSize: upload.file?.size,
+          model: transcriptData.model,
+          hasSpeakerLabels: transcriptData.hasSpeakerLabels || false,
+        });
 
         // Reset user edits for new audio
         userEditedFieldsRef.current.clear();
@@ -221,13 +237,13 @@ function NewEpisode() {
 
         showToast({
           message: 'Transcript ready!',
-          description: 'Your audio has been transcribed. Fill in the details and generate content.',
+          description: 'Fill in the details and generate content.',
           variant: 'success',
           duration: 5000,
         });
       }
     }
-  }, []); // Only run on mount
+  }, [upload.hasReadyTranscript, upload.transcriptionResult, upload.file, resetAnalysis, showToast]);
 
   /**
    * Handle audio upload start - navigate to dashboard
@@ -509,6 +525,11 @@ function NewEpisode() {
 
       // Track processing globally
       trackProcessing(episode.id, title);
+
+      // Clear the pending upload state now that form is submitted
+      if (upload.hasReadyTranscript) {
+        upload.reset();
+      }
 
       // Show toast notification with time estimate
       showToast({

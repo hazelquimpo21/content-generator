@@ -44,6 +44,7 @@ import calendarRouter from './routes/calendar.js';
 import topicsRouter from './routes/topics.js';
 import pillarsRouter from './routes/pillars.js';
 import brandDiscoveryRouter from './routes/brand-discovery.js';
+import transcriptionRouter from './routes/transcription.js';
 
 // ============================================================================
 // APP CONFIGURATION
@@ -125,6 +126,7 @@ app.get('/', (req, res) => {
       topics: '/api/topics',
       pillars: '/api/pillars',
       brandDiscovery: '/api/brand-discovery',
+      transcription: '/api/transcription',
     },
     documentation: 'See /docs for API documentation',
   });
@@ -161,6 +163,9 @@ app.use('/api/pillars', pillarsRouter);
 
 // Brand Discovery routes (user-scoped onboarding)
 app.use('/api/brand-discovery', brandDiscoveryRouter);
+
+// Audio transcription routes (Whisper API)
+app.use('/api/transcription', transcriptionRouter);
 
 // ============================================================================
 // ERROR HANDLING
@@ -232,6 +237,7 @@ async function startServer() {
       calendar: `http://localhost:${PORT}/api/calendar`,
       topics: `http://localhost:${PORT}/api/topics`,
       pillars: `http://localhost:${PORT}/api/pillars`,
+      transcription: `http://localhost:${PORT}/api/transcription`,
     });
 
     if (NODE_ENV === 'development') {

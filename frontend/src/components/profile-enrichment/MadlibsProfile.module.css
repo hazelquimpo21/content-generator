@@ -709,6 +709,7 @@
 .wordBankTagSelected:hover:not(:disabled) {
   background: var(--color-text, #1a1a1a);
   border-color: var(--color-text, #1a1a1a);
+  color: white;
 }
 
 .wordBankTagDisabled {

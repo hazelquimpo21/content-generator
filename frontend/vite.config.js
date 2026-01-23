@@ -27,6 +27,15 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:3001',
         changeOrigin: true,
+        // Increase timeout for large file uploads (e.g., audio transcription)
+        timeout: 300000, // 5 minutes
+        proxyTimeout: 300000,
+        // Configure proxy for large uploads
+        configure: (proxy) => {
+          proxy.on('error', (err, req, res) => {
+            console.error('Proxy error:', err.message);
+          });
+        },
       },
     },
   },

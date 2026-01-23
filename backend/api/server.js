@@ -82,7 +82,7 @@ app.use(compression());
 
 // Body parsing
 app.use(express.json({ limit: '10mb' })); // Large limit for transcripts
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Request logging
 app.use(requestLogger);
@@ -217,7 +217,7 @@ async function startServer() {
   }
 
   // Start listening
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     logger.info(`🚀 Server started successfully`, {
       port: PORT,
       environment: NODE_ENV,
@@ -244,6 +244,11 @@ async function startServer() {
       logger.info('💡 Development mode - CORS is permissive');
     }
   });
+
+  // Set longer timeout for large file uploads (5 minutes)
+  server.timeout = 300000;
+  server.headersTimeout = 310000; // Should be larger than timeout
+  server.keepAliveTimeout = 305000;
 }
 
 // ============================================================================

@@ -57,7 +57,17 @@ const WHISPER_MAX_SIZE_BYTES = 25 * 1024 * 1024;
  */
 export async function isFFmpegAvailable() {
   return new Promise((resolve) => {
-    const ffmpeg = spawn('ffmpeg', ['-version']);
+    const ffmpeg = spawn('ffmpeg', ['-version'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+
+    // Consume stdout and stderr to prevent buffer blocking
+    ffmpeg.stdout.on('data', () => {});
+    ffmpeg.stderr.on('data', () => {});
+
+    // Handle stream errors to prevent uncaught exceptions
+    ffmpeg.stdout.on('error', () => {});
+    ffmpeg.stderr.on('error', () => {});
 
     ffmpeg.on('error', () => {
       logger.warn('FFmpeg not found on system - large file support disabled');
@@ -87,7 +97,9 @@ async function getAudioDuration(filePath) {
       '-show_entries', 'format=duration',
       '-of', 'default=noprint_wrappers=1:nokey=1',
       filePath,
-    ]);
+    ], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
 
     let output = '';
     let errorOutput = '';
@@ -99,6 +111,10 @@ async function getAudioDuration(filePath) {
     ffprobe.stderr.on('data', (data) => {
       errorOutput += data.toString();
     });
+
+    // Handle stream errors to prevent uncaught exceptions
+    ffprobe.stdout.on('error', () => {});
+    ffprobe.stderr.on('error', () => {});
 
     ffprobe.on('error', (err) => {
       reject(new Error(`FFprobe error: ${err.message}`));
@@ -152,13 +168,22 @@ async function splitWithFFmpeg(inputPath, outputDir, extension, chunkDuration) {
       chunkDuration,
     });
 
-    const ffmpeg = spawn('ffmpeg', args);
+    const ffmpeg = spawn('ffmpeg', args, {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
 
     let errorOutput = '';
+
+    // Consume stdout to prevent buffer blocking (FFmpeg outputs progress to stderr, not stdout)
+    ffmpeg.stdout.on('data', () => {});
 
     ffmpeg.stderr.on('data', (data) => {
       errorOutput += data.toString();
     });
+
+    // Handle stream errors to prevent uncaught exceptions
+    ffmpeg.stdout.on('error', () => {});
+    ffmpeg.stderr.on('error', () => {});
 
     ffmpeg.on('error', (err) => {
       reject(new Error(`FFmpeg error: ${err.message}`));

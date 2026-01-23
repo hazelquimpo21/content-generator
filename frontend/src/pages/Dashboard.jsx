@@ -163,11 +163,10 @@ function Dashboard() {
       const feeds = feedsResponse.feeds || [];
       setPodcastFeeds(feeds);
 
-      // Get recent unprocessed episodes from first feed (if any)
+      // Get recent episodes from first feed (all statuses)
       if (feeds.length > 0) {
         const feed = feeds[0];
         const episodesResponse = await api.podcasts.getFeed(feed.id, {
-          status: 'available',
           limit: 5,
           offset: 0,
         });
@@ -941,8 +940,8 @@ function UploadProgressCard({ state, file, progress, isComplete, transcriptionPr
 
 /**
  * PodcastQuickImport component
- * Shows recent unprocessed episodes from connected podcast feed.
- * Allows quick transcription without navigating to NewEpisode.
+ * Shows recent episodes from connected podcast feed.
+ * Allows quick transcription or viewing processed episodes.
  */
 function PodcastQuickImport({
   feed,
@@ -952,6 +951,7 @@ function PodcastQuickImport({
   onTranscribe,
   onViewAll,
 }) {
+  const navigate = useNavigate();
   const [transcribingId, setTranscribingId] = useState(null);
 
   async function handleTranscribe(episode) {
@@ -967,6 +967,17 @@ function PodcastQuickImport({
     if (mins < 60) return `${mins}m`;
     const hours = Math.floor(mins / 60);
     return `${hours}h ${mins % 60}m`;
+  }
+
+  // Get status icon based on episode status
+  function getStatusIcon(episode, isThisTranscribing) {
+    if (isThisTranscribing || episode.status === 'transcribing') {
+      return <Loader2 size={14} className={styles.spinning} />;
+    }
+    if (episode.status === 'processed') {
+      return <CheckCircle2 size={14} className={styles.statusProcessed} />;
+    }
+    return <Circle size={14} />;
   }
 
   return (
@@ -986,32 +997,42 @@ function PodcastQuickImport({
         {episodes.map((episode) => {
           const isThisTranscribing = transcribingId === episode.id;
           const isDisabled = hasActiveTranscription && !isThisTranscribing;
+          const isProcessed = episode.status === 'processed';
+          const episodeId = episode.episode_id || episode.linked_episode?.id;
 
           return (
             <div key={episode.id} className={styles.podcastEpisodeRow}>
               <div className={styles.podcastEpisodeStatus}>
-                {isThisTranscribing ? (
-                  <Loader2 size={14} className={styles.spinning} />
-                ) : (
-                  <Circle size={14} />
-                )}
+                {getStatusIcon(episode, isThisTranscribing)}
               </div>
               <div className={styles.podcastEpisodeInfo}>
                 <span className={styles.podcastEpisodeTitle}>{episode.title}</span>
                 <span className={styles.podcastEpisodeMeta}>
                   {episode.published_at && new Date(episode.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                   {episode.duration_seconds && ` · ${formatDuration(episode.duration_seconds)}`}
+                  {isProcessed && ' · Processed'}
                 </span>
               </div>
-              <Button
-                variant={isDisabled ? 'ghost' : 'primary'}
-                size="sm"
-                onClick={() => handleTranscribe(episode)}
-                disabled={isDisabled || isThisTranscribing}
-                leftIcon={isThisTranscribing ? Loader2 : Play}
-              >
-                {isThisTranscribing ? 'Transcribing...' : 'Transcribe'}
-              </Button>
+              {isProcessed && episodeId ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => navigate(`/episodes/${episodeId}/review`)}
+                  rightIcon={ChevronRight}
+                >
+                  View
+                </Button>
+              ) : (
+                <Button
+                  variant={isDisabled ? 'ghost' : 'primary'}
+                  size="sm"
+                  onClick={() => handleTranscribe(episode)}
+                  disabled={isDisabled || isThisTranscribing}
+                  leftIcon={isThisTranscribing ? Loader2 : Play}
+                >
+                  {isThisTranscribing ? 'Transcribing...' : 'Transcribe'}
+                </Button>
+              )}
             </div>
           );
         })}

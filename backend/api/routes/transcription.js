@@ -35,6 +35,10 @@ import {
   isSpeakerTranscriptionAvailable,
   applySpeakerLabels,
 } from '../../lib/speaker-transcription.js';
+import {
+  processTranscriptWithTimestamps,
+  applyCustomSpeakerLabels,
+} from '../../lib/transcript-processor.js';
 import { ValidationError } from '../../lib/errors.js';
 import { requireAuth } from '../middleware/auth-middleware.js';
 import logger from '../../lib/logger.js';
@@ -566,6 +570,423 @@ router.post('/with-episode', handleUpload('audio'), requireAuth, async (req, res
 
     next(error);
   }
+});
+
+// ============================================================================
+// ENHANCED TRANSCRIPTION ROUTES (WITHOUT ASSEMBLYAI)
+// ============================================================================
+
+/**
+ * POST /api/transcription/enhanced
+ * Transcribes audio with timestamps and optional speaker estimation.
+ * Uses OpenAI Whisper with verbose_json format and local processing.
+ * Does NOT require AssemblyAI - uses GPT-4o-mini for speaker estimation.
+ *
+ * Request:
+ * - Content-Type: multipart/form-data
+ * - Field 'audio': The audio file to transcribe
+ * - Optional fields:
+ *   - language: ISO-639-1 language code
+ *   - estimate_speakers: 'true' to enable speaker estimation (default: false)
+ *   - use_llm: 'true' to use LLM for smarter speaker detection (default: true)
+ *   - expected_speakers: Number of expected speakers (1-10, default: 2)
+ *
+ * Response:
+ * {
+ *   success: true,
+ *   transcript: "Plain text...",
+ *   formattedTranscript: "[00:00:12] Speaker A: Hello...",
+ *   utterances: [...],
+ *   speakers: [{ id: 'A', label: 'Speaker A' }, ...],
+ *   audioDurationMinutes: 45.2
+ * }
+ */
+router.post('/enhanced', handleUpload('audio'), requireAuth, async (req, res, next) => {
+  try {
+    // Validate that a file was uploaded
+    if (!req.file) {
+      logger.warn('Enhanced transcription request missing audio file', {
+        userId: req.user.id,
+      });
+      throw new ValidationError(
+        'audio',
+        'No audio file provided. Please upload an audio file in the "audio" field.'
+      );
+    }
+
+    // Extract options from body
+    const {
+      language,
+      estimate_speakers,
+      use_llm = 'true',
+      expected_speakers,
+    } = req.body;
+
+    // Parse boolean options
+    const estimateSpeakers = estimate_speakers === 'true' || estimate_speakers === true;
+    const useLLM = use_llm === 'true' || use_llm === true;
+
+    // Parse expected speakers
+    let expectedSpeakers = 2;
+    if (expected_speakers) {
+      expectedSpeakers = parseInt(expected_speakers, 10);
+      if (isNaN(expectedSpeakers) || expectedSpeakers < 1 || expectedSpeakers > 10) {
+        expectedSpeakers = 2;
+      }
+    }
+
+    logger.info('Enhanced transcription requested', {
+      userId: req.user.id,
+      filename: req.file.originalname,
+      fileSizeMB: (req.file.size / (1024 * 1024)).toFixed(2),
+      estimateSpeakers,
+      useLLM,
+      expectedSpeakers,
+      language: language || 'auto-detect',
+    });
+
+    // Step 1: Transcribe with verbose_json to get segments
+    const transcriptionResult = await transcribeAudioWithChunking(req.file.buffer, {
+      filename: req.file.originalname,
+      mimeType: req.file.mimetype,
+      language,
+      responseFormat: 'verbose_json',
+    });
+
+    // Step 2: Process transcript with timestamps and optional speaker estimation
+    const processedResult = await processTranscriptWithTimestamps(
+      transcriptionResult.segments || [],
+      {
+        estimateSpeakers,
+        useLLM,
+        expectedSpeakers,
+      }
+    );
+
+    // Calculate total cost (transcription + speaker estimation)
+    const totalCost = (transcriptionResult.estimatedCost || 0) + (processedResult.speakerEstimationCost || 0);
+
+    logger.info('Enhanced transcription completed', {
+      userId: req.user.id,
+      filename: req.file.originalname,
+      audioDurationMinutes: processedResult.audioDurationMinutes,
+      utteranceCount: processedResult.utterances.length,
+      speakerCount: processedResult.speakers.length,
+      transcriptionCost: transcriptionResult.estimatedCost,
+      speakerEstimationCost: processedResult.speakerEstimationCost,
+      totalCost,
+    });
+
+    res.json({
+      success: true,
+
+      // Plain transcript (pipeline-compatible)
+      transcript: processedResult.transcript,
+
+      // Formatted with timestamps and speakers
+      formattedTranscript: processedResult.formattedTranscript,
+
+      // Detailed utterances for preview/UI
+      utterances: processedResult.utterances,
+
+      // Speaker metadata
+      speakers: processedResult.speakers,
+      hasSpeakerLabels: processedResult.hasSpeakerLabels,
+
+      // Audio metadata
+      audioDurationSeconds: processedResult.audioDurationSeconds || transcriptionResult.audioDurationSeconds,
+      audioDurationMinutes: processedResult.audioDurationMinutes || transcriptionResult.audioDurationMinutes,
+      detectedLanguage: transcriptionResult.detectedLanguage,
+
+      // Cost breakdown
+      transcriptionCost: transcriptionResult.estimatedCost,
+      speakerEstimationCost: processedResult.speakerEstimationCost,
+      totalCost,
+      formattedCost: `$${totalCost.toFixed(4)}`,
+
+      // Processing info
+      processingDurationMs: transcriptionResult.processingDurationMs,
+      provider: processedResult.provider,
+      usedLLM: processedResult.usedLLM,
+
+      // Request info
+      model: transcriptionResult.model,
+      filename: transcriptionResult.filename,
+      chunked: transcriptionResult.chunked || false,
+      totalChunks: transcriptionResult.totalChunks || 1,
+    });
+  } catch (error) {
+    logger.error('Enhanced transcription failed', {
+      userId: req.user?.id,
+      filename: req.file?.originalname,
+      error: error.message,
+      errorType: error.constructor.name,
+    });
+    next(error);
+  }
+});
+
+/**
+ * POST /api/transcription/enhanced/with-episode
+ * Enhanced transcription (timestamps + speakers) with episode creation.
+ * Uses Whisper + GPT-4o-mini instead of AssemblyAI.
+ *
+ * Request:
+ * - Content-Type: multipart/form-data
+ * - Field 'audio': The audio file to transcribe
+ * - Optional fields:
+ *   - title: Episode title
+ *   - language: ISO-639-1 language code
+ *   - estimate_speakers: 'true' to enable speaker estimation
+ *   - use_llm: 'true' to use LLM for speaker detection
+ *   - expected_speakers: Number of expected speakers
+ *   - episode_context: JSON string with additional context
+ */
+router.post('/enhanced/with-episode', handleUpload('audio'), requireAuth, async (req, res, next) => {
+  try {
+    if (!req.file) {
+      throw new ValidationError(
+        'audio',
+        'No audio file provided. Please upload an audio file in the "audio" field.'
+      );
+    }
+
+    const {
+      title,
+      language,
+      estimate_speakers,
+      use_llm = 'true',
+      expected_speakers,
+      episode_context,
+    } = req.body;
+
+    // Parse options
+    const estimateSpeakers = estimate_speakers === 'true' || estimate_speakers === true;
+    const useLLM = use_llm === 'true' || use_llm === true;
+    let expectedSpeakers = 2;
+    if (expected_speakers) {
+      expectedSpeakers = parseInt(expected_speakers, 10);
+      if (isNaN(expectedSpeakers) || expectedSpeakers < 1 || expectedSpeakers > 10) {
+        expectedSpeakers = 2;
+      }
+    }
+
+    logger.info('Enhanced transcription with episode creation requested', {
+      userId: req.user.id,
+      filename: req.file.originalname,
+      fileSizeMB: (req.file.size / (1024 * 1024)).toFixed(2),
+      estimateSpeakers,
+      hasTitle: !!title,
+    });
+
+    // Step 1: Transcribe with verbose_json
+    const transcriptionResult = await transcribeAudioWithChunking(req.file.buffer, {
+      filename: req.file.originalname,
+      mimeType: req.file.mimetype,
+      language,
+      responseFormat: 'verbose_json',
+    });
+
+    // Step 2: Process transcript with timestamps and speakers
+    const processedResult = await processTranscriptWithTimestamps(
+      transcriptionResult.segments || [],
+      {
+        estimateSpeakers,
+        useLLM,
+        expectedSpeakers,
+      }
+    );
+
+    // Validate transcript length
+    if (!processedResult.transcript || processedResult.transcript.length < 500) {
+      throw new ValidationError(
+        'transcript',
+        `Transcription is too short (${processedResult.transcript?.length || 0} characters). ` +
+        'Minimum 500 characters required for episode creation.'
+      );
+    }
+
+    // Step 3: Create episode
+    const { episodeRepo } = await import('../../lib/supabase-client.js');
+    const { estimateEpisodeCost } = await import('../../lib/cost-calculator.js');
+
+    // Parse episode context
+    let parsedContext = {};
+    if (episode_context) {
+      try {
+        parsedContext = typeof episode_context === 'string'
+          ? JSON.parse(episode_context)
+          : episode_context;
+      } catch (parseError) {
+        logger.warn('Failed to parse episode_context', {
+          userId: req.user.id,
+          error: parseError.message,
+        });
+      }
+    }
+
+    // Add speaker metadata to context
+    if (estimateSpeakers) {
+      parsedContext.speakers = processedResult.speakers;
+      parsedContext.hasSpeakerDiarization = true;
+      parsedContext.speakerProvider = 'whisper-enhanced';
+    }
+
+    // Create episode with formatted transcript (includes speakers/timestamps)
+    const episode = await episodeRepo.create({
+      transcript: estimateSpeakers ? processedResult.formattedTranscript : processedResult.transcript,
+      title: title || `Transcribed from ${req.file.originalname}`,
+      episode_context: parsedContext,
+      user_id: req.user.id,
+    });
+
+    const estimate = estimateEpisodeCost(processedResult.transcript);
+    const totalCost = (transcriptionResult.estimatedCost || 0) + (processedResult.speakerEstimationCost || 0);
+
+    logger.info('Episode created from enhanced transcription', {
+      userId: req.user.id,
+      episodeId: episode.id,
+      transcriptLength: processedResult.transcript.length,
+      speakersDetected: processedResult.speakers.length,
+      totalCost,
+    });
+
+    res.status(201).json({
+      success: true,
+      episode: {
+        ...episode,
+        wordCount: processedResult.transcript.split(/\s+/).length,
+      },
+      transcription: {
+        // Core data
+        transcript: processedResult.transcript,
+        formattedTranscript: processedResult.formattedTranscript,
+
+        // Speaker info
+        speakers: processedResult.speakers,
+        utterances: processedResult.utterances,
+        hasSpeakerLabels: processedResult.hasSpeakerLabels,
+
+        // Metadata
+        audioDurationMinutes: processedResult.audioDurationMinutes || transcriptionResult.audioDurationMinutes,
+        transcriptLength: processedResult.transcript.length,
+        totalCost,
+        formattedCost: `$${totalCost.toFixed(4)}`,
+        processingDurationMs: transcriptionResult.processingDurationMs,
+        detectedLanguage: transcriptionResult.detectedLanguage,
+        provider: processedResult.provider,
+        usedLLM: processedResult.usedLLM,
+      },
+      estimate: {
+        processingCost: estimate.formattedCost,
+        processingTime: estimate.formattedTime,
+      },
+    });
+  } catch (error) {
+    logger.error('Enhanced transcription with episode creation failed', {
+      userId: req.user?.id,
+      filename: req.file?.originalname,
+      error: error.message,
+      errorType: error.constructor.name,
+    });
+    next(error);
+  }
+});
+
+/**
+ * POST /api/transcription/enhanced/label
+ * Applies custom speaker labels to an enhanced transcription result.
+ *
+ * Request Body:
+ * {
+ *   speakerLabels: { "A": "Dr. Smith", "B": "Jane Doe" },
+ *   utterances: [...],
+ *   speakers: [...]
+ * }
+ */
+router.post('/enhanced/label', requireAuth, (req, res, next) => {
+  try {
+    const { speakerLabels, utterances, speakers } = req.body;
+
+    if (!speakerLabels || typeof speakerLabels !== 'object') {
+      throw new ValidationError(
+        'speakerLabels',
+        'Speaker labels object is required. Example: { "A": "Host", "B": "Guest" }'
+      );
+    }
+
+    if (!utterances || !Array.isArray(utterances)) {
+      throw new ValidationError(
+        'utterances',
+        'Utterances array is required from the transcription result'
+      );
+    }
+
+    logger.info('Applying speaker labels to enhanced transcription', {
+      userId: req.user.id,
+      speakerCount: Object.keys(speakerLabels).length,
+      utteranceCount: utterances.length,
+    });
+
+    // Apply labels using the processor function
+    const result = applyCustomSpeakerLabels(
+      { utterances, speakers: speakers || [] },
+      speakerLabels
+    );
+
+    logger.info('Speaker labels applied successfully', {
+      userId: req.user.id,
+      labeledSpeakers: result.speakers.map(s => s.label),
+    });
+
+    res.json({
+      success: true,
+      formattedTranscript: result.formattedTranscript,
+      speakers: result.speakers,
+      utterances: result.utterances,
+      speakerLabels: result.speakerLabels,
+    });
+  } catch (error) {
+    logger.error('Failed to apply speaker labels', {
+      userId: req.user?.id,
+      error: error.message,
+    });
+    next(error);
+  }
+});
+
+/**
+ * GET /api/transcription/enhanced/requirements
+ * Returns information about enhanced transcription capabilities.
+ */
+router.get('/enhanced/requirements', requireAuth, (req, res) => {
+  logger.debug('Enhanced transcription requirements requested', {
+    userId: req.user.id,
+  });
+
+  const whisperReqs = getAudioRequirements();
+
+  res.json({
+    success: true,
+    requirements: {
+      ...whisperReqs,
+      features: [
+        'Timestamps for each segment',
+        'Speaker estimation (heuristic or LLM)',
+        'No AssemblyAI required',
+        'Full transcript preview',
+        'Custom speaker labeling',
+      ],
+      speakerEstimation: {
+        available: true,
+        methods: ['heuristic', 'llm'],
+        llmModel: 'gpt-4o-mini',
+        llmCostPer1000Utterances: '~$0.002-0.005',
+        maxSpeakers: 10,
+      },
+      note: 'Enhanced transcription uses Whisper for transcription and optional GPT-4o-mini for speaker detection',
+    },
+  });
 });
 
 // ============================================================================

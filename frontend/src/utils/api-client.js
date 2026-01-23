@@ -347,6 +347,13 @@ const episodes = {
    * @param {string} id - Episode UUID
    */
   status: (id) => get(`/episodes/${id}/status`),
+
+  /**
+   * Cancel episode processing
+   * @param {string} id - Episode UUID
+   * @returns {Promise<Object>} - { episode_id, status, message, stages_completed }
+   */
+  cancel: (id) => post(`/episodes/${id}/cancel`),
 };
 
 /**

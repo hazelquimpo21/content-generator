@@ -26,6 +26,7 @@ import {
   Info,
   ChevronDown,
   ChevronUp,
+  X,
 } from 'lucide-react';
 import { Button, Card, ProgressBar, Spinner, useToast } from '@components/shared';
 import api from '@utils/api-client';
@@ -114,6 +115,7 @@ function ProcessingScreen() {
   const [error, setError] = useState(null);
   const [startTime] = useState(Date.now());
   const [expandedPhases, setExpandedPhases] = useState({});
+  const [canceling, setCanceling] = useState(false);
 
   // Fetch initial data and start polling
   useEffect(() => {
@@ -160,6 +162,34 @@ function ProcessingScreen() {
       setError(err.message || 'Failed to fetch status');
     } finally {
       setLoading(false);
+    }
+  }
+
+  /**
+   * Cancel processing and navigate to dashboard
+   */
+  async function handleCancel() {
+    try {
+      setCanceling(true);
+      await api.episodes.cancel(episodeId);
+
+      // Stop polling
+      if (pollInterval.current) {
+        clearInterval(pollInterval.current);
+      }
+
+      showToast({
+        message: 'Processing cancelled',
+        description: 'You can restart processing anytime from the dashboard.',
+        variant: 'info',
+        duration: 5000,
+      });
+
+      // Navigate to dashboard
+      navigate('/');
+    } catch (err) {
+      setError(err.message || 'Failed to cancel processing');
+      setCanceling(false);
     }
   }
 
@@ -297,6 +327,22 @@ function ProcessingScreen() {
             You don't need to stay on this page. Processing continues in the background
             and we'll update the episode when it's ready. {getTimeEstimate()}
           </p>
+        </div>
+      )}
+
+      {/* Cancel button - only show during processing */}
+      {episode.status === 'processing' && (
+        <div className={styles.cancelSection}>
+          <Button
+            variant="ghost"
+            size="sm"
+            leftIcon={X}
+            onClick={handleCancel}
+            loading={canceling}
+            disabled={canceling}
+          >
+            {canceling ? 'Cancelling...' : 'Cancel Processing'}
+          </Button>
         </div>
       )}
 

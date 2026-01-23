@@ -94,7 +94,7 @@ function formatSpeed(bytesPerSecond) {
  * @param {boolean} props.showSpeakerOption - Show speaker diarization toggle (default: true)
  * @param {boolean} props.defaultWithSpeakers - Default value for speaker diarization
  */
-function AudioUpload({ onTranscriptReady, onError, className, showSpeakerOption = true, defaultWithSpeakers = false }) {
+function AudioUpload({ onTranscriptReady, onError, className, showSpeakerOption = true, defaultWithSpeakers = true }) {
   // Global upload state from context
   const {
     state,
@@ -397,14 +397,23 @@ function AudioUpload({ onTranscriptReady, onError, className, showSpeakerOption 
               <span className={styles.fileName}>{file?.name}</span>
               <span className={styles.fileSize}>{formatFileSize(file?.size || 0)}</span>
             </div>
-            <button
-              className={styles.backgroundButton}
-              onClick={minimize}
-              title="Continue transcribing in background while you browse"
-            >
-              <Minimize2 size={14} />
-              <span>Background</span>
-            </button>
+            <div className={styles.fileActions}>
+              <button
+                className={styles.backgroundButton}
+                onClick={minimize}
+                title="Continue transcribing in background while you browse"
+              >
+                <Minimize2 size={14} />
+                <span>Background</span>
+              </button>
+              <button
+                className={styles.cancelButton}
+                onClick={handleCancel}
+                title="Cancel transcription"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
           <div className={styles.transcribingStatus}>
             <Loader2 className={styles.spinner} />

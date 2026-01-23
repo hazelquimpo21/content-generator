@@ -5,8 +5,8 @@
   "main": "api/server.js",
   "type": "module",
   "scripts": {
-    "start": "node api/server.js",
-    "dev": "nodemon api/server.js",
+    "start": "NODE_OPTIONS='--max-http-header-size=65536' node api/server.js",
+    "dev": "NODE_OPTIONS='--max-http-header-size=65536' nodemon api/server.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "dependencies": {

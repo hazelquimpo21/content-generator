@@ -1302,57 +1302,199 @@ X-RateLimit-Reset: 1673625600
 
 ---
 
-## Audio Transcription (Planned Enhancement)
+## Audio Transcription
 
-> **Status**: Researched & Planned - See [AUDIO-TRANSCRIPTION-IMPLEMENTATION.md](./AUDIO-TRANSCRIPTION-IMPLEMENTATION.md)
+> See [AUDIO-TRANSCRIPTION-IMPLEMENTATION.md](./AUDIO-TRANSCRIPTION-IMPLEMENTATION.md) for details.
 
-### POST `/api/transcription/upload`
+### POST `/api/transcription`
 
-Upload an audio file for transcription using OpenAI GPT-4o Mini Transcribe.
+Upload an audio file for basic transcription using OpenAI Whisper.
 
 **Request**: `multipart/form-data`
-- `file` (required): Audio file (MP3, M4A, WAV, MP4, MPEG, MPGA, WEBM)
-- Max size: 25 MB
+- `audio` (required): Audio file (MP3, M4A, WAV, MP4, WEBM, FLAC, OGG)
+- Max size: 100 MB (files >25MB are automatically chunked)
 
 **Response (200 OK):**
 ```json
 {
   "success": true,
-  "transcript": "Full transcript text from the audio...",
-  "metadata": {
-    "duration_seconds": 2700,
-    "language": "en",
-    "model": "gpt-4o-mini-transcribe",
-    "cost_usd": 0.135,
-    "original_filename": "episode-42.mp3"
-  }
+  "transcript": "Full transcript text...",
+  "audioDurationMinutes": 45.2,
+  "estimatedCost": 0.27,
+  "formattedCost": "$0.27",
+  "model": "whisper-1"
 }
 ```
 
-**Error Response (400 Bad Request):**
+---
+
+### GET `/api/transcription/requirements`
+
+Get supported formats and limits.
+
+**Response (200 OK):**
 ```json
 {
-  "error": "Validation failed",
-  "message": "File exceeds 25 MB limit",
-  "details": {
-    "file_size_bytes": 30000000,
-    "max_allowed_bytes": 25000000
+  "success": true,
+  "requirements": {
+    "supportedFormats": ["mp3", "mp4", "m4a", "wav", "webm", "flac", "ogg"],
+    "maxFileSizeMB": 100,
+    "pricePerMinute": 0.006,
+    "model": "whisper-1"
   }
 }
 ```
 
-**Error Response (415 Unsupported Media Type):**
+---
+
+## Speaker Diarization (AssemblyAI)
+
+Identify who said what in your audio with timestamps and speaker labels.
+
+### POST `/api/transcription/speaker`
+
+Transcribe audio with speaker identification.
+
+**Request**: `multipart/form-data`
+- `audio` (required): Audio file (MP3, M4A, WAV, etc.)
+- `speakers_expected` (optional): Number of speakers (1-10)
+- `language` (optional): ISO-639-1 language code
+
+**Response (200 OK):**
 ```json
 {
-  "error": "Unsupported file type",
-  "message": "Only MP3, M4A, WAV, MP4, MPEG, MPGA, and WEBM formats are supported",
-  "details": {
-    "received_type": "audio/ogg"
+  "success": true,
+  "transcript": "Plain text transcript...",
+  "formattedTranscript": "[00:00:12] Speaker A: Welcome back...\n\n[00:00:18] Speaker B: Thanks for having me...",
+  "utterances": [
+    { "speaker": "A", "start": 12000, "end": 18000, "text": "Welcome back...", "confidence": 0.95 },
+    { "speaker": "B", "start": 18200, "end": 25000, "text": "Thanks for having me...", "confidence": 0.92 }
+  ],
+  "speakers": [
+    { "id": "A", "label": "Speaker A" },
+    { "id": "B", "label": "Speaker B" }
+  ],
+  "audioDurationMinutes": 45.2,
+  "estimatedCost": 0.68,
+  "formattedCost": "$0.68",
+  "provider": "assemblyai",
+  "hasSpeakerLabels": true
+}
+```
+
+---
+
+### POST `/api/transcription/speaker/with-episode`
+
+Transcribe with speaker diarization and create episode in one step.
+
+**Request**: `multipart/form-data`
+- `audio` (required): Audio file
+- `title` (optional): Episode title
+- `speakers_expected` (optional): Number of speakers
+- `episode_context` (optional): JSON string with context
+
+**Response (201 Created):**
+```json
+{
+  "success": true,
+  "episode": {
+    "id": "uuid",
+    "title": "Transcribed from podcast.mp3",
+    "status": "draft"
+  },
+  "transcription": {
+    "speakers": [{ "id": "A", "label": "Speaker A" }],
+    "utterances": [...],
+    "hasSpeakerLabels": true,
+    "audioDurationMinutes": 45.2,
+    "estimatedCost": 0.68
   }
 }
 ```
 
-**Cost**: ~$0.003 per minute of audio ($0.14 for a 45-minute episode)
+---
+
+### POST `/api/transcription/speaker/label`
+
+Apply custom names to speakers (e.g., "Speaker A" → "Dr. Smith").
+
+**Request Body:**
+```json
+{
+  "speakerLabels": {
+    "A": "Dr. Smith (Host)",
+    "B": "Jane Doe (Guest)"
+  },
+  "utterances": [...],
+  "speakers": [...]
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "formattedTranscript": "[00:00:12] Dr. Smith (Host): Welcome back...",
+  "speakers": [
+    { "id": "A", "label": "Dr. Smith (Host)" },
+    { "id": "B", "label": "Jane Doe (Guest)" }
+  ]
+}
+```
+
+---
+
+### GET `/api/transcription/speaker/requirements`
+
+Check if speaker diarization is available.
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "requirements": {
+    "available": true,
+    "supportedFormats": ["mp3", "mp4", "m4a", "wav", "webm", "flac", "ogg"],
+    "maxFileSizeMB": 200,
+    "pricePerMinute": 0.015,
+    "provider": "assemblyai",
+    "features": [
+      "Speaker diarization (identifies unique speakers)",
+      "Per-utterance timestamps",
+      "Automatic language detection",
+      "Speaker labeling support"
+    ]
+  }
+}
+```
+
+---
+
+### POST `/api/transcription/speaker/estimate`
+
+Estimate cost for speaker transcription.
+
+**Request Body:**
+```json
+{
+  "fileSizeBytes": 15000000,
+  "bitrate": 128
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "estimate": {
+    "estimatedDurationMinutes": 15.6,
+    "estimatedCost": 0.23,
+    "formattedCost": "$0.23",
+    "pricePerMinute": 0.015
+  }
+}
+```
 
 ---
 

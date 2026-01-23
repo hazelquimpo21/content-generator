@@ -53,6 +53,114 @@ If transcription quality becomes an issue with `gpt-4o-mini-transcribe`, upgrade
 
 ---
 
+## Speaker Diarization (AssemblyAI)
+
+### Overview
+
+Speaker diarization identifies and labels different speakers in audio, outputting a transcript with timestamps and speaker attribution:
+
+```
+[00:00:12] Speaker A: Welcome back to the podcast. Today we have a special guest.
+
+[00:00:18] Speaker B: Thanks for having me. I'm excited to be here.
+
+[00:00:25] Speaker A: Let's start with the basics. Can you tell us about your background?
+```
+
+### Why AssemblyAI for Speaker Diarization?
+
+1. **Native Support**: Speaker labels are built into their transcription API (no separate processing step)
+2. **Competitive Pricing**: $0.015/minute base includes speaker diarization
+3. **Accuracy**: Industry-leading speaker separation accuracy
+4. **Simple Integration**: Single API call returns both transcript and speaker labels
+
+### Pricing Comparison for Speaker-Labeled Transcripts
+
+| Provider | Base Cost (45 min) | Speaker Add-on | Total |
+|----------|-------------------|----------------|-------|
+| **AssemblyAI** | $0.68 | Included | **$0.68** |
+| OpenAI + Manual | $0.14 | N/A (not supported) | N/A |
+
+*Note: OpenAI Whisper does NOT support speaker diarization natively.*
+
+### Technical Implementation
+
+**File**: `backend/lib/speaker-transcription.js`
+
+```javascript
+import { transcribeWithSpeakers } from './lib/speaker-transcription.js';
+
+const result = await transcribeWithSpeakers(audioBuffer, {
+  filename: 'podcast.mp3',
+  speakersExpected: 2,  // Optional: hint for better accuracy
+});
+
+console.log(result.speakers);
+// [{ id: 'A', label: 'Speaker A' }, { id: 'B', label: 'Speaker B' }]
+
+console.log(result.utterances);
+// [{ speaker: 'A', start: 12000, end: 18000, text: 'Welcome...' }, ...]
+
+console.log(result.formattedTranscript);
+// "[00:00:12] Speaker A: Welcome back..."
+```
+
+### API Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/transcription/speaker` | Transcribe with speaker diarization |
+| `POST /api/transcription/speaker/with-episode` | Transcribe + create episode |
+| `POST /api/transcription/speaker/label` | Apply custom speaker names |
+| `GET /api/transcription/speaker/requirements` | Get availability and limits |
+| `POST /api/transcription/speaker/estimate` | Estimate cost |
+
+### Database Schema
+
+New tables for speaker metadata:
+
+```sql
+-- Episode-level speaker settings
+ALTER TABLE episodes ADD COLUMN speaker_data JSONB;
+ALTER TABLE episodes ADD COLUMN transcript_format TEXT DEFAULT 'plain';
+
+-- Detailed speaker storage
+CREATE TABLE episode_speakers (
+  id UUID PRIMARY KEY,
+  episode_id UUID REFERENCES episodes(id),
+  speaker_id TEXT NOT NULL,  -- 'A', 'B', etc.
+  label TEXT NOT NULL,       -- 'Dr. Smith', 'Host', etc.
+  role TEXT                  -- 'host', 'guest', 'interviewer'
+);
+
+-- Timestamped utterances
+CREATE TABLE episode_utterances (
+  id UUID PRIMARY KEY,
+  episode_id UUID REFERENCES episodes(id),
+  speaker_id TEXT NOT NULL,
+  start_ms INTEGER NOT NULL,
+  end_ms INTEGER NOT NULL,
+  text TEXT NOT NULL
+);
+```
+
+### User Flow
+
+1. User uploads audio and toggles "Identify speakers" option
+2. AssemblyAI transcribes with speaker diarization
+3. User sees transcript with "Speaker A", "Speaker B" labels
+4. User can rename speakers (e.g., "Speaker A" → "Dr. Jane Smith")
+5. Formatted transcript with names is saved with episode
+
+### Environment Variables
+
+```bash
+# Add to .env
+ASSEMBLYAI_API_KEY=your-assemblyai-key-here
+```
+
+---
+
 ## Technical Specifications
 
 ### OpenAI Transcription API
@@ -340,17 +448,22 @@ ADD COLUMN audio_duration_seconds INTEGER DEFAULT NULL;
 ```
 backend/
 ├── api/routes/
-│   └── transcription.js        # NEW: Upload endpoint
+│   └── transcription.js          # Upload & speaker endpoints
 ├── lib/
-│   └── transcription-service.js # NEW: OpenAI transcription logic
+│   ├── audio-transcription.js    # OpenAI Whisper transcription
+│   └── speaker-transcription.js  # AssemblyAI speaker diarization
 └── types/
-    └── transcription.ts         # NEW: TypeScript types
+    └── transcription.ts          # TypeScript types
 
 frontend/
 ├── components/shared/
-│   └── AudioUpload.jsx          # NEW: Upload component
+│   ├── AudioUpload.jsx           # Upload with speaker toggle
+│   └── SpeakerLabeling.jsx       # Speaker name editor
 └── pages/
-    └── NewEpisode.jsx           # MODIFY: Add audio tab
+    └── NewEpisode.jsx            # Audio tab
+
+supabase/migrations/
+└── 009_speaker_diarization.sql   # Speaker tables
 ```
 
 ---
@@ -358,10 +471,12 @@ frontend/
 ## Environment Variables
 
 ```bash
-# Already exists
+# Required for basic transcription
 OPENAI_API_KEY=sk-...
 
-# No new keys needed - uses same OpenAI API key
+# Optional: Required for speaker diarization feature
+# Get from: https://www.assemblyai.com/app/account
+ASSEMBLYAI_API_KEY=your-assemblyai-key-here
 ```
 
 ---

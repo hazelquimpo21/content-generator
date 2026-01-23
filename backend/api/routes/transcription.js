@@ -28,6 +28,13 @@ import {
   estimateTranscriptionCost,
   getAudioRequirements,
 } from '../../lib/audio-transcription.js';
+import {
+  transcribeWithSpeakers,
+  estimateSpeakerTranscriptionCost,
+  getSpeakerTranscriptionRequirements,
+  isSpeakerTranscriptionAvailable,
+  applySpeakerLabels,
+} from '../../lib/speaker-transcription.js';
 import { ValidationError } from '../../lib/errors.js';
 import { requireAuth } from '../middleware/auth-middleware.js';
 import logger from '../../lib/logger.js';
@@ -557,6 +564,467 @@ router.post('/with-episode', handleUpload('audio'), requireAuth, async (req, res
       errorType: error.constructor.name,
     });
 
+    next(error);
+  }
+});
+
+// ============================================================================
+// SPEAKER DIARIZATION ROUTES
+// ============================================================================
+
+/**
+ * GET /api/transcription/speaker/requirements
+ * Returns information about speaker transcription capabilities and limits.
+ * Useful for frontend to check availability and display appropriate UI.
+ *
+ * Response:
+ * {
+ *   available: true,
+ *   supportedFormats: ['mp3', 'mp4', ...],
+ *   maxFileSizeMB: 200,
+ *   pricePerMinute: 0.015,
+ *   features: ['Speaker diarization', ...]
+ * }
+ */
+router.get('/speaker/requirements', requireAuth, (req, res) => {
+  logger.debug('Speaker transcription requirements requested', {
+    userId: req.user.id,
+  });
+
+  const requirements = getSpeakerTranscriptionRequirements();
+
+  res.json({
+    success: true,
+    requirements,
+  });
+});
+
+/**
+ * POST /api/transcription/speaker/estimate
+ * Estimates the cost of speaker transcription based on file size.
+ *
+ * Request Body (JSON):
+ * {
+ *   fileSizeBytes: number,
+ *   bitrate?: number
+ * }
+ *
+ * Response:
+ * {
+ *   estimatedDurationMinutes: 5.2,
+ *   estimatedCost: 0.078,
+ *   formattedCost: "$0.0780"
+ * }
+ */
+router.post('/speaker/estimate', requireAuth, (req, res, next) => {
+  try {
+    const { fileSizeBytes, bitrate } = req.body;
+
+    if (!fileSizeBytes || typeof fileSizeBytes !== 'number' || fileSizeBytes <= 0) {
+      throw new ValidationError(
+        'fileSizeBytes',
+        'File size in bytes is required and must be a positive number'
+      );
+    }
+
+    logger.debug('Speaker transcription cost estimate requested', {
+      userId: req.user.id,
+      fileSizeBytes,
+      fileSizeMB: (fileSizeBytes / (1024 * 1024)).toFixed(2),
+    });
+
+    const estimate = estimateSpeakerTranscriptionCost(fileSizeBytes, {
+      bitrate: bitrate || 128,
+    });
+
+    logger.info('Speaker transcription cost estimated', {
+      userId: req.user.id,
+      fileSizeMB: estimate.fileSizeMB,
+      estimatedDurationMinutes: estimate.estimatedDurationMinutes,
+      estimatedCost: estimate.estimatedCost,
+    });
+
+    res.json({
+      success: true,
+      estimate,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/transcription/speaker
+ * Transcribes audio with speaker diarization using AssemblyAI.
+ * Returns transcript with speaker labels and timestamps.
+ *
+ * Request:
+ * - Content-Type: multipart/form-data
+ * - Field 'audio': The audio file to transcribe
+ * - Optional fields:
+ *   - language: ISO-639-1 language code (e.g., 'en')
+ *   - speakers_expected: Expected number of speakers (helps accuracy)
+ *
+ * Response:
+ * {
+ *   success: true,
+ *   transcript: "Plain text transcript...",
+ *   formattedTranscript: "[00:00:12] Speaker A: Welcome...",
+ *   utterances: [...],
+ *   speakers: [{ id: 'A', label: 'Speaker A' }, ...],
+ *   audioDurationMinutes: 45.2,
+ *   estimatedCost: 0.678
+ * }
+ */
+router.post('/speaker', handleUpload('audio'), requireAuth, async (req, res, next) => {
+  try {
+    // Check if speaker transcription is available
+    if (!isSpeakerTranscriptionAvailable()) {
+      logger.error('Speaker transcription requested but not configured', {
+        userId: req.user.id,
+      });
+      throw new ValidationError(
+        'configuration',
+        'Speaker diarization is not available. Please contact support.'
+      );
+    }
+
+    // Validate that a file was uploaded
+    if (!req.file) {
+      logger.warn('Speaker transcription request missing audio file', {
+        userId: req.user.id,
+        hasBody: !!req.body,
+        bodyKeys: req.body ? Object.keys(req.body) : [],
+      });
+      throw new ValidationError(
+        'audio',
+        'No audio file provided. Please upload an audio file in the "audio" field.'
+      );
+    }
+
+    // Extract options from body
+    const { language, speakers_expected } = req.body;
+
+    // Parse speakers_expected if provided
+    let speakersExpected = null;
+    if (speakers_expected) {
+      speakersExpected = parseInt(speakers_expected, 10);
+      if (isNaN(speakersExpected) || speakersExpected < 1 || speakersExpected > 10) {
+        throw new ValidationError(
+          'speakers_expected',
+          'Expected speakers must be a number between 1 and 10'
+        );
+      }
+    }
+
+    logger.info('Speaker transcription requested', {
+      userId: req.user.id,
+      filename: req.file.originalname,
+      mimetype: req.file.mimetype,
+      fileSizeKB: Math.round(req.file.size / 1024),
+      fileSizeMB: (req.file.size / (1024 * 1024)).toFixed(2),
+      language: language || 'auto-detect',
+      speakersExpected: speakersExpected || 'auto-detect',
+    });
+
+    // Perform speaker transcription
+    const result = await transcribeWithSpeakers(req.file.buffer, {
+      filename: req.file.originalname,
+      language,
+      speakersExpected,
+    });
+
+    logger.info('Speaker transcription completed', {
+      userId: req.user.id,
+      filename: req.file.originalname,
+      audioDurationMinutes: result.audioDurationMinutes,
+      speakersDetected: result.speakers.length,
+      utteranceCount: result.utterances.length,
+      estimatedCost: result.estimatedCost,
+      processingDurationMs: result.processingDurationMs,
+    });
+
+    res.json({
+      success: true,
+      // Plain transcript (pipeline-compatible)
+      transcript: result.transcript,
+
+      // Formatted with speakers and timestamps
+      formattedTranscript: result.formattedTranscript,
+
+      // Detailed utterances for UI
+      utterances: result.utterances,
+
+      // Speaker metadata for labeling
+      speakers: result.speakers,
+
+      // Audio metadata
+      audioDurationSeconds: result.audioDurationSeconds,
+      audioDurationMinutes: result.audioDurationMinutes,
+      detectedLanguage: result.detectedLanguage,
+
+      // Cost and processing
+      estimatedCost: result.estimatedCost,
+      formattedCost: result.formattedCost,
+      processingDurationMs: result.processingDurationMs,
+
+      // Provider info
+      provider: result.provider,
+      transcriptId: result.transcriptId,
+      hasSpeakerLabels: true,
+    });
+  } catch (error) {
+    logger.error('Speaker transcription failed', {
+      userId: req.user?.id,
+      filename: req.file?.originalname,
+      fileSizeKB: req.file ? Math.round(req.file.size / 1024) : null,
+      error: error.message,
+      errorType: error.constructor.name,
+      statusCode: error.statusCode,
+    });
+
+    next(error);
+  }
+});
+
+/**
+ * POST /api/transcription/speaker/with-episode
+ * Transcribes audio with speaker diarization and creates an episode.
+ * Combines speaker transcription with episode creation for a streamlined workflow.
+ *
+ * Request:
+ * - Content-Type: multipart/form-data
+ * - Field 'audio': The audio file to transcribe
+ * - Optional fields:
+ *   - title: Episode title
+ *   - language: ISO-639-1 language code
+ *   - speakers_expected: Expected number of speakers
+ *   - episode_context: JSON string with additional context
+ *
+ * Response:
+ * {
+ *   success: true,
+ *   episode: { id, title, ... },
+ *   transcription: { speakers, utterances, ... }
+ * }
+ */
+router.post('/speaker/with-episode', handleUpload('audio'), requireAuth, async (req, res, next) => {
+  try {
+    // Check availability
+    if (!isSpeakerTranscriptionAvailable()) {
+      throw new ValidationError(
+        'configuration',
+        'Speaker diarization is not available. Please contact support.'
+      );
+    }
+
+    if (!req.file) {
+      throw new ValidationError(
+        'audio',
+        'No audio file provided. Please upload an audio file in the "audio" field.'
+      );
+    }
+
+    const { title, language, speakers_expected, episode_context } = req.body;
+
+    // Parse speakers_expected
+    let speakersExpected = null;
+    if (speakers_expected) {
+      speakersExpected = parseInt(speakers_expected, 10);
+      if (isNaN(speakersExpected) || speakersExpected < 1 || speakersExpected > 10) {
+        throw new ValidationError(
+          'speakers_expected',
+          'Expected speakers must be a number between 1 and 10'
+        );
+      }
+    }
+
+    logger.info('Speaker transcription with episode creation requested', {
+      userId: req.user.id,
+      filename: req.file.originalname,
+      fileSizeMB: (req.file.size / (1024 * 1024)).toFixed(2),
+      hasTitle: !!title,
+      speakersExpected: speakersExpected || 'auto-detect',
+    });
+
+    // Step 1: Transcribe with speaker diarization
+    const transcriptionResult = await transcribeWithSpeakers(req.file.buffer, {
+      filename: req.file.originalname,
+      language,
+      speakersExpected,
+    });
+
+    // Validate transcript length
+    if (!transcriptionResult.transcript || transcriptionResult.transcript.length < 500) {
+      throw new ValidationError(
+        'transcript',
+        `Transcription is too short (${transcriptionResult.transcript?.length || 0} characters). ` +
+        'Minimum 500 characters required for episode creation.'
+      );
+    }
+
+    // Step 2: Create episode
+    const { episodeRepo } = await import('../../lib/supabase-client.js');
+    const { estimateEpisodeCost } = await import('../../lib/cost-calculator.js');
+
+    // Parse episode context
+    let parsedContext = {};
+    if (episode_context) {
+      try {
+        parsedContext = typeof episode_context === 'string'
+          ? JSON.parse(episode_context)
+          : episode_context;
+      } catch (parseError) {
+        logger.warn('Failed to parse episode_context', {
+          userId: req.user.id,
+          error: parseError.message,
+        });
+      }
+    }
+
+    // Add speaker metadata to context
+    parsedContext.speakers = transcriptionResult.speakers;
+    parsedContext.hasSpeakerDiarization = true;
+    parsedContext.transcriptId = transcriptionResult.transcriptId;
+
+    // Create episode with formatted transcript (includes speakers/timestamps)
+    const episode = await episodeRepo.create({
+      transcript: transcriptionResult.formattedTranscript, // Use formatted version
+      title: title || `Transcribed from ${req.file.originalname}`,
+      episode_context: parsedContext,
+      user_id: req.user.id,
+    });
+
+    const estimate = estimateEpisodeCost(transcriptionResult.transcript);
+
+    logger.info('Episode created from speaker transcription', {
+      userId: req.user.id,
+      episodeId: episode.id,
+      transcriptLength: transcriptionResult.transcript.length,
+      speakersDetected: transcriptionResult.speakers.length,
+      audioDurationMinutes: transcriptionResult.audioDurationMinutes,
+      transcriptionCost: transcriptionResult.estimatedCost,
+    });
+
+    res.status(201).json({
+      success: true,
+      episode: {
+        ...episode,
+        wordCount: transcriptionResult.transcript.split(/\s+/).length,
+      },
+      transcription: {
+        // Core data
+        transcript: transcriptionResult.transcript,
+        formattedTranscript: transcriptionResult.formattedTranscript,
+
+        // Speaker info
+        speakers: transcriptionResult.speakers,
+        utterances: transcriptionResult.utterances,
+        hasSpeakerLabels: true,
+
+        // Metadata
+        audioDurationMinutes: transcriptionResult.audioDurationMinutes,
+        transcriptLength: transcriptionResult.transcript.length,
+        estimatedCost: transcriptionResult.estimatedCost,
+        formattedCost: transcriptionResult.formattedCost,
+        processingDurationMs: transcriptionResult.processingDurationMs,
+        detectedLanguage: transcriptionResult.detectedLanguage,
+        transcriptId: transcriptionResult.transcriptId,
+      },
+      estimate: {
+        processingCost: estimate.formattedCost,
+        processingTime: estimate.formattedTime,
+      },
+    });
+  } catch (error) {
+    logger.error('Speaker transcription with episode creation failed', {
+      userId: req.user?.id,
+      filename: req.file?.originalname,
+      error: error.message,
+      errorType: error.constructor.name,
+    });
+
+    next(error);
+  }
+});
+
+/**
+ * POST /api/transcription/speaker/label
+ * Applies custom speaker labels to a transcription result.
+ * Call this after transcription to rename speakers (e.g., "Speaker A" -> "Dr. Smith").
+ *
+ * Request Body:
+ * {
+ *   transcriptId: "abc123",
+ *   speakerLabels: {
+ *     "A": "Dr. Smith (Host)",
+ *     "B": "Jane Doe (Guest)"
+ *   },
+ *   utterances: [...] // Original utterances from transcription
+ * }
+ *
+ * Response:
+ * {
+ *   success: true,
+ *   formattedTranscript: "[00:00:12] Dr. Smith (Host): Welcome...",
+ *   speakers: [{ id: 'A', label: 'Dr. Smith (Host)' }, ...],
+ *   utterances: [...] // Updated with speakerLabel field
+ * }
+ */
+router.post('/speaker/label', requireAuth, (req, res, next) => {
+  try {
+    const { speakerLabels, utterances, speakers } = req.body;
+
+    if (!speakerLabels || typeof speakerLabels !== 'object') {
+      throw new ValidationError(
+        'speakerLabels',
+        'Speaker labels object is required. Example: { "A": "Host", "B": "Guest" }'
+      );
+    }
+
+    if (!utterances || !Array.isArray(utterances)) {
+      throw new ValidationError(
+        'utterances',
+        'Utterances array is required from the original transcription'
+      );
+    }
+
+    if (!speakers || !Array.isArray(speakers)) {
+      throw new ValidationError(
+        'speakers',
+        'Speakers array is required from the original transcription'
+      );
+    }
+
+    logger.info('Applying speaker labels', {
+      userId: req.user.id,
+      speakerCount: Object.keys(speakerLabels).length,
+      utteranceCount: utterances.length,
+    });
+
+    // Apply labels using the helper function
+    const result = applySpeakerLabels(
+      { utterances, speakers },
+      speakerLabels
+    );
+
+    logger.info('Speaker labels applied successfully', {
+      userId: req.user.id,
+      labeledSpeakers: result.speakers.map(s => s.label),
+    });
+
+    res.json({
+      success: true,
+      formattedTranscript: result.formattedTranscript,
+      speakers: result.speakers,
+      utterances: result.utterances,
+      speakerLabels: result.speakerLabels,
+    });
+  } catch (error) {
+    logger.error('Failed to apply speaker labels', {
+      userId: req.user?.id,
+      error: error.message,
+    });
     next(error);
   }
 });

@@ -1,0 +1,167 @@
+/* ============================================================================
+   PROPERTIES CHECKLIST STYLES
+   ============================================================================ */
+
+.container {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* Grid of property cards */
+.checklistGrid {
+  display: grid;
+  gap: var(--spacing-3);
+}
+
+/* Individual property card */
+.propertyCard {
+  display: block;
+  width: 100%;
+  padding: var(--spacing-4);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.propertyCard:hover {
+  border-color: var(--color-border-hover);
+  background: var(--color-surface-hover);
+}
+
+.propertyCard.selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary-subtle);
+}
+
+.propertyCard:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Card content layout */
+.cardContent {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-4);
+}
+
+/* Icon wrapper */
+.iconWrapper {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-secondary);
+  transition: all 0.2s ease;
+}
+
+.selected .iconWrapper {
+  background: var(--color-primary);
+}
+
+.icon {
+  width: 24px;
+  height: 24px;
+  color: var(--color-text-secondary);
+  transition: color 0.2s ease;
+}
+
+.selected .icon {
+  color: white;
+}
+
+/* Text content */
+.textContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-1);
+}
+
+.label {
+  font-weight: 600;
+  font-size: var(--text-base);
+  color: var(--color-text);
+}
+
+.description {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Checkbox indicator */
+.checkbox {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  transition: all 0.2s ease;
+}
+
+.selected .checkbox {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+}
+
+.checkIcon {
+  width: 16px;
+  height: 16px;
+  color: white;
+}
+
+/* Actions */
+.actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: var(--spacing-6);
+  padding-top: var(--spacing-4);
+  border-top: 1px solid var(--color-border);
+}
+
+/* Hint text */
+.hint {
+  margin-top: var(--spacing-4);
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .cardContent {
+    flex-wrap: wrap;
+  }
+
+  .checkbox {
+    position: absolute;
+    top: var(--spacing-3);
+    right: var(--spacing-3);
+  }
+
+  .propertyCard {
+    position: relative;
+    padding-right: calc(var(--spacing-4) + 32px);
+  }
+
+  .actions {
+    flex-direction: column-reverse;
+    gap: var(--spacing-3);
+  }
+
+  .actions button {
+    width: 100%;
+  }
+}

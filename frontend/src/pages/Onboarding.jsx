@@ -24,7 +24,10 @@ import {
   FileText,
   Compass,
   Users,
-  Share2
+  Share2,
+  CheckSquare,
+  Download,
+  User
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button, ProgressBar, Spinner, useToast } from '@components/shared';
@@ -38,6 +41,13 @@ import MethodEditor from '../components/brand-discovery/modules/MethodEditor';
 import AudienceEditor from '../components/brand-discovery/modules/AudienceEditor';
 import ChannelsEditor from '../components/brand-discovery/modules/ChannelsEditor';
 
+// Import profile enrichment components
+import {
+  PropertiesChecklist,
+  ImportContent,
+  MadlibsProfile
+} from '../components/profile-enrichment';
+
 import styles from './Onboarding.module.css';
 
 // Onboarding steps configuration
@@ -49,12 +59,33 @@ const ONBOARDING_STEPS = [
     icon: Sparkles,
   },
   {
+    id: 'properties',
+    title: 'What Do You Have?',
+    description: 'Tell us about your existing content so we can help you get started faster.',
+    icon: CheckSquare,
+  },
+  {
+    id: 'import',
+    title: 'Import Your Content',
+    description: "We'll analyze your existing content to jumpstart your profile.",
+    icon: Download,
+    conditional: true, // Only show if user has properties
+  },
+  {
+    id: 'profile',
+    title: 'Build Your Profile',
+    description: 'Fill in the blanks to describe your practice.',
+    icon: User,
+    module: 'profile',
+    weight: 20,
+  },
+  {
     id: 'vibe',
     title: 'Set Your Vibe',
     description: 'Adjust the sliders to define your brand tone and energy.',
     icon: Sliders,
     module: 'vibe',
-    weight: 25,
+    weight: 20,
   },
   {
     id: 'values',
@@ -62,7 +93,7 @@ const ONBOARDING_STEPS = [
     description: 'Select and rank the core values that guide your practice.',
     icon: Heart,
     module: 'values',
-    weight: 25,
+    weight: 20,
   },
   {
     id: 'complete',
@@ -123,16 +154,38 @@ function Onboarding() {
   const [brandDiscovery, setBrandDiscovery] = useState(null);
   const [referenceData, setReferenceData] = useState(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [enrichedData, setEnrichedData] = useState({}); // Data from import/scrape
 
-  // Get active steps based on whether user wants advanced setup
-  const activeSteps = showAdvanced
-    ? [...ONBOARDING_STEPS.slice(0, -1), ...ADVANCED_STEPS, ONBOARDING_STEPS[ONBOARDING_STEPS.length - 1]]
-    : ONBOARDING_STEPS;
+  // Get profile properties to determine if import step should show
+  const profileProperties = brandDiscovery?.modules?.profile?.data?.properties || {};
+  const hasAnyProperties = profileProperties.has_website ||
+    profileProperties.has_podcast ||
+    profileProperties.has_newsletter ||
+    profileProperties.has_bio;
 
+  // Filter steps based on conditions
+  const getActiveSteps = () => {
+    let steps = showAdvanced
+      ? [...ONBOARDING_STEPS.slice(0, -1), ...ADVANCED_STEPS, ONBOARDING_STEPS[ONBOARDING_STEPS.length - 1]]
+      : ONBOARDING_STEPS;
+
+    // Filter out import step if user has no properties
+    steps = steps.filter(step => {
+      if (step.id === 'import' && !hasAnyProperties) {
+        return false;
+      }
+      return true;
+    });
+
+    return steps;
+  };
+
+  const activeSteps = getActiveSteps();
   const currentStepData = activeSteps[currentStep];
   const isFirstStep = currentStep === 0;
   const isLastStep = currentStep === activeSteps.length - 1;
   const isModuleStep = !!currentStepData?.module;
+  const isSpecialStep = ['properties', 'import'].includes(currentStepData?.id);
 
   // Calculate progress (skip welcome and complete steps)
   const moduleSteps = activeSteps.filter(s => s.module);
@@ -237,6 +290,36 @@ function Onboarding() {
   };
 
   /**
+   * Handle properties checklist save
+   */
+  const handlePropertiesSave = async (data, status) => {
+    try {
+      setSaving(true);
+      const response = await api.brandDiscovery.updateModule('profile', data, status);
+      setBrandDiscovery(response.brandDiscovery);
+      showToast({ message: 'Properties saved', variant: 'success' });
+      handleNext();
+    } catch (err) {
+      console.error('[Onboarding] Failed to save properties:', err);
+      showToast({ message: `Failed to save: ${err.message}`, variant: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /**
+   * Handle import completion
+   */
+  const handleImportComplete = (extractedData, importedSources) => {
+    setEnrichedData(extractedData || {});
+    showToast({
+      message: `Successfully imported from ${importedSources.length} source(s)`,
+      variant: 'success'
+    });
+    handleNext();
+  };
+
+  /**
    * Render the module editor for current step
    */
   const renderModuleEditor = () => {
@@ -261,6 +344,13 @@ function Onboarding() {
     };
 
     switch (moduleId) {
+      case 'profile':
+        return (
+          <MadlibsProfile
+            {...commonProps}
+            enrichedData={enrichedData}
+          />
+        );
       case 'vibe':
         return <VibeEditor {...commonProps} />;
       case 'values':
@@ -349,6 +439,29 @@ function Onboarding() {
             </div>
           )}
 
+          {/* Properties checklist step */}
+          {currentStepData.id === 'properties' && (
+            <div className={styles.moduleWrapper}>
+              <PropertiesChecklist
+                data={getModuleData('profile')}
+                onSave={handlePropertiesSave}
+                onSkip={() => handlePropertiesSave({ properties: {} }, 'partial')}
+                saving={saving}
+              />
+            </div>
+          )}
+
+          {/* Import content step */}
+          {currentStepData.id === 'import' && (
+            <div className={styles.moduleWrapper}>
+              <ImportContent
+                properties={profileProperties}
+                onComplete={handleImportComplete}
+                onSkip={handleNext}
+              />
+            </div>
+          )}
+
           {/* Module step - render the editor */}
           {isModuleStep && (
             <div className={styles.moduleWrapper}>
@@ -383,8 +496,8 @@ function Onboarding() {
         </div>
       </div>
 
-      {/* Navigation footer - hidden on module steps (editors have their own buttons) */}
-      {!isModuleStep && (
+      {/* Navigation footer - hidden on module/special steps (they have their own buttons) */}
+      {!isModuleStep && !isSpecialStep && (
         <div className={styles.footer}>
           <div className={styles.footerLeft}>
             {!isFirstStep && (

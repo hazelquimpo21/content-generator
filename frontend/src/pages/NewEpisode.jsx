@@ -34,7 +34,7 @@ import {
   Zap,
   Lightbulb,
 } from 'lucide-react';
-import { Button, Card, Input, useToast, AudioUpload } from '@components/shared';
+import { Button, Card, Input, useToast, AudioUpload, TranscriptPreview } from '@components/shared';
 import { useProcessing } from '@contexts/ProcessingContext';
 import { useUpload } from '@contexts/UploadContext';
 import api from '@utils/api-client';
@@ -240,11 +240,12 @@ function NewEpisode() {
       if (transcriptData) {
         hasPopulatedFromUploadRef.current = true;
         setInputMode('audio');
-        setTranscript(transcriptData.transcript);
+        // Use formattedTranscript when available (has timestamps/speakers), otherwise plain transcript
+        setTranscript(transcriptData.formattedTranscript || transcriptData.transcript);
         setAudioMetadata({
           audioDurationMinutes: transcriptData.audioDurationMinutes,
           audioDurationSeconds: transcriptData.audioDurationSeconds,
-          estimatedCost: transcriptData.estimatedCost,
+          estimatedCost: transcriptData.estimatedCost || transcriptData.totalCost,
           formattedCost: transcriptData.formattedCost,
           chunked: transcriptData.chunked,
           totalChunks: transcriptData.totalChunks,
@@ -252,6 +253,12 @@ function NewEpisode() {
           fileSize: upload.file?.size,
           model: transcriptData.model,
           hasSpeakerLabels: transcriptData.hasSpeakerLabels || false,
+          // Enhanced transcription data for timestamps and speakers
+          formattedTranscript: transcriptData.formattedTranscript,
+          speakers: transcriptData.speakers,
+          utterances: transcriptData.utterances,
+          provider: transcriptData.provider,
+          transcriptId: transcriptData.transcriptId,
         });
 
         // Reset user edits for new audio
@@ -449,7 +456,9 @@ function NewEpisode() {
    * Handle audio transcription completion
    */
   function handleAudioTranscriptReady(transcriptText, metadata) {
-    setTranscript(transcriptText);
+    // Use formattedTranscript when available (has timestamps/speakers), otherwise plain transcript
+    const transcriptToUse = metadata?.formattedTranscript || transcriptText;
+    setTranscript(transcriptToUse);
     setAudioMetadata(metadata);
 
     // Reset user edits and title history for new audio
@@ -540,6 +549,13 @@ function NewEpisode() {
           transcription_model: audioMetadata.model,
           transcribed_at: new Date().toISOString(),
         };
+
+        // Include speaker data in episode context if available
+        if (audioMetadata.hasSpeakerLabels && audioMetadata.speakers) {
+          episodeData.episode_context.speakers = audioMetadata.speakers;
+          episodeData.episode_context.hasSpeakerDiarization = true;
+          episodeData.episode_context.speakerProvider = audioMetadata.provider || 'whisper-enhanced';
+        }
       }
 
       const response = await api.episodes.create(episodeData);
@@ -807,11 +823,29 @@ function NewEpisode() {
                     <span>{transcript.split(/\s+/).filter(Boolean).length.toLocaleString()} words</span>
                     <span>{audioMetadata.audioDurationMinutes?.toFixed(1)} min</span>
                     <span>{audioMetadata.formattedCost}</span>
+                    {audioMetadata.hasSpeakerLabels && audioMetadata.speakers && (
+                      <span>{audioMetadata.speakers.length} speakers</span>
+                    )}
                   </div>
-                  <div className={styles.transcriptPreviewText}>
-                    {transcript.slice(0, 500)}
-                    {transcript.length > 500 && '...'}
-                  </div>
+
+                  {/* Show full TranscriptPreview when we have utterances with timestamps/speakers */}
+                  {audioMetadata.utterances && audioMetadata.utterances.length > 0 ? (
+                    <TranscriptPreview
+                      utterances={audioMetadata.utterances}
+                      speakers={audioMetadata.speakers || []}
+                      showTimestamps={true}
+                      showSpeakers={audioMetadata.hasSpeakerLabels}
+                      defaultExpanded={false}
+                      maxHeight={400}
+                    />
+                  ) : (
+                    /* Fallback to basic text preview when no utterances */
+                    <div className={styles.transcriptPreviewText}>
+                      {transcript.slice(0, 500)}
+                      {transcript.length > 500 && '...'}
+                    </div>
+                  )}
+
                   {/* Analysis status */}
                   <div className={styles.transcriptFooter}>
                     {showAnalyzingStatus && (

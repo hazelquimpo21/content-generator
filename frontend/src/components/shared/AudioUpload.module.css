@@ -451,3 +451,35 @@
   border-color: var(--color-primary);
   color: var(--color-primary);
 }
+
+/* ============================================================================
+ * MINIMIZED PLACEHOLDER (Shows in component when minimized)
+ * ============================================================================ */
+
+.minimizedPlaceholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-6);
+  background-color: var(--color-bg-tertiary);
+  border: 2px dashed var(--color-primary);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.minimizedPlaceholder:hover {
+  background-color: var(--color-primary-light);
+}
+
+.minimizedPlaceholderText {
+  font-weight: var(--font-medium);
+  color: var(--color-primary);
+}
+
+.minimizedPlaceholderHint {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+}

@@ -1,0 +1,224 @@
+/**
+ * ============================================================================
+ * GLOBAL UPLOAD INDICATOR STYLES
+ * ============================================================================
+ * Floating indicator that persists across navigation
+ * ============================================================================
+ */
+
+.indicator {
+  position: fixed;
+  bottom: var(--space-4);
+  right: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-bg-secondary);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  max-width: 400px;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================================================
+ * STATE VARIANTS
+ * ============================================================================ */
+
+.indicator.uploading {
+  border: 1px solid var(--color-primary);
+  cursor: pointer;
+}
+
+.indicator.uploading:hover {
+  background-color: var(--color-primary-light);
+}
+
+.indicator.transcribing {
+  border: 1px solid var(--color-primary);
+  cursor: pointer;
+}
+
+.indicator.transcribing:hover {
+  background-color: var(--color-primary-light);
+}
+
+.indicator.complete {
+  border: 1px solid var(--color-success);
+  background-color: var(--color-success-light);
+}
+
+.indicator.error {
+  border: 1px solid var(--color-error);
+  background-color: var(--color-error-light);
+}
+
+/* ============================================================================
+ * CONTENT
+ * ============================================================================ */
+
+.content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+}
+
+.icon {
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.successIcon {
+  color: var(--color-success);
+  flex-shrink: 0;
+}
+
+.errorIcon {
+  color: var(--color-error);
+  flex-shrink: 0;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.progressInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.text {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.statsRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.stat {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+}
+
+.stat svg {
+  color: var(--color-primary);
+}
+
+.tip {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+  animation: tipFade 0.3s ease-in-out;
+}
+
+@keyframes tipFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* ============================================================================
+ * PROGRESS BAR
+ * ============================================================================ */
+
+.progressBar {
+  width: 80px;
+  height: 4px;
+  background-color: var(--color-bg-accent);
+  border-radius: 2px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.progressFill {
+  height: 100%;
+  background-color: var(--color-primary);
+  transition: width 0.3s ease;
+}
+
+/* ============================================================================
+ * ACTIONS
+ * ============================================================================ */
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.expandButton,
+.cancelButton,
+.closeButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.expandButton:hover {
+  background-color: var(--color-bg-primary);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.cancelButton:hover,
+.closeButton:hover {
+  background-color: var(--color-error-light);
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+/* ============================================================================
+ * RESPONSIVE
+ * ============================================================================ */
+
+@media (max-width: 480px) {
+  .indicator {
+    left: var(--space-4);
+    right: var(--space-4);
+    max-width: none;
+  }
+
+  .progressBar {
+    display: none;
+  }
+}

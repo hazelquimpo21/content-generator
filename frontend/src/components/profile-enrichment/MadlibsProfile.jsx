@@ -216,8 +216,13 @@ function MadlibsProfile({ data = {}, referenceData = {}, onSave, saving, enriche
   // Get word banks from reference data
   const wordBanks = referenceData.wordBanks || {};
 
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    handleSave();
+  };
+
   return (
-    <div className={styles.container}>
+    <form className={styles.container} onSubmit={handleFormSubmit} autoComplete="on">
       {/* Section 1: Who You Are */}
       <div className={styles.section}>
         <h3 className={styles.sectionTitle}>Who You Are</h3>
@@ -225,6 +230,9 @@ function MadlibsProfile({ data = {}, referenceData = {}, onSave, saving, enriche
           <span>I'm </span>
           <input
             type="text"
+            name="name"
+            id="profile-name"
+            autoComplete="name"
             className={styles.inlineInput}
             placeholder="your name"
             value={profile.name}
@@ -233,6 +241,9 @@ function MadlibsProfile({ data = {}, referenceData = {}, onSave, saving, enriche
           <span> and my credentials are </span>
           <input
             type="text"
+            name="credentials"
+            id="profile-credentials"
+            autoComplete="honorific-suffix"
             className={styles.inlineInput}
             placeholder="PhD, LMFT, etc."
             value={profile.credentials}
@@ -241,6 +252,9 @@ function MadlibsProfile({ data = {}, referenceData = {}, onSave, saving, enriche
           <span>. My business name is </span>
           <input
             type="text"
+            name="organization"
+            id="profile-business-name"
+            autoComplete="organization"
             className={`${styles.inlineInput} ${styles.wide}`}
             placeholder="your practice name"
             value={profile.business_name}
@@ -257,6 +271,9 @@ function MadlibsProfile({ data = {}, referenceData = {}, onSave, saving, enriche
           <span>I'm based in </span>
           <input
             type="text"
+            name="address-level2"
+            id="profile-location"
+            autoComplete="address-level2"
             className={styles.inlineInput}
             placeholder="City, State"
             value={profile.location}
@@ -283,6 +300,9 @@ function MadlibsProfile({ data = {}, referenceData = {}, onSave, saving, enriche
                 <span>My podcast is called </span>
                 <input
                   type="text"
+                  name="podcast-name"
+                  id="profile-podcast-name"
+                  autoComplete="off"
                   className={`${styles.inlineInput} ${styles.wide}`}
                   placeholder="podcast name"
                   value={profile.podcast_name}
@@ -296,6 +316,9 @@ function MadlibsProfile({ data = {}, referenceData = {}, onSave, saving, enriche
                 <span>My newsletter is </span>
                 <input
                   type="text"
+                  name="newsletter-name"
+                  id="profile-newsletter-name"
+                  autoComplete="off"
                   className={`${styles.inlineInput} ${styles.wide}`}
                   placeholder="newsletter name"
                   value={profile.newsletter_name}
@@ -378,6 +401,9 @@ function MadlibsProfile({ data = {}, referenceData = {}, onSave, saving, enriche
           <span>They choose me over others because </span>
           <input
             type="text"
+            name="differentiator"
+            id="profile-differentiator"
+            autoComplete="off"
             className={`${styles.inlineInput} ${styles.extraWide}`}
             placeholder="what makes you unique"
             value={profile.differentiator}
@@ -390,15 +416,15 @@ function MadlibsProfile({ data = {}, referenceData = {}, onSave, saving, enriche
       {/* Save button */}
       <div className={styles.actions}>
         <Button
+          type="submit"
           variant="primary"
           leftIcon={Save}
-          onClick={handleSave}
           loading={saving}
         >
           Save & Continue
         </Button>
       </div>
-    </div>
+    </form>
   );
 }
 

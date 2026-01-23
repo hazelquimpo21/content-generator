@@ -10,7 +10,7 @@
 import * as cheerio from 'cheerio';
 import logger from '../lib/logger.js';
 import { getServiceClient } from '../lib/supabase-client.js';
-import { callClaude } from '../lib/ai-clients.js';
+import { callClaude } from '../lib/api-client-anthropic.js';
 
 // ============================================================================
 // CONFIGURATION
@@ -517,19 +517,13 @@ async function analyzeContentWithAI(content, sourceType) {
   const prompt = buildAnalysisPrompt(content, sourceType);
 
   try {
-    const response = await callClaude({
+    const response = await callClaude(prompt, {
       model: 'claude-3-5-haiku-20241022',
       maxTokens: 2000,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
     });
 
-    // Parse the JSON response
-    const responseText = response.content[0].text;
+    // Parse the JSON response (callClaude returns { content: string })
+    const responseText = response.content;
 
     // Extract JSON from response (handle markdown code blocks)
     const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/) ||

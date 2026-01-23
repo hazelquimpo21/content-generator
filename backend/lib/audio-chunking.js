@@ -34,15 +34,15 @@ import logger from './logger.js';
 // ============================================================================
 
 // Target chunk size in MB (keep under Whisper's 25MB limit)
-const TARGET_CHUNK_SIZE_MB = 20;
+export const TARGET_CHUNK_SIZE_MB = 20;
 
 // Chunk duration in seconds (roughly 20 minutes per chunk at 128kbps MP3)
 // 20 min * 60 sec * 128 kbps / 8 bits = ~19.2 MB
 const CHUNK_DURATION_SECONDS = 1200; // 20 minutes
 
 // Maximum file size we'll accept (100 MB)
-const MAX_LARGE_FILE_SIZE_MB = 100;
-const MAX_LARGE_FILE_SIZE_BYTES = MAX_LARGE_FILE_SIZE_MB * 1024 * 1024;
+export const MAX_LARGE_FILE_SIZE_MB = 100;
+export const MAX_LARGE_FILE_SIZE_BYTES = MAX_LARGE_FILE_SIZE_MB * 1024 * 1024;
 
 // Whisper API limit
 const WHISPER_MAX_SIZE_BYTES = 25 * 1024 * 1024;

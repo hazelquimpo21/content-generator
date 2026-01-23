@@ -58,6 +58,24 @@ const NODE_ENV = process.env.NODE_ENV || 'development';
 // MIDDLEWARE SETUP
 // ============================================================================
 
+// Debug: Log all incoming requests immediately (before any other middleware)
+app.use((req, res, next) => {
+  console.log(`[DEBUG] Incoming request: ${req.method} ${req.url} Content-Type: ${req.headers['content-type']} Content-Length: ${req.headers['content-length']}`);
+
+  // Add error handlers to catch socket issues
+  req.on('error', (err) => {
+    console.error('[DEBUG] Request stream error:', err.message);
+  });
+  res.on('error', (err) => {
+    console.error('[DEBUG] Response stream error:', err.message);
+  });
+  req.socket?.on('error', (err) => {
+    console.error('[DEBUG] Socket error:', err.message);
+  });
+
+  next();
+});
+
 // Add correlation ID to all requests (for tracing)
 app.use(correlationId);
 

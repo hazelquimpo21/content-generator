@@ -28,8 +28,9 @@ import {
   Edit3,
   ChevronLeft,
   ChevronRight,
+  Mic,
 } from 'lucide-react';
-import { Button, Card, Input, useToast } from '@components/shared';
+import { Button, Card, Input, useToast, AudioUpload } from '@components/shared';
 import { useProcessing } from '@contexts/ProcessingContext';
 import api from '@utils/api-client';
 import { useTranscriptAutoPopulate } from '@hooks/useTranscriptAutoPopulate';
@@ -55,10 +56,14 @@ function NewEpisode() {
   const { showToast } = useToast();
   const { trackProcessing, estimatedDuration } = useProcessing();
 
+  // Input mode: 'transcript' or 'audio'
+  const [inputMode, setInputMode] = useState('transcript');
+
   // Form state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [transcript, setTranscript] = useState('');
+  const [audioMetadata, setAudioMetadata] = useState(null);
   const [episodeContext, setEpisodeContext] = useState({
     title: '',
     episode_number: '',
@@ -346,6 +351,56 @@ function NewEpisode() {
     }
   }
 
+  /**
+   * Handle audio transcription completion
+   */
+  function handleAudioTranscriptReady(transcriptText, metadata) {
+    setTranscript(transcriptText);
+    setAudioMetadata(metadata);
+
+    // Reset user edits and title history for new audio
+    userEditedFieldsRef.current.clear();
+    resetAnalysis();
+    setRegenerationCount(0);
+    setRegenerateCooldown(0);
+    setTitleHistory([]);
+    setCurrentTitleIndex(0);
+  }
+
+  /**
+   * Handle audio upload error
+   */
+  function handleAudioError(errorMessage) {
+    setError(errorMessage);
+  }
+
+  /**
+   * Switch input mode
+   */
+  function handleInputModeChange(mode) {
+    if (mode !== inputMode) {
+      setInputMode(mode);
+      // Clear transcript when switching modes
+      setTranscript('');
+      setAudioMetadata(null);
+      setError(null);
+      userEditedFieldsRef.current.clear();
+      resetAnalysis();
+      setRegenerationCount(0);
+      setRegenerateCooldown(0);
+      setTitleHistory([]);
+      setCurrentTitleIndex(0);
+      setEpisodeContext({
+        title: '',
+        episode_number: '',
+        guest_name: '',
+        guest_credentials: '',
+        recording_date: '',
+        notes: '',
+      });
+    }
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
 
@@ -370,7 +425,7 @@ function NewEpisode() {
       setError(null);
 
       // Create episode
-      const response = await api.episodes.create({
+      const episodeData = {
         transcript: transcript.trim(),
         episode_context: {
           ...episodeContext,
@@ -378,7 +433,22 @@ function NewEpisode() {
             ? parseInt(episodeContext.episode_number, 10)
             : undefined,
         },
-      });
+      };
+
+      // Add audio metadata if uploaded from audio
+      if (inputMode === 'audio' && audioMetadata) {
+        episodeData.source_type = 'audio';
+        episodeData.audio_metadata = {
+          original_filename: audioMetadata.filename,
+          duration_seconds: audioMetadata.audioDurationSeconds,
+          file_size_bytes: audioMetadata.fileSize,
+          transcription_cost_usd: audioMetadata.estimatedCost,
+          transcription_model: audioMetadata.model,
+          transcribed_at: new Date().toISOString(),
+        };
+      }
+
+      const response = await api.episodes.create(episodeData);
 
       const episode = response.episode;
       const title = episodeContext.title || 'Untitled Episode';
@@ -444,79 +514,146 @@ function NewEpisode() {
           </div>
         )}
 
-        {/* Transcript section */}
+        {/* Content Input section */}
         <Card
-          title="Transcript"
-          subtitle="Paste your transcript or upload a text file"
-          headerAction={<FileText className={styles.sectionIcon} />}
+          title="Add Your Content"
+          subtitle={inputMode === 'transcript' ? 'Paste your transcript or upload a text file' : 'Upload an audio file to transcribe'}
+          headerAction={inputMode === 'transcript' ? <FileText className={styles.sectionIcon} /> : <Mic className={styles.sectionIcon} />}
         >
-          <div className={styles.transcriptSection}>
-            {/* File upload */}
-            <div className={styles.uploadArea}>
-              <input
-                type="file"
-                accept=".txt,.md,.doc,.docx"
-                onChange={handleFileUpload}
-                className={styles.fileInput}
-                id="transcript-file"
-              />
-              <label htmlFor="transcript-file" className={styles.uploadLabel}>
-                <Upload className={styles.uploadIcon} />
-                <span className={styles.uploadText}>
-                  Drop file here or click to upload
-                </span>
-                <span className={styles.uploadHint}>
-                  Supports .txt, .md, .doc, .docx
-                </span>
-              </label>
-            </div>
-
-            {/* Or divider */}
-            <div className={styles.divider}>
-              <span>or paste directly</span>
-            </div>
-
-            {/* Transcript textarea */}
-            <Input
-              multiline
-              rows={12}
-              placeholder="Paste your full podcast transcript here..."
-              value={transcript}
-              onChange={handleTranscriptChange}
-            />
-
-            {/* Word count and analysis status */}
-            <div className={styles.transcriptFooter}>
-              {transcript && (
-                <p className={styles.wordCount}>
-                  {transcript.split(/\s+/).filter(Boolean).length.toLocaleString()} words
-                </p>
-              )}
-              {showAnalyzingStatus && (
-                <div className={styles.analyzingStatus}>
-                  <Loader2 className={styles.analyzingSpinner} size={14} />
-                  <span>Analyzing transcript...</span>
-                </div>
-              )}
-              {metadata && !analyzing && (
-                <div className={styles.analysisComplete}>
-                  <Check size={14} />
-                  <span>Analysis complete</span>
-                  {usage && (
-                    <span className={styles.analysisCost}>
-                      (${usage.cost.toFixed(4)}, {(usage.durationMs / 1000).toFixed(1)}s)
-                    </span>
-                  )}
-                </div>
-              )}
-              {analyzeError && (
-                <div className={styles.analyzeError}>
-                  <AlertCircle size={14} />
-                  <span>Auto-populate unavailable</span>
-                </div>
-              )}
-            </div>
+          {/* Input mode tabs */}
+          <div className={styles.inputModeTabs}>
+            <button
+              type="button"
+              className={`${styles.inputModeTab} ${inputMode === 'transcript' ? styles.active : ''}`}
+              onClick={() => handleInputModeChange('transcript')}
+            >
+              <FileText size={18} />
+              <span>Paste Transcript</span>
+            </button>
+            <button
+              type="button"
+              className={`${styles.inputModeTab} ${inputMode === 'audio' ? styles.active : ''}`}
+              onClick={() => handleInputModeChange('audio')}
+            >
+              <Mic size={18} />
+              <span>Upload Audio</span>
+            </button>
           </div>
+
+          {/* Transcript input mode */}
+          {inputMode === 'transcript' && (
+            <div className={styles.transcriptSection}>
+              {/* File upload */}
+              <div className={styles.uploadArea}>
+                <input
+                  type="file"
+                  accept=".txt,.md,.doc,.docx"
+                  onChange={handleFileUpload}
+                  className={styles.fileInput}
+                  id="transcript-file"
+                />
+                <label htmlFor="transcript-file" className={styles.uploadLabel}>
+                  <Upload className={styles.uploadIcon} />
+                  <span className={styles.uploadText}>
+                    Drop file here or click to upload
+                  </span>
+                  <span className={styles.uploadHint}>
+                    Supports .txt, .md, .doc, .docx
+                  </span>
+                </label>
+              </div>
+
+              {/* Or divider */}
+              <div className={styles.divider}>
+                <span>or paste directly</span>
+              </div>
+
+              {/* Transcript textarea */}
+              <Input
+                multiline
+                rows={12}
+                placeholder="Paste your full podcast transcript here..."
+                value={transcript}
+                onChange={handleTranscriptChange}
+              />
+
+              {/* Word count and analysis status */}
+              <div className={styles.transcriptFooter}>
+                {transcript && (
+                  <p className={styles.wordCount}>
+                    {transcript.split(/\s+/).filter(Boolean).length.toLocaleString()} words
+                  </p>
+                )}
+                {showAnalyzingStatus && (
+                  <div className={styles.analyzingStatus}>
+                    <Loader2 className={styles.analyzingSpinner} size={14} />
+                    <span>Analyzing transcript...</span>
+                  </div>
+                )}
+                {metadata && !analyzing && (
+                  <div className={styles.analysisComplete}>
+                    <Check size={14} />
+                    <span>Analysis complete</span>
+                    {usage && (
+                      <span className={styles.analysisCost}>
+                        (${usage.cost.toFixed(4)}, {(usage.durationMs / 1000).toFixed(1)}s)
+                      </span>
+                    )}
+                  </div>
+                )}
+                {analyzeError && (
+                  <div className={styles.analyzeError}>
+                    <AlertCircle size={14} />
+                    <span>Auto-populate unavailable</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Audio upload mode */}
+          {inputMode === 'audio' && (
+            <div className={styles.audioSection}>
+              <AudioUpload
+                onTranscriptReady={handleAudioTranscriptReady}
+                onError={handleAudioError}
+              />
+
+              {/* Show transcript preview after audio transcription */}
+              {transcript && audioMetadata && (
+                <div className={styles.transcriptPreview}>
+                  <div className={styles.transcriptPreviewHeader}>
+                    <Check size={16} className={styles.successIcon} />
+                    <span>Transcript from {audioMetadata.filename}</span>
+                  </div>
+                  <div className={styles.transcriptPreviewStats}>
+                    <span>{transcript.split(/\s+/).filter(Boolean).length.toLocaleString()} words</span>
+                    <span>{audioMetadata.audioDurationMinutes?.toFixed(1)} min</span>
+                    <span>{audioMetadata.formattedCost}</span>
+                  </div>
+                  <div className={styles.transcriptPreviewText}>
+                    {transcript.slice(0, 500)}
+                    {transcript.length > 500 && '...'}
+                  </div>
+                  {/* Analysis status */}
+                  <div className={styles.transcriptFooter}>
+                    {showAnalyzingStatus && (
+                      <div className={styles.analyzingStatus}>
+                        <Loader2 className={styles.analyzingSpinner} size={14} />
+                        <span>Analyzing transcript...</span>
+                      </div>
+                    )}
+                    {metadata && !analyzing && (
+                      <div className={styles.analysisComplete}>
+                        <Check size={14} />
+                        <span>Analysis complete</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </Card>
 
         {/* Generated Title Section - Only shows after analysis or when title exists */}

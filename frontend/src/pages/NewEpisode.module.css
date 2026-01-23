@@ -55,6 +55,47 @@
 }
 
 /* ============================================================================
+ * INPUT MODE TABS
+ * ============================================================================ */
+
+.inputModeTabs {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-1);
+  background-color: var(--color-bg-tertiary);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--space-4);
+}
+
+.inputModeTab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.inputModeTab:hover {
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-secondary);
+}
+
+.inputModeTab.active {
+  background-color: var(--color-bg-primary);
+  color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ============================================================================
  * TRANSCRIPT SECTION
  * ============================================================================ */
 
@@ -62,6 +103,56 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+}
+
+/* ============================================================================
+ * AUDIO SECTION
+ * ============================================================================ */
+
+.audioSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.transcriptPreview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background-color: var(--color-bg-tertiary);
+  border: 1px solid var(--color-bg-accent);
+  border-radius: var(--radius-lg);
+}
+
+.transcriptPreviewHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+}
+
+.transcriptPreviewHeader .successIcon {
+  color: var(--color-success);
+}
+
+.transcriptPreviewStats {
+  display: flex;
+  gap: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+}
+
+.transcriptPreviewText {
+  padding: var(--space-3);
+  background-color: var(--color-bg-primary);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+  max-height: 150px;
+  overflow-y: auto;
 }
 
 .uploadArea {

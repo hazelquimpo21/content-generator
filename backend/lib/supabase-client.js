@@ -102,6 +102,8 @@ export const episodeRepo = {
       transcriptLength: data.transcript?.length,
       hasContext: !!data.episode_context && Object.keys(data.episode_context).length > 0,
       hasUserId: !!data.user_id,
+      sourceType: data.source_type || 'transcript',
+      hasAudioMetadata: !!data.audio_metadata,
     });
 
     // Build insert object - only include user_id if provided
@@ -115,6 +117,14 @@ export const episodeRepo = {
     // Add user_id for multi-user support (optional for backwards compatibility)
     if (data.user_id) {
       insertData.user_id = data.user_id;
+    }
+
+    // Add audio source fields if provided
+    if (data.source_type) {
+      insertData.source_type = data.source_type;
+    }
+    if (data.audio_metadata) {
+      insertData.audio_metadata = data.audio_metadata;
     }
 
     const { data: episode, error } = await db
@@ -131,10 +141,12 @@ export const episodeRepo = {
     logger.dbResult('insert', 'episodes', {
       episodeId: episode.id,
       userId: episode.user_id,
+      sourceType: episode.source_type,
     });
     logger.info('Episode created', {
       episodeId: episode.id,
       userId: episode.user_id,
+      sourceType: episode.source_type,
     });
     return episode;
   },

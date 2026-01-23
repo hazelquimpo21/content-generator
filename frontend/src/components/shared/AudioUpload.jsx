@@ -264,11 +264,12 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
             </div>
             <div className={styles.fileActions}>
               <button
-                className={styles.minimizeButton}
+                className={styles.backgroundButton}
                 onClick={minimize}
-                title="Minimize - upload continues in background"
+                title="Continue uploading in background while you browse"
               >
-                <Minimize2 size={16} />
+                <Minimize2 size={14} />
+                <span>Background</span>
               </button>
               <button
                 className={styles.cancelButton}
@@ -302,7 +303,7 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
             )}
           </div>
           <span className={styles.backgroundHint}>
-            You can minimize this and continue browsing - upload will continue
+            Click the minimize button to continue browsing while this uploads
           </span>
         </div>
       )}
@@ -337,11 +338,12 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
               <span className={styles.fileSize}>{formatFileSize(file?.size || 0)}</span>
             </div>
             <button
-              className={styles.minimizeButton}
+              className={styles.backgroundButton}
               onClick={minimize}
-              title="Minimize - transcription continues in background"
+              title="Continue transcribing in background while you browse"
             >
-              <Minimize2 size={16} />
+              <Minimize2 size={14} />
+              <span>Background</span>
             </button>
           </div>
           <div className={styles.transcribingStatus}>
@@ -358,7 +360,7 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
             <span className={styles.tipText}>{TRANSCRIPTION_TIPS[currentTipIndex]}</span>
           </div>
           <span className={styles.backgroundHint}>
-            You can minimize this and continue browsing - transcription will continue
+            Click the minimize button to continue browsing while this transcribes
           </span>
         </div>
       )}

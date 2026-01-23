@@ -77,7 +77,7 @@ function GlobalUploadIndicator() {
   } = useUpload();
 
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
-  const prevStateRef = useRef(state);
+  const prevStateRef = useRef(null); // Start as null to detect initial mount
 
   // Rotate tips during transcription
   useEffect(() => {
@@ -95,12 +95,19 @@ function GlobalUploadIndicator() {
     const prevState = prevStateRef.current;
     prevStateRef.current = state;
 
+    // Skip on initial mount (prevState is null)
+    if (prevState === null) return;
+
     // Only react to state transitions
     if (prevState === state) return;
 
     // On completion - show toast with action to go to new episode page
-    if (state === UPLOAD_STATE.COMPLETE && prevState === UPLOAD_STATE.TRANSCRIBING) {
+    // Trigger when transitioning TO complete from uploading or transcribing
+    if (state === UPLOAD_STATE.COMPLETE &&
+        (prevState === UPLOAD_STATE.TRANSCRIBING || prevState === UPLOAD_STATE.UPLOADING)) {
       const isOnNewEpisodePage = location.pathname === '/episodes/new';
+
+      console.log('[GlobalUploadIndicator] Showing completion toast', { prevState, state, isOnNewEpisodePage });
 
       showToast({
         message: 'Transcription complete!',
@@ -126,7 +133,10 @@ function GlobalUploadIndicator() {
     }
 
     // On error - show error toast
-    if (state === UPLOAD_STATE.ERROR && prevState !== UPLOAD_STATE.IDLE) {
+    if (state === UPLOAD_STATE.ERROR &&
+        prevState !== UPLOAD_STATE.IDLE && prevState !== null) {
+      console.log('[GlobalUploadIndicator] Showing error toast', { prevState, state, error });
+
       showToast({
         message: 'Upload failed',
         description: error || 'Something went wrong. Please try again.',

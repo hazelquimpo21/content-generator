@@ -294,7 +294,7 @@ function Dashboard() {
             Try Again
           </Button>
         </Card>
-      ) : filteredEpisodes.length === 0 ? (
+      ) : filteredEpisodes.length === 0 && !upload.isProcessing ? (
         <Card className={styles.emptyCard}>
           <div className={styles.emptyContent}>
             <h3>No episodes found</h3>
@@ -315,7 +315,7 @@ function Dashboard() {
         </Card>
       ) : (
         <div className={styles.grid}>
-          {/* Upload in progress card */}
+          {/* Upload in progress card - always shows at the top when processing */}
           {upload.isProcessing && (
             <UploadProgressCard
               state={upload.state}

@@ -786,6 +786,11 @@
   color: var(--color-text-tertiary);
 }
 
+/* Status colors for podcast episodes */
+.statusProcessed {
+  color: var(--color-success);
+}
+
 /* Responsive adjustments for podcast section */
 @media (max-width: 640px) {
   .podcastHeader {

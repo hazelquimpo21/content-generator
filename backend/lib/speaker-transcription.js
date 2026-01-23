@@ -247,9 +247,13 @@ async function startTranscription(audioUrl, options = {}) {
     speaker_labels: true, // Enable speaker diarization
   };
 
-  // Add optional parameters
+  // Add language settings
   if (language) {
+    // Use specific language code
     requestBody.language_code = language;
+  } else {
+    // Enable automatic language detection (required for universal model)
+    requestBody.language_detection = true;
   }
 
   if (speakersExpected && speakersExpected > 0) {

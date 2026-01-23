@@ -1,0 +1,254 @@
+/* ============================================================================
+ * CONNECT PODCAST MODAL STYLES
+ * ============================================================================ */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 0.5rem;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tab:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text);
+}
+
+.activeTab {
+  background: var(--color-primary-subtle);
+  color: var(--color-primary);
+}
+
+/* Tab content */
+.tabContent {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+/* Search form */
+.searchForm,
+.urlForm {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.searchForm > div:first-child,
+.urlForm > div:first-child {
+  flex: 1;
+}
+
+/* Error message */
+.error {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-error-subtle);
+  border: 1px solid var(--color-error-border);
+  border-radius: var(--radius-md);
+  color: var(--color-error);
+  font-size: 0.875rem;
+}
+
+/* Results list */
+.results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+/* Result card */
+.resultCard {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  transition: border-color 0.15s ease;
+}
+
+.resultCard:hover {
+  border-color: var(--color-border-hover);
+}
+
+.artwork {
+  width: 80px;
+  height: 80px;
+  border-radius: var(--radius-md);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.resultInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.resultTitle {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resultAuthor {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.resultMeta {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+}
+
+.resultMeta span {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.resultDescription {
+  font-size: 0.813rem;
+  color: var(--color-text-secondary);
+  margin: 0.5rem 0 0;
+  line-height: 1.4;
+}
+
+.resultActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-end;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.websiteLink {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--color-text-tertiary);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.websiteLink:hover {
+  color: var(--color-primary);
+}
+
+/* Help section */
+.helpSection {
+  border-top: 1px solid var(--color-border);
+  padding-top: 1rem;
+  margin-top: 0.5rem;
+}
+
+.helpToggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: color 0.15s ease;
+  width: 100%;
+}
+
+.helpToggle:hover {
+  color: var(--color-text);
+}
+
+.helpTips {
+  margin-top: 0.75rem;
+  padding: 1rem;
+  background: var(--color-surface-subtle);
+  border-radius: var(--radius-md);
+}
+
+.helpIntro {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  margin: 0 0 0.75rem;
+}
+
+.tipsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tip {
+  font-size: 0.813rem;
+  color: var(--color-text);
+  padding: 0.5rem 0.75rem;
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+}
+
+.tip strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .resultCard {
+    flex-direction: column;
+  }
+
+  .artwork {
+    width: 60px;
+    height: 60px;
+  }
+
+  .resultActions {
+    flex-direction: row;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .searchForm,
+  .urlForm {
+    flex-direction: column;
+  }
+}

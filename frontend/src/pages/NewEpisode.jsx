@@ -33,8 +33,11 @@ import {
   Clock,
   Zap,
   Lightbulb,
+  Rss,
+  Settings,
 } from 'lucide-react';
 import { Button, Card, Input, useToast, AudioUpload, TranscriptPreview } from '@components/shared';
+import { FeedEpisodesList } from '@components/podcast';
 import { useProcessing } from '@contexts/ProcessingContext';
 import { useUpload } from '@contexts/UploadContext';
 import api from '@utils/api-client';
@@ -71,8 +74,13 @@ function NewEpisode() {
   const { trackProcessing, estimatedDuration } = useProcessing();
   const upload = useUpload();
 
-  // Input mode: 'transcript' or 'audio'
+  // Input mode: 'transcript', 'audio', or 'feed'
   const [inputMode, setInputMode] = useState('transcript');
+
+  // Podcast feed state
+  const [podcastFeeds, setPodcastFeeds] = useState([]);
+  const [feedsLoading, setFeedsLoading] = useState(false);
+  const [selectedFeed, setSelectedFeed] = useState(null);
 
   // Form state
   const [loading, setLoading] = useState(false);
@@ -478,6 +486,35 @@ function NewEpisode() {
   }
 
   /**
+   * Load podcast feeds for the import tab
+   */
+  async function loadPodcastFeeds() {
+    try {
+      setFeedsLoading(true);
+      const response = await api.podcasts.listFeeds();
+      setPodcastFeeds(response.feeds || []);
+    } catch (err) {
+      console.error('Failed to load podcast feeds:', err);
+      // Don't show error, just keep empty list
+    } finally {
+      setFeedsLoading(false);
+    }
+  }
+
+  /**
+   * Handle episode processed from feed
+   */
+  function handleFeedEpisodeProcessed(episode) {
+    showToast({
+      message: 'Episode created!',
+      description: 'You can now generate content from this episode.',
+      variant: 'success',
+      action: () => navigate(`/episodes/${episode.id}`),
+      actionLabel: 'View Episode',
+    });
+  }
+
+  /**
    * Switch input mode
    */
   function handleInputModeChange(mode) {
@@ -487,6 +524,7 @@ function NewEpisode() {
       setTranscript('');
       setAudioMetadata(null);
       setError(null);
+      setSelectedFeed(null);
       userEditedFieldsRef.current.clear();
       resetAnalysis();
       setRegenerationCount(0);
@@ -501,6 +539,11 @@ function NewEpisode() {
         recording_date: '',
         notes: '',
       });
+
+      // Load feeds when switching to feed mode
+      if (mode === 'feed' && podcastFeeds.length === 0) {
+        loadPodcastFeeds();
+      }
     }
   }
 
@@ -709,8 +752,20 @@ function NewEpisode() {
         {/* Content Input section */}
         <Card
           title="Add Your Content"
-          subtitle={inputMode === 'transcript' ? 'Paste your transcript or upload a text file' : 'Upload an audio file to transcribe'}
-          headerAction={inputMode === 'transcript' ? <FileText className={styles.sectionIcon} /> : <Mic className={styles.sectionIcon} />}
+          subtitle={
+            inputMode === 'transcript'
+              ? 'Paste your transcript or upload a text file'
+              : inputMode === 'audio'
+                ? 'Upload an audio file to transcribe'
+                : 'Import and transcribe episodes from your podcast feed'
+          }
+          headerAction={
+            inputMode === 'transcript'
+              ? <FileText className={styles.sectionIcon} />
+              : inputMode === 'audio'
+                ? <Mic className={styles.sectionIcon} />
+                : <Rss className={styles.sectionIcon} />
+          }
         >
           {/* Input mode tabs */}
           <div className={styles.inputModeTabs}>
@@ -729,6 +784,14 @@ function NewEpisode() {
             >
               <Mic size={18} />
               <span>Upload Audio</span>
+            </button>
+            <button
+              type="button"
+              className={`${styles.inputModeTab} ${inputMode === 'feed' ? styles.active : ''}`}
+              onClick={() => handleInputModeChange('feed')}
+            >
+              <Rss size={18} />
+              <span>Import from Feed</span>
             </button>
           </div>
 
@@ -867,6 +930,66 @@ function NewEpisode() {
                         <span>Analysis complete</span>
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Feed import mode */}
+          {inputMode === 'feed' && (
+            <div className={styles.feedSection}>
+              {feedsLoading ? (
+                <div className={styles.feedLoading}>
+                  <Loader2 className={styles.analyzingSpinner} size={24} />
+                  <span>Loading your podcast feeds...</span>
+                </div>
+              ) : podcastFeeds.length === 0 ? (
+                <div className={styles.noFeeds}>
+                  <Rss className={styles.noFeedsIcon} />
+                  <h4>No Podcast Feeds Connected</h4>
+                  <p>Connect your podcast's RSS feed to import and transcribe episodes directly.</p>
+                  <Button
+                    variant="primary"
+                    leftIcon={Settings}
+                    onClick={() => navigate('/settings')}
+                  >
+                    Connect Podcast in Settings
+                  </Button>
+                </div>
+              ) : selectedFeed ? (
+                <FeedEpisodesList
+                  feed={selectedFeed}
+                  onBack={() => setSelectedFeed(null)}
+                  onEpisodeProcessed={handleFeedEpisodeProcessed}
+                />
+              ) : (
+                <div className={styles.feedSelection}>
+                  <p className={styles.feedSelectionHint}>Select a podcast to view and transcribe episodes:</p>
+                  <div className={styles.feedList}>
+                    {podcastFeeds.map((feed) => (
+                      <button
+                        key={feed.id}
+                        type="button"
+                        className={styles.feedSelectCard}
+                        onClick={() => setSelectedFeed(feed)}
+                      >
+                        {feed.artwork_url && (
+                          <img
+                            src={feed.artwork_url}
+                            alt={feed.title}
+                            className={styles.feedSelectArtwork}
+                          />
+                        )}
+                        <div className={styles.feedSelectInfo}>
+                          <span className={styles.feedSelectTitle}>{feed.title}</span>
+                          <span className={styles.feedSelectMeta}>
+                            {feed.totalEpisodes || 0} episodes · {feed.processedEpisodes || 0} processed
+                          </span>
+                        </div>
+                        <ChevronRight size={20} className={styles.feedSelectArrow} />
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}

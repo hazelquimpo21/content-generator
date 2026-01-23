@@ -110,26 +110,18 @@ function GlobalUploadIndicator() {
       console.log('[GlobalUploadIndicator] Showing completion toast', { prevState, state, isOnNewEpisodePage });
 
       showToast({
-        message: 'Transcription complete!',
+        message: 'Transcript ready!',
         description: isOnNewEpisodePage
-          ? 'Your transcript is ready. You can now generate content.'
-          : 'Your transcript is ready. Return to continue.',
+          ? 'Your transcript is ready. Fill in the details to generate content.'
+          : 'Your audio has been transcribed. Continue to generate content.',
         variant: 'success',
-        duration: 8000,
+        duration: 10000,
         action: isOnNewEpisodePage ? undefined : () => navigate('/episodes/new'),
-        actionLabel: isOnNewEpisodePage ? undefined : 'Go to Episode',
+        actionLabel: isOnNewEpisodePage ? undefined : 'Continue',
       });
 
-      // Reset the upload state after showing toast (unless on new episode page)
-      if (!isOnNewEpisodePage) {
-        // Keep state for a bit so user can navigate
-        setTimeout(() => {
-          // Don't reset if user already went to the page
-          if (location.pathname !== '/episodes/new') {
-            reset();
-          }
-        }, 10000);
-      }
+      // Don't auto-reset - let the form consume the transcript
+      // The state will be reset when the user navigates to the form and consumes it
     }
 
     // On error - show error toast

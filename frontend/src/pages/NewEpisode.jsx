@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import { Button, Card, Input, useToast, AudioUpload } from '@components/shared';
 import { useProcessing } from '@contexts/ProcessingContext';
+import { useUpload } from '@contexts/UploadContext';
 import api from '@utils/api-client';
 import { useTranscriptAutoPopulate } from '@hooks/useTranscriptAutoPopulate';
 import styles from './NewEpisode.module.css';
@@ -55,6 +56,7 @@ function NewEpisode() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const { trackProcessing, estimatedDuration } = useProcessing();
+  const upload = useUpload();
 
   // Input mode: 'transcript' or 'audio'
   const [inputMode, setInputMode] = useState('transcript');
@@ -195,6 +197,55 @@ function NewEpisode() {
 
     return () => clearInterval(timer);
   }, [regenerateCooldown]);
+
+  // ============================================================================
+  // CHECK FOR PENDING TRANSCRIPT ON MOUNT
+  // ============================================================================
+
+  useEffect(() => {
+    // Check if there's a completed transcript waiting to be consumed
+    if (upload.hasReadyTranscript) {
+      const result = upload.consumeTranscript();
+      if (result) {
+        setInputMode('audio');
+        setTranscript(result.transcript);
+        setAudioMetadata(result.metadata);
+
+        // Reset user edits for new audio
+        userEditedFieldsRef.current.clear();
+        resetAnalysis();
+        setRegenerationCount(0);
+        setRegenerateCooldown(0);
+        setTitleHistory([]);
+        setCurrentTitleIndex(0);
+
+        showToast({
+          message: 'Transcript ready!',
+          description: 'Your audio has been transcribed. Fill in the details and generate content.',
+          variant: 'success',
+          duration: 5000,
+        });
+      }
+    }
+  }, []); // Only run on mount
+
+  /**
+   * Handle audio upload start - navigate to dashboard
+   */
+  function handleAudioUploadStart() {
+    // Minimize the upload UI
+    upload.minimize();
+
+    showToast({
+      message: 'Upload started',
+      description: 'Your audio is being uploaded and transcribed. You\'ll be notified when it\'s ready.',
+      variant: 'processing',
+      duration: 5000,
+    });
+
+    // Navigate to dashboard
+    navigate('/');
+  }
 
   // ============================================================================
   // TITLE EDITING HANDLERS
@@ -617,6 +668,7 @@ function NewEpisode() {
               <AudioUpload
                 onTranscriptReady={handleAudioTranscriptReady}
                 onError={handleAudioError}
+                onUploadStart={handleAudioUploadStart}
               />
 
               {/* Show transcript preview after audio transcription */}

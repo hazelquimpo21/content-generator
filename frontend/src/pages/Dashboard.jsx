@@ -30,10 +30,13 @@ import {
   Mic,
   ArrowRight,
   Zap,
+  Rss,
+  Circle,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Button, Card, Badge, Spinner, ConfirmDialog, useToast } from '@components/shared';
 import { useUpload, UPLOAD_STATE } from '../contexts/UploadContext';
+import { useTranscription } from '../contexts/TranscriptionContext';
 import api from '@utils/api-client';
 import styles from './Dashboard.module.css';
 
@@ -74,6 +77,7 @@ function Dashboard() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const upload = useUpload();
+  const { hasActiveTranscription, activeTranscription, startTranscription } = useTranscription();
 
   // State for episode list
   const [episodes, setEpisodes] = useState([]);
@@ -81,6 +85,11 @@ function Dashboard() {
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // State for podcast feeds section
+  const [podcastFeeds, setPodcastFeeds] = useState([]);
+  const [recentFeedEpisodes, setRecentFeedEpisodes] = useState([]);
+  const [feedsLoading, setFeedsLoading] = useState(true);
 
   // State for delete confirmation dialog
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -132,7 +141,34 @@ function Dashboard() {
   // Fetch episodes on mount and filter change
   useEffect(() => {
     fetchEpisodes();
+    fetchPodcastFeeds();
   }, [statusFilter]);
+
+  // Fetch podcast feeds for quick import section
+  async function fetchPodcastFeeds() {
+    try {
+      setFeedsLoading(true);
+      const feedsResponse = await api.podcasts.listFeeds();
+      const feeds = feedsResponse.feeds || [];
+      setPodcastFeeds(feeds);
+
+      // Get recent unprocessed episodes from first feed (if any)
+      if (feeds.length > 0) {
+        const feed = feeds[0];
+        const episodesResponse = await api.podcasts.getFeed(feed.id, {
+          status: 'available',
+          limit: 5,
+          offset: 0,
+        });
+        setRecentFeedEpisodes(episodesResponse.episodes || []);
+      }
+    } catch (err) {
+      console.error('[Dashboard] Failed to fetch podcast feeds:', err);
+      // Silent fail - don't block dashboard for feed errors
+    } finally {
+      setFeedsLoading(false);
+    }
+  }
 
   // Poll for updates when there are processing episodes
   useEffect(() => {
@@ -316,6 +352,46 @@ function Dashboard() {
         />
       )}
 
+      {/* From Your Podcast - Quick access to import feed episodes */}
+      {!feedsLoading && podcastFeeds.length > 0 && recentFeedEpisodes.length > 0 && (
+        <PodcastQuickImport
+          feed={podcastFeeds[0]}
+          episodes={recentFeedEpisodes}
+          hasActiveTranscription={hasActiveTranscription}
+          activeTranscription={activeTranscription}
+          onTranscribe={async (episode) => {
+            const result = await startTranscription(episode);
+            if (result.success) {
+              showToast({
+                message: 'Transcription complete!',
+                description: `"${episode.title}" is ready.`,
+                variant: 'success',
+                action: async () => {
+                  await api.episodes.process(result.episode.id);
+                  navigate(`/episodes/${result.episode.id}/processing`);
+                },
+                actionLabel: 'Start Processing',
+                duration: 15000,
+              });
+              fetchPodcastFeeds(); // Refresh to update episode counts
+            } else if (result.activeEpisode) {
+              showToast({
+                message: 'Transcription in progress',
+                description: `Please wait for "${result.activeEpisode.title}" to finish.`,
+                variant: 'warning',
+              });
+            } else {
+              showToast({
+                message: 'Transcription failed',
+                description: result.error,
+                variant: 'error',
+              });
+            }
+          }}
+          onViewAll={() => navigate('/episodes/new', { state: { tab: 'feed' } })}
+        />
+      )}
+
       {/* Filters */}
       <div className={styles.filters}>
         {/* Search */}
@@ -461,6 +537,9 @@ function EpisodeCard({ episode, onClick, onDelete }) {
     ? format(new Date(episode.created_at), 'MMM d, yyyy')
     : '';
 
+  // Check if episode came from RSS feed
+  const isFromFeed = episode.feed_episode_id || episode.episode_context?.source === 'rss_feed';
+
   // Calculate phase progress based on current stage
   const currentPhase = episode.current_stage !== undefined
     ? STAGE_TO_PHASE[episode.current_stage] || 1
@@ -497,9 +576,16 @@ function EpisodeCard({ episode, onClick, onDelete }) {
       padding="md"
     >
       <div className={styles.cardHeader}>
-        <Badge status={episode.status} dot>
-          {episode.status === 'processing' ? 'Processing...' : episode.status}
-        </Badge>
+        <div className={styles.cardBadges}>
+          <Badge status={episode.status} dot>
+            {episode.status === 'processing' ? 'Processing...' : episode.status}
+          </Badge>
+          {isFromFeed && (
+            <span className={styles.sourceIndicator} title="Imported from RSS feed">
+              <Rss size={12} />
+            </span>
+          )}
+        </div>
         <span className={styles.cardDate}>{createdAt}</span>
       </div>
 
@@ -807,6 +893,97 @@ function UploadProgressCard({ state, file, progress, isComplete, transcriptionPr
         </div>
       </div>
     </Card>
+  );
+}
+
+/**
+ * PodcastQuickImport component
+ * Shows recent unprocessed episodes from connected podcast feed.
+ * Allows quick transcription without navigating to NewEpisode.
+ */
+function PodcastQuickImport({
+  feed,
+  episodes,
+  hasActiveTranscription,
+  activeTranscription,
+  onTranscribe,
+  onViewAll,
+}) {
+  const [transcribingId, setTranscribingId] = useState(null);
+
+  async function handleTranscribe(episode) {
+    setTranscribingId(episode.id);
+    await onTranscribe(episode);
+    setTranscribingId(null);
+  }
+
+  // Format duration
+  function formatDuration(seconds) {
+    if (!seconds) return '';
+    const mins = Math.floor(seconds / 60);
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.floor(mins / 60);
+    return `${hours}h ${mins % 60}m`;
+  }
+
+  return (
+    <div className={styles.podcastSection}>
+      <div className={styles.podcastHeader}>
+        <div className={styles.podcastHeaderLeft}>
+          <Rss size={18} className={styles.podcastIcon} />
+          <span className={styles.podcastLabel}>From Your Podcast</span>
+          <span className={styles.podcastName}>{feed.title}</span>
+        </div>
+        <Button variant="ghost" size="sm" onClick={onViewAll}>
+          View All Episodes
+        </Button>
+      </div>
+
+      {/* Active transcription banner */}
+      {hasActiveTranscription && (
+        <div className={styles.transcribingBanner}>
+          <Loader2 size={14} className={styles.spinning} />
+          <span>
+            Transcribing: <strong>{activeTranscription?.title}</strong>
+          </span>
+        </div>
+      )}
+
+      <div className={styles.podcastEpisodes}>
+        {episodes.map((episode) => {
+          const isThisTranscribing = transcribingId === episode.id;
+          const isDisabled = hasActiveTranscription && !isThisTranscribing;
+
+          return (
+            <div key={episode.id} className={styles.podcastEpisodeRow}>
+              <div className={styles.podcastEpisodeStatus}>
+                {isThisTranscribing ? (
+                  <Loader2 size={14} className={styles.spinning} />
+                ) : (
+                  <Circle size={14} />
+                )}
+              </div>
+              <div className={styles.podcastEpisodeInfo}>
+                <span className={styles.podcastEpisodeTitle}>{episode.title}</span>
+                <span className={styles.podcastEpisodeMeta}>
+                  {episode.published_at && new Date(episode.published_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                  {episode.duration_seconds && ` · ${formatDuration(episode.duration_seconds)}`}
+                </span>
+              </div>
+              <Button
+                variant={isDisabled ? 'ghost' : 'primary'}
+                size="sm"
+                onClick={() => handleTranscribe(episode)}
+                disabled={isDisabled || isThisTranscribing}
+                leftIcon={isThisTranscribing ? Loader2 : Play}
+              >
+                {isThisTranscribing ? 'Transcribing...' : 'Transcribe'}
+              </Button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

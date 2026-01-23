@@ -142,6 +142,23 @@
   align-items: center;
 }
 
+.cardBadges {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sourceIndicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
 .cardDate {
   font-size: var(--text-sm);
   color: var(--color-text-tertiary);
@@ -651,5 +668,143 @@
 
   .bannerProgressBar {
     max-width: 150px;
+  }
+}
+
+/* ============================================================================
+ * PODCAST QUICK IMPORT SECTION
+ * ============================================================================ */
+
+.podcastSection {
+  margin-bottom: var(--space-6);
+  padding: var(--space-4);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-bg-accent);
+  border-radius: var(--radius-lg);
+}
+
+.podcastHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.podcastHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.podcastIcon {
+  color: var(--color-primary);
+}
+
+.podcastLabel {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+}
+
+.podcastName {
+  font-size: var(--text-sm);
+  color: var(--color-text-tertiary);
+}
+
+.podcastName::before {
+  content: '·';
+  margin-right: var(--space-2);
+}
+
+/* Transcribing banner within podcast section */
+.transcribingBanner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
+  background: var(--color-info-light, rgba(96, 165, 250, 0.1));
+  border: 1px solid var(--color-info, #60a5fa);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--color-info, #60a5fa);
+}
+
+.transcribingBanner strong {
+  color: var(--color-text-primary);
+}
+
+/* Episodes list */
+.podcastEpisodes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.podcastEpisodeRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-bg);
+  border: 1px solid var(--color-bg-accent);
+  border-radius: var(--radius-md);
+  transition: border-color var(--transition-fast);
+}
+
+.podcastEpisodeRow:hover {
+  border-color: var(--color-primary-light);
+}
+
+.podcastEpisodeStatus {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-tertiary);
+}
+
+.podcastEpisodeInfo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.podcastEpisodeTitle {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.podcastEpisodeMeta {
+  font-size: var(--text-xs);
+  color: var(--color-text-tertiary);
+}
+
+/* Responsive adjustments for podcast section */
+@media (max-width: 640px) {
+  .podcastHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+
+  .podcastEpisodeRow {
+    flex-wrap: wrap;
+  }
+
+  .podcastEpisodeInfo {
+    flex: 1 1 100%;
+    order: 1;
+    margin-top: var(--space-2);
+  }
+
+  .podcastEpisodeStatus {
+    order: 0;
   }
 }

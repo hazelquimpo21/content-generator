@@ -18,6 +18,7 @@ import { Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ProcessingProvider } from './contexts/ProcessingContext';
 import { UploadProvider } from './contexts/UploadContext';
+import { TranscriptionProvider } from './contexts/TranscriptionContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import OnboardingRoute from './components/auth/OnboardingRoute';
 
@@ -58,6 +59,7 @@ function App() {
     <AuthProvider>
       <ProcessingProvider>
         <UploadProvider>
+          <TranscriptionProvider>
           <ToastProvider>
             {/* Admin bar - only visible to superadmins */}
             <AdminBar />
@@ -135,6 +137,7 @@ function App() {
               <Route path="*" element={<NotFound />} />
             </Routes>
           </ToastProvider>
+          </TranscriptionProvider>
         </UploadProvider>
       </ProcessingProvider>
     </AuthProvider>

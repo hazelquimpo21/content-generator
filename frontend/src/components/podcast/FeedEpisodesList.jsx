@@ -21,8 +21,10 @@ import {
   Filter,
   Search,
   ExternalLink,
+  Info,
 } from 'lucide-react';
 import { Button, Input, Spinner, useToast } from '@components/shared';
+import { useTranscription } from '@contexts/TranscriptionContext';
 import api from '@utils/api-client';
 import styles from './FeedEpisodesList.module.css';
 
@@ -68,6 +70,7 @@ function formatDate(dateString) {
 function FeedEpisodesList({ feed, onBack, onEpisodeProcessed }) {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { activeTranscription, hasActiveTranscription, startTranscription, isTranscribing } = useTranscription();
 
   // State
   const [loading, setLoading] = useState(true);
@@ -83,9 +86,6 @@ function FeedEpisodesList({ feed, onBack, onEpisodeProcessed }) {
   // Pagination
   const [offset, setOffset] = useState(0);
   const limit = 20;
-
-  // Transcription state
-  const [transcribing, setTranscribing] = useState({}); // episodeId -> true/false
 
   // Load episodes
   useEffect(() => {
@@ -125,64 +125,91 @@ function FeedEpisodesList({ feed, onBack, onEpisodeProcessed }) {
     : episodes;
 
   /**
-   * Transcribe an episode
+   * Transcribe an episode (using queue protection)
    */
-  async function handleTranscribe(episode, startProcessing = false) {
-    try {
-      setTranscribing(prev => ({ ...prev, [episode.id]: true }));
+  async function handleTranscribe(episode) {
+    // Use the transcription context to manage the queue
+    showToast({
+      message: 'Transcription started',
+      description: `Transcribing "${episode.title}". This may take a few minutes.`,
+      variant: 'processing',
+    });
 
-      showToast({
-        message: 'Transcription started',
-        description: `Transcribing "${episode.title}". This may take a few minutes.`,
-        variant: 'processing',
-      });
+    // Mark as transcribing locally
+    setEpisodes(prev =>
+      prev.map(ep =>
+        ep.id === episode.id ? { ...ep, status: 'transcribing' } : ep
+      )
+    );
 
-      const result = await api.podcasts.transcribeEpisode(episode.id, {
-        startProcessing,
-      });
+    const result = await startTranscription(episode);
 
-      // Update episode status in list
-      setEpisodes(prev =>
-        prev.map(ep =>
-          ep.id === episode.id
-            ? { ...ep, status: 'processed', episode_id: result.episode.id }
-            : ep
-        )
-      );
-
-      showToast({
-        message: startProcessing ? 'Processing started!' : 'Transcription complete!',
-        description: startProcessing
-          ? 'Your episode is being processed. You\'ll be notified when ready.'
-          : 'The transcript is ready. You can now generate content from it.',
-        variant: 'success',
-        action: () => navigate(`/episodes/${result.episode.id}`),
-        actionLabel: 'View Episode',
-      });
-
-      onEpisodeProcessed?.(result.episode);
-
-      // Reload to update counts
-      loadEpisodes();
-    } catch (err) {
-      console.error('Transcription failed:', err);
-      showToast({
-        message: 'Transcription failed',
-        description: err.message || 'Could not transcribe episode. Please try again.',
-        variant: 'error',
-      });
-
-      // Update episode status to error
-      setEpisodes(prev =>
-        prev.map(ep =>
-          ep.id === episode.id
-            ? { ...ep, status: 'error', error_message: err.message }
-            : ep
-        )
-      );
-    } finally {
-      setTranscribing(prev => ({ ...prev, [episode.id]: false }));
+    if (!result.success) {
+      // Check if it was blocked by another active transcription
+      if (result.activeEpisode) {
+        showToast({
+          message: 'Transcription in progress',
+          description: `Please wait for "${result.activeEpisode.title}" to finish before starting another.`,
+          variant: 'warning',
+        });
+        // Revert local status
+        setEpisodes(prev =>
+          prev.map(ep =>
+            ep.id === episode.id ? { ...ep, status: 'available' } : ep
+          )
+        );
+      } else {
+        // Transcription failed
+        showToast({
+          message: 'Transcription failed',
+          description: result.error || 'Could not transcribe episode. Please try again.',
+          variant: 'error',
+        });
+        setEpisodes(prev =>
+          prev.map(ep =>
+            ep.id === episode.id
+              ? { ...ep, status: 'error', error_message: result.error }
+              : ep
+          )
+        );
+      }
+      return;
     }
+
+    // Success!
+    setEpisodes(prev =>
+      prev.map(ep =>
+        ep.id === episode.id
+          ? { ...ep, status: 'processed', episode_id: result.episode.id }
+          : ep
+      )
+    );
+
+    showToast({
+      message: 'Transcription complete!',
+      description: `"${episode.title}" is ready. Click to start generating content.`,
+      variant: 'success',
+      action: async () => {
+        // Start processing and navigate
+        try {
+          await api.episodes.process(result.episode.id);
+          navigate(`/episodes/${result.episode.id}/processing`);
+        } catch (err) {
+          showToast({
+            message: 'Failed to start processing',
+            description: err.message,
+            variant: 'error',
+          });
+        }
+      },
+      actionLabel: 'Start Processing',
+      duration: 15000, // Give user time to click
+    });
+
+    onEpisodeProcessed?.(result.episode, episode);
+
+    // Reload to update counts
+    loadEpisodes();
   }
 
   return (
@@ -215,6 +242,17 @@ function FeedEpisodesList({ feed, onBack, onEpisodeProcessed }) {
           </div>
         </div>
       </div>
+
+      {/* Active transcription banner */}
+      {hasActiveTranscription && (
+        <div className={styles.transcriptionBanner}>
+          <Info size={16} />
+          <span>
+            Transcribing: <strong>{activeTranscription.title}</strong>
+          </span>
+          <Loader2 size={14} className={styles.spinning} />
+        </div>
+      )}
 
       {/* Filters */}
       <div className={styles.filters}>
@@ -284,8 +322,9 @@ function FeedEpisodesList({ feed, onBack, onEpisodeProcessed }) {
             <EpisodeRow
               key={episode.id}
               episode={episode}
-              transcribing={transcribing[episode.id]}
-              onTranscribe={() => handleTranscribe(episode, false)}
+              isTranscribing={isTranscribing(episode.id)}
+              hasOtherTranscription={hasActiveTranscription && !isTranscribing(episode.id)}
+              onTranscribe={() => handleTranscribe(episode)}
               onViewEpisode={() => {
                 if (episode.episode_id || episode.linked_episode?.id) {
                   navigate(`/episodes/${episode.episode_id || episode.linked_episode?.id}`);
@@ -329,23 +368,27 @@ function FeedEpisodesList({ feed, onBack, onEpisodeProcessed }) {
  */
 function EpisodeRow({
   episode,
-  transcribing,
+  isTranscribing,
+  hasOtherTranscription,
   onTranscribe,
   onViewEpisode,
 }) {
+  // Use transcribing status from context or local status
+  const effectiveStatus = isTranscribing ? 'transcribing' : episode.status;
+
   const StatusIcon = {
     available: Circle,
     transcribing: Loader2,
     processed: CheckCircle,
     error: AlertCircle,
-  }[episode.status] || Circle;
+  }[effectiveStatus] || Circle;
 
   const statusColor = {
     available: styles.statusAvailable,
     transcribing: styles.statusTranscribing,
     processed: styles.statusProcessed,
     error: styles.statusError,
-  }[episode.status];
+  }[effectiveStatus];
 
   return (
     <div className={styles.episodeRow}>
@@ -353,7 +396,7 @@ function EpisodeRow({
       <div className={`${styles.statusIcon} ${statusColor}`}>
         <StatusIcon
           size={18}
-          className={episode.status === 'transcribing' ? styles.spinning : ''}
+          className={effectiveStatus === 'transcribing' ? styles.spinning : ''}
         />
       </div>
 
@@ -384,7 +427,7 @@ function EpisodeRow({
 
       {/* Actions */}
       <div className={styles.episodeActions}>
-        {episode.status === 'processed' && (episode.episode_id || episode.linked_episode?.id) && (
+        {effectiveStatus === 'processed' && (episode.episode_id || episode.linked_episode?.id) && (
           <Button
             variant="ghost"
             size="sm"
@@ -395,19 +438,20 @@ function EpisodeRow({
           </Button>
         )}
 
-        {(episode.status === 'available' || episode.status === 'error') && (
+        {(effectiveStatus === 'available' || effectiveStatus === 'error') && (
           <Button
-            variant="primary"
+            variant={hasOtherTranscription ? 'ghost' : 'primary'}
             size="sm"
             onClick={onTranscribe}
-            disabled={transcribing}
-            leftIcon={transcribing ? Loader2 : Play}
+            disabled={hasOtherTranscription}
+            leftIcon={Play}
+            title={hasOtherTranscription ? 'Wait for current transcription to finish' : 'Transcribe this episode'}
           >
-            {transcribing ? 'Transcribing...' : 'Transcribe'}
+            Transcribe
           </Button>
         )}
 
-        {episode.status === 'transcribing' && (
+        {effectiveStatus === 'transcribing' && (
           <span className={styles.inProgressLabel}>
             <Loader2 size={14} className={styles.spinning} />
             In Progress

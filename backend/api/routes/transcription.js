@@ -316,8 +316,14 @@ router.post('/estimate', requireAuth, (req, res, next) => {
  *   processingDurationMs: 15234,
  *   model: "whisper-1"
  * }
+ *
+ * NOTE: handleUpload runs BEFORE requireAuth to prevent EPIPE errors.
+ * When auth fails during a large file upload, the server would close the
+ * connection before the client finishes sending data, causing EPIPE.
+ * By consuming the upload first, we ensure the full request is received
+ * before any auth rejection.
  */
-router.post('/', requireAuth, handleUpload('audio'), async (req, res, next) => {
+router.post('/', handleUpload('audio'), requireAuth, async (req, res, next) => {
   try {
     // Validate that a file was uploaded
     if (!req.file) {
@@ -443,8 +449,11 @@ router.post('/', requireAuth, handleUpload('audio'), async (req, res, next) => {
  *   episode: { id, title, status, ... },
  *   transcription: { ... }
  * }
+ *
+ * NOTE: handleUpload runs BEFORE requireAuth to prevent EPIPE errors.
+ * See comment on POST / route for explanation.
  */
-router.post('/with-episode', requireAuth, handleUpload('audio'), async (req, res, next) => {
+router.post('/with-episode', handleUpload('audio'), requireAuth, async (req, res, next) => {
   try {
     // Validate that a file was uploaded
     if (!req.file) {

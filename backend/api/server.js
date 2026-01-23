@@ -267,6 +267,32 @@ async function startServer() {
   server.timeout = 300000;
   server.headersTimeout = 310000; // Should be larger than timeout
   server.keepAliveTimeout = 305000;
+
+  // Debug: Add server-level error handlers
+  server.on('error', (err) => {
+    console.error('[DEBUG] Server error:', err.message, err.code);
+  });
+
+  server.on('clientError', (err, socket) => {
+    console.error('[DEBUG] Client error:', err.message, err.code);
+    // Don't destroy socket immediately - let it drain
+    if (socket.writable) {
+      socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+    }
+  });
+
+  // Log when connections are established
+  server.on('connection', (socket) => {
+    console.log('[DEBUG] New connection from:', socket.remoteAddress);
+    socket.on('error', (err) => {
+      console.error('[DEBUG] Connection socket error:', err.message, err.code);
+    });
+    socket.on('close', (hadError) => {
+      if (hadError) {
+        console.error('[DEBUG] Connection closed with error');
+      }
+    });
+  });
 }
 
 // ============================================================================

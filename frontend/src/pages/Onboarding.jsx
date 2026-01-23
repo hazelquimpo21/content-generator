@@ -27,7 +27,8 @@ import {
   Share2,
   CheckSquare,
   Download,
-  User
+  User,
+  PartyPopper
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Button, ProgressBar, Spinner, useToast } from '@components/shared';
@@ -45,8 +46,11 @@ import ChannelsEditor from '../components/brand-discovery/modules/ChannelsEditor
 import {
   PropertiesChecklist,
   ImportContent,
-  MadlibsProfile
+  MadlibsWizard
 } from '../components/profile-enrichment';
+
+// Import brand discovery components
+import { BrandMagicExplainer } from '../components/brand-discovery';
 
 import styles from './Onboarding.module.css';
 
@@ -346,9 +350,10 @@ function Onboarding() {
     switch (moduleId) {
       case 'profile':
         return (
-          <MadlibsProfile
+          <MadlibsWizard
             {...commonProps}
             enrichedData={enrichedData}
+            compact={false}
           />
         );
       case 'vibe':
@@ -410,32 +415,7 @@ function Onboarding() {
           {/* Welcome step */}
           {currentStepData.id === 'welcome' && (
             <div className={styles.welcomeContent}>
-              <div className={styles.welcomeFeatures}>
-                <div className={styles.feature}>
-                  <Sliders className={styles.featureIcon} />
-                  <div>
-                    <h3>Define Your Vibe</h3>
-                    <p>Set your brand tone from clinical to relatable</p>
-                  </div>
-                </div>
-                <div className={styles.feature}>
-                  <Heart className={styles.featureIcon} />
-                  <div>
-                    <h3>Discover Your Values</h3>
-                    <p>Identify what makes your practice unique</p>
-                  </div>
-                </div>
-                <div className={styles.feature}>
-                  <Sparkles className={styles.featureIcon} />
-                  <div>
-                    <h3>Generate Brand DNA</h3>
-                    <p>AI-powered content that sounds like you</p>
-                  </div>
-                </div>
-              </div>
-              <p className={styles.timeEstimate}>
-                This takes about 5 minutes
-              </p>
+              <BrandMagicExplainer variant="full" />
             </div>
           )}
 
@@ -472,23 +452,44 @@ function Onboarding() {
           {/* Completion step */}
           {currentStepData.id === 'complete' && (
             <div className={styles.completeContent}>
-              <div className={styles.successBadge}>
-                <Check className={styles.successIcon} />
+              <div className={styles.celebrationContainer}>
+                <div className={styles.successBadge}>
+                  <PartyPopper className={styles.successIcon} />
+                </div>
+                <div className={styles.confetti} aria-hidden="true" />
               </div>
+
+              <h2 className={styles.completionTitle}>You're All Set!</h2>
+
               <p className={styles.completionText}>
                 Your Brand DNA has been created! We'll use this to generate content
                 that matches your unique voice and values.
               </p>
+
+              <div className={styles.completionHighlights}>
+                <div className={styles.highlight}>
+                  <Sparkles className={styles.highlightIcon} />
+                  <span>Personalized content generation</span>
+                </div>
+                <div className={styles.highlight}>
+                  <Heart className={styles.highlightIcon} />
+                  <span>Voice that sounds like you</span>
+                </div>
+                <div className={styles.highlight}>
+                  <Users className={styles.highlightIcon} />
+                  <span>Content for your audience</span>
+                </div>
+              </div>
 
               {!showAdvanced && (
                 <button
                   className={styles.advancedLink}
                   onClick={() => {
                     setShowAdvanced(true);
-                    setCurrentStep(activeSteps.length - 1); // Go to first advanced step
+                    setCurrentStep(activeSteps.length - 1);
                   }}
                 >
-                  Want to refine further? Add more details
+                  Want to refine further? Add more details →
                 </button>
               )}
             </div>

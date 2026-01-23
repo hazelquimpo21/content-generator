@@ -9,3 +9,4 @@
 export { default as BrandDiscoveryStudio } from './BrandDiscoveryStudio';
 export { default as ModuleCard } from './ModuleCard';
 export { default as BrandDnaPreview } from './BrandDnaPreview';
+export { default as BrandMagicExplainer } from './BrandMagicExplainer';

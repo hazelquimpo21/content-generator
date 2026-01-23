@@ -654,14 +654,45 @@ router.post('/enhanced', handleUpload('audio'), requireAuth, async (req, res, ne
     });
 
     // Step 2: Process transcript with timestamps and optional speaker estimation
-    const processedResult = await processTranscriptWithTimestamps(
-      transcriptionResult.segments || [],
-      {
-        estimateSpeakers,
-        useLLM,
-        expectedSpeakers,
-      }
-    );
+    // Note: For large files that were chunked, segments may not be available
+    const hasSegments = transcriptionResult.segments && transcriptionResult.segments.length > 0;
+
+    let processedResult;
+
+    if (hasSegments) {
+      // Normal path: process segments with timestamps and optional speaker estimation
+      processedResult = await processTranscriptWithTimestamps(
+        transcriptionResult.segments,
+        {
+          estimateSpeakers,
+          useLLM,
+          expectedSpeakers,
+        }
+      );
+    } else {
+      // Fallback for large chunked files without segments:
+      // Use the plain transcript directly without timestamp/speaker processing
+      logger.info('No segments available (likely chunked large file), using plain transcript fallback', {
+        userId: req.user.id,
+        filename: req.file.originalname,
+        chunked: transcriptionResult.chunked,
+        totalChunks: transcriptionResult.totalChunks,
+      });
+
+      // Create a minimal result structure with the plain transcript
+      processedResult = {
+        transcript: transcriptionResult.transcript,
+        formattedTranscript: transcriptionResult.transcript, // Same as plain for fallback
+        utterances: [],
+        speakers: [],
+        hasSpeakerLabels: false,
+        audioDurationSeconds: transcriptionResult.audioDurationSeconds,
+        audioDurationMinutes: transcriptionResult.audioDurationMinutes,
+        speakerEstimationCost: 0,
+        provider: 'whisper-chunked',
+        usedLLM: false,
+      };
+    }
 
     // Calculate total cost (transcription + speaker estimation)
     const totalCost = (transcriptionResult.estimatedCost || 0) + (processedResult.speakerEstimationCost || 0);
@@ -669,12 +700,13 @@ router.post('/enhanced', handleUpload('audio'), requireAuth, async (req, res, ne
     logger.info('Enhanced transcription completed', {
       userId: req.user.id,
       filename: req.file.originalname,
-      audioDurationMinutes: processedResult.audioDurationMinutes,
+      audioDurationMinutes: processedResult.audioDurationMinutes || transcriptionResult.audioDurationMinutes,
       utteranceCount: processedResult.utterances.length,
       speakerCount: processedResult.speakers.length,
       transcriptionCost: transcriptionResult.estimatedCost,
       speakerEstimationCost: processedResult.speakerEstimationCost,
       totalCost,
+      usedFallback: !hasSegments,
     });
 
     res.json({
@@ -683,10 +715,10 @@ router.post('/enhanced', handleUpload('audio'), requireAuth, async (req, res, ne
       // Plain transcript (pipeline-compatible)
       transcript: processedResult.transcript,
 
-      // Formatted with timestamps and speakers
+      // Formatted with timestamps and speakers (or plain transcript for fallback)
       formattedTranscript: processedResult.formattedTranscript,
 
-      // Detailed utterances for preview/UI
+      // Detailed utterances for preview/UI (empty for fallback)
       utterances: processedResult.utterances,
 
       // Speaker metadata

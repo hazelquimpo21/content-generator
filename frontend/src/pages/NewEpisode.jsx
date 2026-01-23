@@ -839,10 +839,17 @@ function NewEpisode() {
                       maxHeight={400}
                     />
                   ) : (
-                    /* Fallback to basic text preview when no utterances */
-                    <div className={styles.transcriptPreviewText}>
-                      {transcript.slice(0, 500)}
-                      {transcript.length > 500 && '...'}
+                    /* Fallback to scrollable text preview when no utterances (e.g., large chunked files) */
+                    <div className={styles.transcriptPreviewText} style={{ maxHeight: '300px' }}>
+                      {audioMetadata.chunked && (
+                        <div className={styles.chunkedNotice}>
+                          <AlertCircle size={14} />
+                          <span>Large file was processed in chunks. Timestamps not available.</span>
+                        </div>
+                      )}
+                      <div className={styles.transcriptTextContent}>
+                        {transcript}
+                      </div>
                     </div>
                   )}
 

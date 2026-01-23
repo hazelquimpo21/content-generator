@@ -498,21 +498,52 @@ function AudioUpload({ onTranscriptReady, onError, onUploadStart, className, sho
               </button>
             </div>
           </div>
+
+          {/* Progress phases indicator */}
+          <div className={styles.transcriptionPhases}>
+            <div className={`${styles.phase} ${styles.phaseComplete}`}>
+              <Check size={14} />
+              <span>Uploaded</span>
+            </div>
+            <div className={styles.phaseDivider} />
+            <div className={`${styles.phase} ${styles.phaseActive}`}>
+              <Loader2 size={14} className={styles.phaseSpinner} />
+              <span>Transcribing</span>
+            </div>
+            <div className={styles.phaseDivider} />
+            <div className={`${styles.phase} ${styles.phasePending}`}>
+              <Sparkles size={14} />
+              <span>Processing</span>
+            </div>
+          </div>
+
+          {/* Indeterminate progress bar */}
+          <div className={styles.indeterminateProgress}>
+            <div className={styles.indeterminateBar} />
+          </div>
+
           <div className={styles.transcribingStatus}>
-            <Loader2 className={styles.spinner} />
-            <span>
-              Transcribing audio...
+            <span className={styles.transcribingMessage}>
               {file?.size > 25 * 1024 * 1024
-                ? ' Large files may take several minutes.'
-                : ' This may take 1-2 minutes.'}
+                ? 'Processing large audio file...'
+                : 'Converting speech to text...'}
+            </span>
+            <span className={styles.transcribingEstimate}>
+              {file?.size > 50 * 1024 * 1024
+                ? 'This may take 3-5 minutes for large files'
+                : file?.size > 25 * 1024 * 1024
+                  ? 'This may take 2-3 minutes'
+                  : 'Usually completes in 1-2 minutes'}
             </span>
           </div>
+
           <div className={styles.tipContainer}>
             <span className={styles.tipLabel}>Did you know?</span>
             <span className={styles.tipText}>{currentTips[currentTipIndex]}</span>
           </div>
+
           <span className={styles.backgroundHint}>
-            Click the minimize button to continue browsing while this transcribes
+            You can minimize this and continue browsing - we will notify you when it is ready
           </span>
         </div>
       )}
@@ -538,10 +569,12 @@ function AudioUpload({ onTranscriptReady, onError, onUploadStart, className, sho
             <div className={styles.stat}>
               <span className={styles.statLabel}>Words</span>
               <span className={styles.statValue}>
-                {transcriptionResult.transcript?.split(/\s+/).length.toLocaleString()}
+                {transcriptionResult.transcript?.trim()
+                  ? transcriptionResult.transcript.split(/\s+/).filter(Boolean).length.toLocaleString()
+                  : '—'}
               </span>
             </div>
-            {hasSpeakerLabels && transcriptionResult.speakers && (
+            {hasSpeakerLabels && transcriptionResult.speakers && transcriptionResult.speakers.length > 0 && (
               <div className={styles.stat}>
                 <span className={styles.statLabel}>Speakers</span>
                 <span className={styles.statValue}>
@@ -550,7 +583,7 @@ function AudioUpload({ onTranscriptReady, onError, onUploadStart, className, sho
                 </span>
               </div>
             )}
-            {transcriptionResult.utterances && (
+            {transcriptionResult.utterances && transcriptionResult.utterances.length > 0 && (
               <div className={styles.stat}>
                 <span className={styles.statLabel}>Segments</span>
                 <span className={styles.statValue}>
@@ -559,16 +592,22 @@ function AudioUpload({ onTranscriptReady, onError, onUploadStart, className, sho
               </div>
             )}
           </div>
-          {hasSpeakerLabels && (
+          {hasSpeakerLabels && transcriptionResult.utterances?.length > 0 && (
             <div className={styles.speakerInfo}>
               <Users size={14} />
               <span>Speakers detected and labeled with timestamps</span>
             </div>
           )}
-          {transcriptionResult.formattedTranscript && !hasSpeakerLabels && (
+          {transcriptionResult.formattedTranscript && !hasSpeakerLabels && transcriptionResult.utterances?.length > 0 && (
             <div className={styles.speakerInfo}>
               <Clock size={14} />
               <span>Transcript includes timestamps for each segment</span>
+            </div>
+          )}
+          {transcriptionResult.chunked && (!transcriptionResult.utterances || transcriptionResult.utterances.length === 0) && (
+            <div className={styles.speakerInfo}>
+              <FileText size={14} />
+              <span>Large file processed in {transcriptionResult.totalChunks} chunks (timestamps not available)</span>
             </div>
           )}
           <Button

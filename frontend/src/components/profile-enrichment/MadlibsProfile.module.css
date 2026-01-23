@@ -7,23 +7,28 @@
 
 .container {
   width: 100%;
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 auto;
-  padding: var(--spacing-4) 0;
+  padding: var(--spacing-8) var(--spacing-4);
 }
 
 /* ============================================================================
    SECTIONS - Generous separation between profile areas
    ============================================================================ */
 .section {
-  margin-bottom: var(--spacing-10);
-  padding-bottom: var(--spacing-8);
+  margin-bottom: var(--spacing-12);
+  padding: var(--spacing-6) 0 var(--spacing-10);
   border-bottom: 1px solid var(--color-border);
+}
+
+.section:first-of-type {
+  padding-top: 0;
 }
 
 .section:last-of-type {
   border-bottom: none;
-  margin-bottom: var(--spacing-6);
+  margin-bottom: var(--spacing-8);
+  padding-bottom: var(--spacing-4);
 }
 
 .sectionTitle {
@@ -32,10 +37,10 @@
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--color-primary);
-  margin-bottom: var(--spacing-6);
+  margin-bottom: var(--spacing-8);
   display: flex;
   align-items: center;
-  gap: var(--spacing-2);
+  gap: var(--spacing-3);
 }
 
 .sectionTitle::before {
@@ -54,16 +59,18 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  row-gap: var(--spacing-4);
-  column-gap: var(--spacing-2);
+  row-gap: var(--spacing-5);
+  column-gap: var(--spacing-3);
   font-size: var(--text-lg);
-  line-height: 1.8;
+  line-height: 2;
   color: var(--color-text);
-  margin-bottom: var(--spacing-6);
+  margin-bottom: var(--spacing-8);
+  padding: var(--spacing-2) 0;
 }
 
 .madlibsText:last-child {
   margin-bottom: 0;
+  padding-bottom: 0;
 }
 
 .madlibsText > span {
@@ -270,18 +277,19 @@
 }
 
 .dropdownOptions {
-  max-height: 300px;
+  max-height: 320px;
   overflow-y: auto;
-  padding: var(--spacing-3);
+  padding: var(--spacing-4);
 }
 
 /* Option items with checkbox-style selection */
 .option {
   display: flex;
   align-items: flex-start;
-  gap: var(--spacing-3);
+  gap: var(--spacing-4);
   width: 100%;
-  padding: var(--spacing-4);
+  padding: var(--spacing-4) var(--spacing-5);
+  margin-bottom: var(--spacing-2);
   border: none;
   background: none;
   cursor: pointer;
@@ -289,6 +297,10 @@
   border-radius: var(--radius-lg);
   transition: all 0.2s ease;
   position: relative;
+}
+
+.option:last-child {
+  margin-bottom: 0;
 }
 
 .option:hover {
@@ -438,15 +450,16 @@
 .selectedTags {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--spacing-3);
-  margin-top: var(--spacing-4);
+  gap: var(--spacing-4);
+  margin-top: var(--spacing-5);
+  padding: var(--spacing-3) 0;
 }
 
 .tag {
   display: inline-flex;
   align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-3) var(--spacing-2) var(--spacing-4);
+  gap: var(--spacing-3);
+  padding: var(--spacing-3) var(--spacing-4) var(--spacing-3) var(--spacing-5);
   background: linear-gradient(to bottom, white, var(--color-primary-subtle));
   border: 1.5px solid var(--color-primary-light);
   border-radius: var(--radius-full);
@@ -508,8 +521,8 @@
 .actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: var(--spacing-10);
-  padding-top: var(--spacing-8);
+  margin-top: var(--spacing-12);
+  padding: var(--spacing-10) 0 var(--spacing-4);
   border-top: 1px solid var(--color-border);
 }
 
@@ -518,24 +531,28 @@
    ============================================================================ */
 @media (max-width: 640px) {
   .container {
-    padding: var(--spacing-2) 0;
+    padding: var(--spacing-6) var(--spacing-4);
   }
 
   .section {
-    margin-bottom: var(--spacing-8);
-    padding-bottom: var(--spacing-6);
+    margin-bottom: var(--spacing-10);
+    padding: var(--spacing-4) 0 var(--spacing-8);
+  }
+
+  .sectionTitle {
+    margin-bottom: var(--spacing-6);
   }
 
   .madlibsText {
     font-size: var(--text-base);
-    line-height: 1.7;
-    row-gap: var(--spacing-3);
-    margin-bottom: var(--spacing-5);
+    line-height: 1.9;
+    row-gap: var(--spacing-4);
+    margin-bottom: var(--spacing-6);
   }
 
   .inlineInput {
     min-width: 130px;
-    padding: var(--spacing-3);
+    padding: var(--spacing-3) var(--spacing-4);
   }
 
   .inlineInput.wide {
@@ -548,7 +565,7 @@
 
   .selectorTrigger {
     min-width: 150px;
-    padding: var(--spacing-3);
+    padding: var(--spacing-3) var(--spacing-4);
   }
 
   /* Mobile dropdown as bottom sheet */
@@ -561,7 +578,7 @@
     min-width: 100%;
     max-width: 100%;
     border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
-    max-height: 70vh;
+    max-height: 75vh;
     animation: dropdownSlideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
@@ -577,29 +594,35 @@
   }
 
   .dropdownHeader {
-    padding: var(--spacing-5) var(--spacing-5) var(--spacing-4);
+    padding: var(--spacing-6) var(--spacing-5) var(--spacing-4);
   }
 
   .dropdownOptions {
-    max-height: calc(70vh - 140px);
-    padding: var(--spacing-4);
+    max-height: calc(75vh - 150px);
+    padding: var(--spacing-5);
   }
 
   .option {
-    padding: var(--spacing-4) var(--spacing-3);
+    padding: var(--spacing-5) var(--spacing-4);
+    margin-bottom: var(--spacing-2);
   }
 
   .customInput {
-    padding: var(--spacing-4);
+    padding: var(--spacing-5);
   }
 
   .selectedTags {
-    margin-top: var(--spacing-3);
-    gap: var(--spacing-2);
+    margin-top: var(--spacing-4);
+    gap: var(--spacing-3);
   }
 
   .tag {
-    font-size: var(--text-xs);
-    padding: var(--spacing-2) var(--spacing-2) var(--spacing-2) var(--spacing-3);
+    font-size: var(--text-sm);
+    padding: var(--spacing-2) var(--spacing-3) var(--spacing-2) var(--spacing-4);
+  }
+
+  .actions {
+    margin-top: var(--spacing-10);
+    padding: var(--spacing-8) 0 var(--spacing-4);
   }
 }

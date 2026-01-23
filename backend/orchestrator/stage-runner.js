@@ -15,25 +15,26 @@
  * ---------------------
  * The pipeline is organized into 4 phases, each containing multiple tasks:
  *
- *   PHASE 1 (Extract):    Stage 1 (analyze), Stage 2 (quotes)
+ *   PRE-GATE:             Stage 0 (content brief) - ALWAYS runs
+ *   PHASE 1 (Extract):    Stage 1 (summary), Stage 2 (quotes & tips) - parallel
  *   PHASE 2 (Plan):       Stage 3 (outline), Stage 4 (paragraphs), Stage 5 (headlines)
  *   PHASE 3 (Write):      Stage 6 (draft), Stage 7 (refine)
  *   PHASE 4 (Distribute): Stage 8 (social), Stage 9 (email)
- *   PRE-GATE:             Stage 0 (preprocess) - conditional
  *
  * Stage-to-Model Mapping:
  * -----------------------
- * Stage 0:   Claude Haiku 3.5     (preprocessing, 200K context)
- * Stage 1:   GPT-5 mini           (transcript analysis)
- * Stage 2:   Claude Haiku 3.5     (quote extraction)
+ * Stage 0:   Claude Sonnet 4      (content brief - quality analysis)
+ * Stage 1:   GPT-5 mini           (episode summary)
+ * Stage 2:   Claude Haiku 3.5     (quotes & tips extraction)
  * Stage 3-6: GPT-5 mini           (outlining and drafting)
  * Stage 7-9: Claude Sonnet 4      (refinement and distribution)
  *
  * Design Principle - Focused Analyzers:
  * -------------------------------------
  * Each stage analyzer does ONE thing well:
- * - Stage 1: Extract metadata and episode_crux (CANONICAL SUMMARY)
- * - Stage 2: Extract verbatim quotes (CANONICAL QUOTES SOURCE)
+ * - Stage 0: Create content brief with themes (CANONICAL CONTENT BRIEF)
+ * - Stage 1: Create in-depth summary and episode_crux (CANONICAL SUMMARY)
+ * - Stage 2: Extract verbatim quotes and tips (CANONICAL QUOTES/TIPS)
  * - Stage 3: Create high-level blog outline
  * - Stage 4: Detail paragraph-level structure
  * - Stage 5: Generate headline options
@@ -58,9 +59,9 @@ import { ProcessingError } from '../lib/errors.js';
 // Each analyzer is a focused module that handles one specific task.
 // ============================================================================
 
-import { preprocessTranscript } from '../analyzers/stage-00-preprocess-transcript.js';
-import { analyzeTranscript } from '../analyzers/stage-01-analyze-transcript.js';
-import { extractQuotes } from '../analyzers/stage-02-extract-quotes.js';
+import { createContentBrief } from '../analyzers/stage-00-content-brief.js';
+import { createEpisodeSummary } from '../analyzers/stage-01-episode-summary.js';
+import { extractQuotesAndTips } from '../analyzers/stage-02-extract-quotes.js';
 import { outlineHighLevel } from '../analyzers/stage-03-outline-high-level.js';
 import { outlineParagraphs } from '../analyzers/stage-04-outline-paragraphs.js';
 import { generateHeadlines } from '../analyzers/stage-05-generate-headlines.js';
@@ -82,16 +83,18 @@ import { generateEmail } from '../analyzers/stage-09-generate-email.js';
 /**
  * Maps stage numbers to their analyzer functions.
  *
- * Stage 0:  Transcript preprocessing (for long transcripts)
- * Stages 1-9: Main content pipeline
+ * Stage 0:   Content brief (ALWAYS runs)
+ * Stage 1:   Episode summary
+ * Stage 2:   Quotes & tips extraction
+ * Stages 3-9: Main content pipeline
  *
  * Stage 8 is special - it has sub-stages for each social platform.
  * Use STAGE_8_SUBSTAGE_ANALYZERS for platform-specific analyzers.
  */
 const STAGE_ANALYZERS = {
-  0: preprocessTranscript,
-  1: analyzeTranscript,
-  2: extractQuotes,
+  0: createContentBrief,
+  1: createEpisodeSummary,
+  2: extractQuotesAndTips,
   3: outlineHighLevel,
   4: outlineParagraphs,
   5: generateHeadlines,
@@ -122,12 +125,12 @@ export const STAGE_8_SUBSTAGES = Object.keys(STAGE_8_SUBSTAGE_ANALYZERS);
  * Used in logging and progress reporting.
  */
 export const STAGE_NAMES = {
-  0: 'Transcript Preprocessing',
-  1: 'Transcript Analysis',
-  2: 'Quote Extraction',
-  3: 'Blog Outline - High Level',
-  4: 'Paragraph-Level Outlines',
-  5: 'Headlines & Copy Options',
+  0: 'Content Brief',
+  1: 'Episode Summary',
+  2: 'Quotes & Tips',
+  3: 'Blog Outline',
+  4: 'Paragraph Outlines',
+  5: 'Headlines & Copy',
   6: 'Draft Generation',
   7: 'Refinement Pass',
   8: 'Social Content',
@@ -173,14 +176,15 @@ export const STAGE_PROVIDERS = {
  * Model identifiers for each stage.
  *
  * Model selection rationale:
- * - Haiku: Fast, cheap, excellent for extraction tasks
+ * - Sonnet (Stage 0): Quality analysis for foundational content brief
+ * - Haiku (Stage 2): Fast, cheap, excellent for extraction tasks
  * - GPT-5 mini: Good balance of quality and cost for structured work
- * - Sonnet: High quality for refined, creative output
+ * - Sonnet (Stage 7-9): High quality for refined, creative output
  */
 export const STAGE_MODELS = {
-  0: 'claude-3-5-haiku-20241022',   // Preprocessing (200K context, cheap)
-  1: 'gpt-5-mini',                   // Analysis
-  2: 'claude-3-5-haiku-20241022',   // Quote extraction (accurate)
+  0: 'claude-sonnet-4-20250514',    // Content brief (quality analysis)
+  1: 'gpt-5-mini',                   // Summary
+  2: 'claude-3-5-haiku-20241022',   // Quotes & tips extraction (accurate)
   3: 'gpt-5-mini',                   // High-level outline
   4: 'gpt-5-mini',                   // Paragraph outlines
   5: 'gpt-5-mini',                   // Headlines

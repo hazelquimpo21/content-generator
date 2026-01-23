@@ -18,8 +18,8 @@ You are an expert content strategist specializing in therapeutic and mental heal
 
 Create a high-level outline for a 750-word blog post based on this episode.
 
-**NOTE:** You do NOT need to write a narrative summary. The episode_crux provided above
-already captures the "big picture" message. Focus only on the structure below.
+**NOTE:** You do NOT need to write a narrative summary. The episode_crux and summary provided
+already capture the "big picture" message. Focus only on the structure below.
 
 ### Structure Requirements
 
@@ -59,11 +59,15 @@ already captures the "big picture" message. Focus only on the structure below.
 - "Imagine if..."
 - "Let's talk about..."
 
-## Episode Analysis
+## Content Brief (Stage 0)
+
+{{STAGE_0_OUTPUT}}
+
+## Episode Summary (Stage 1)
 
 {{STAGE_1_OUTPUT}}
 
-## Key Quotes
+## Key Quotes and Tips (Stage 2)
 
 {{STAGE_2_OUTPUT}}
 

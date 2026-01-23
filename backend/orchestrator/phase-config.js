@@ -69,37 +69,36 @@ import logger from '../lib/logger.js';
  */
 export const TASKS = {
   // -------------------------------------------------------------------------
-  // PRE-GATE: Preprocessing (conditional)
+  // PRE-GATE: Content Brief (ALWAYS runs)
   // -------------------------------------------------------------------------
-  preprocess: {
+  content_brief: {
     id: 0,
-    name: 'Transcript Preprocessing',
-    analyzer: 'preprocessTranscript',
-    model: 'claude-3-5-haiku-20241022',
+    name: 'Content Brief',
+    analyzer: 'createContentBrief',
+    model: 'claude-sonnet-4-20250514',
     provider: 'anthropic',
-    description: 'Compress long transcripts for downstream processing',
-    // This task is special - it only runs if transcript exceeds threshold
-    conditional: true,
+    description: 'Create comprehensive content brief with themes, metadata, SEO overview',
+    // No longer conditional - always runs
   },
 
   // -------------------------------------------------------------------------
-  // PHASE 1: EXTRACT - Read transcript and extract key information
+  // PHASE 1: EXTRACT - Summary and quotes/tips
   // -------------------------------------------------------------------------
-  analyze: {
+  summary: {
     id: 1,
-    name: 'Transcript Analysis',
-    analyzer: 'analyzeTranscript',
+    name: 'Episode Summary',
+    analyzer: 'createEpisodeSummary',
     model: 'gpt-5-mini',
     provider: 'openai',
-    description: 'Extract metadata, themes, and episode crux (CANONICAL SUMMARY)',
+    description: 'Create in-depth summary and episode crux (CANONICAL SUMMARY)',
   },
-  quotes: {
+  quotes_and_tips: {
     id: 2,
-    name: 'Quote Extraction',
-    analyzer: 'extractQuotes',
+    name: 'Quotes & Tips Extraction',
+    analyzer: 'extractQuotesAndTips',
     model: 'claude-3-5-haiku-20241022',
     provider: 'anthropic',
-    description: 'Extract verbatim quotes (CANONICAL QUOTES SOURCE)',
+    description: 'Extract verbatim quotes and actionable tips (CANONICAL SOURCE)',
   },
 
   // -------------------------------------------------------------------------
@@ -221,35 +220,36 @@ export const TASKS = {
  */
 export const PHASES = {
   // -------------------------------------------------------------------------
-  // PRE-GATE: Conditional preprocessing
+  // PRE-GATE: Content Brief (ALWAYS runs)
   // -------------------------------------------------------------------------
-  // This is NOT a numbered phase - it's a gate that runs before Phase 1.
-  // Only executes if transcript exceeds the token threshold.
+  // Creates the foundational content brief with themes, metadata, and SEO overview.
+  // This is the foundation for all downstream content creation.
   // -------------------------------------------------------------------------
   pregate: {
     id: 'pregate',
-    name: '🚪 Pre-Gate: Preprocessing',
-    description: 'Compress long transcripts if needed (>8000 tokens)',
-    tasks: ['preprocess'],
+    name: '📋 Pre-Gate: Content Brief',
+    description: 'Create content brief with themes, metadata, and SEO overview',
+    tasks: ['content_brief'],
     parallel: false,  // Single task
     requiredPhases: [],
-    // Special flag: this phase is conditional
-    conditional: true,
-    emoji: '🚪',
+    // NOT conditional - always runs
+    emoji: '📋',
   },
 
   // -------------------------------------------------------------------------
   // PHASE 1: EXTRACT
   // -------------------------------------------------------------------------
-  // Extract all information we need from the transcript.
-  // Both tasks only need the transcript, so they run in PARALLEL.
+  // Create summary (using themes) and extract quotes/tips.
+  // Both tasks can run in PARALLEL after content brief completes:
+  // - summary: needs themes from Stage 0
+  // - quotes_and_tips: only needs original transcript
   // -------------------------------------------------------------------------
   extract: {
     id: 'extract',
     name: '📤 Phase 1: Extract',
-    description: 'Read transcript and extract metadata, summary, and quotes',
-    tasks: ['analyze', 'quotes'],
-    parallel: true,  // ✨ PARALLEL: Both only need transcript
+    description: 'Create episode summary and extract quotes/tips',
+    tasks: ['summary', 'quotes_and_tips'],
+    parallel: true,  // ✨ PARALLEL: summary needs Stage 0, quotes needs transcript
     requiredPhases: ['pregate'],
     emoji: '📤',
   },
@@ -337,40 +337,47 @@ export const PHASE_ORDER = ['pregate', 'extract', 'plan', 'write', 'distribute']
  */
 export const TASK_DEPENDENCIES = {
   // Pre-gate
-  preprocess: [],  // Only needs transcript
+  content_brief: [],  // Only needs transcript
 
   // Phase 1: Extract
-  analyze: [],     // Only needs transcript
-  quotes: [],      // Only needs transcript (ALWAYS original, not preprocessed)
+  summary: ['content_brief'],     // Needs themes from content brief
+  quotes_and_tips: [],            // Only needs transcript (ALWAYS original)
 
   // Phase 2: Plan
-  outline: ['analyze', 'quotes'],           // Needs Phase 1 outputs
-  paragraphs: ['quotes', 'outline'],        // Needs quotes + outline
-  headlines: ['analyze', 'outline'],        // Needs analysis + outline
+  outline: ['summary', 'quotes_and_tips'],           // Needs Phase 1 outputs
+  paragraphs: ['quotes_and_tips', 'outline'],        // Needs quotes + outline
+  headlines: ['summary', 'outline'],                 // Needs summary + outline
 
   // Phase 3: Write
-  draft: ['analyze', 'quotes', 'outline', 'paragraphs', 'headlines'],  // Needs everything
+  draft: ['summary', 'quotes_and_tips', 'outline', 'paragraphs', 'headlines'],  // Needs everything
   refine: ['draft'],  // Needs the draft output_text
 
   // Phase 4: Distribute
   // All 4 social platform tasks have identical dependencies
-  social_instagram: ['refine', 'quotes', 'headlines'],
-  social_twitter: ['refine', 'quotes', 'headlines'],
-  social_linkedin: ['refine', 'quotes', 'headlines'],
-  social_facebook: ['refine', 'quotes', 'headlines'],
-  email: ['refine', 'analyze', 'headlines'],  // Needs refined post + analysis + headlines
+  social_instagram: ['refine', 'quotes_and_tips', 'headlines'],
+  social_twitter: ['refine', 'quotes_and_tips', 'headlines'],
+  social_linkedin: ['refine', 'quotes_and_tips', 'headlines'],
+  social_facebook: ['refine', 'quotes_and_tips', 'headlines'],
+  email: ['refine', 'content_brief', 'headlines'],  // Needs refined post + content brief + headlines
 };
 
 /**
  * Maps task IDs to what data they require from previousStages.
  * Used for validation before running a task.
+ *
+ * Stage mapping:
+ * - Stage 0: content_brief (themes, episode_name, seo_overview, etc.)
+ * - Stage 1: summary (summary, episode_crux)
+ * - Stage 2: quotes_and_tips (quotes[], tips[])
  */
 export const REQUIRED_PREVIOUS_DATA = {
-  preprocess: [],
-  analyze: [],
-  quotes: [],
+  content_brief: [],
+  summary: [
+    { stage: 0, fields: ['themes'], required: false },  // Gracefully degrade if missing
+  ],
+  quotes_and_tips: [],
   outline: [
-    { stage: 1, fields: ['episode_crux', 'episode_basics'] },
+    { stage: 1, fields: ['episode_crux', 'summary'] },
     { stage: 2, fields: ['quotes'] },
   ],
   paragraphs: [
@@ -382,8 +389,9 @@ export const REQUIRED_PREVIOUS_DATA = {
     { stage: 3, fields: ['post_structure'] },
   ],
   draft: [
-    { stage: 1, fields: ['episode_basics', 'episode_crux'] },
-    { stage: 2, fields: ['quotes'] },
+    { stage: 0, fields: ['episode_name', 'seo_overview'] },
+    { stage: 1, fields: ['summary', 'episode_crux'] },
+    { stage: 2, fields: ['quotes', 'tips'] },
     { stage: 3, fields: ['post_structure'] },
     { stage: 4, fields: ['section_details'] },
     { stage: 5, fields: ['headlines'] },
@@ -394,23 +402,23 @@ export const REQUIRED_PREVIOUS_DATA = {
   // All 4 social platform tasks have identical requirements
   social_instagram: [
     { stage: 7, fields: ['output_text'], required: true },
-    { stage: 2, fields: ['quotes'] },
+    { stage: 2, fields: ['quotes', 'tips'] },
   ],
   social_twitter: [
     { stage: 7, fields: ['output_text'], required: true },
-    { stage: 2, fields: ['quotes'] },
+    { stage: 2, fields: ['quotes', 'tips'] },
   ],
   social_linkedin: [
     { stage: 7, fields: ['output_text'], required: true },
-    { stage: 2, fields: ['quotes'] },
+    { stage: 2, fields: ['quotes', 'tips'] },
   ],
   social_facebook: [
     { stage: 7, fields: ['output_text'], required: true },
-    { stage: 2, fields: ['quotes'] },
+    { stage: 2, fields: ['quotes', 'tips'] },
   ],
   email: [
     { stage: 7, fields: ['output_text'], required: true },
-    { stage: 1, fields: ['episode_basics'] },
+    { stage: 0, fields: ['episode_name', 'seo_overview'] },
   ],
 };
 
@@ -567,9 +575,9 @@ export function logPipelineConfig() {
  * Note: Stage 8 has 4 platform-specific tasks, all mapping to stage_number 8.
  */
 export const STAGE_TO_TASK = {
-  0: 'preprocess',
-  1: 'analyze',
-  2: 'quotes',
+  0: 'content_brief',
+  1: 'summary',
+  2: 'quotes_and_tips',
   3: 'outline',
   4: 'paragraphs',
   5: 'headlines',
@@ -586,14 +594,20 @@ export const STAGE_TO_TASK = {
  * Includes all 4 Stage 8 platform tasks.
  */
 export const TASK_TO_STAGE = {
-  ...Object.fromEntries(
-    Object.entries(STAGE_TO_TASK).map(([k, v]) => [v, parseInt(k)])
-  ),
+  content_brief: 0,
+  summary: 1,
+  quotes_and_tips: 2,
+  outline: 3,
+  paragraphs: 4,
+  headlines: 5,
+  draft: 6,
+  refine: 7,
   // All 4 social platform tasks map to stage 8
   social_instagram: 8,
   social_twitter: 8,
   social_linkedin: 8,
   social_facebook: 8,
+  email: 9,
 };
 
 /**

@@ -9,7 +9,8 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { Save, ChevronDown, X, Plus, Check, MousePointerClick } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Save, ChevronDown, X, Plus, Check, MousePointerClick, Sparkles } from 'lucide-react';
 import { Button } from '@components/shared';
 import styles from './MadlibsProfile.module.css';
 
@@ -227,6 +228,204 @@ function WordBankSelector({
 }
 
 /**
+ * WordBankModal - Full-screen modal with clickable tag grid
+ *
+ * Features:
+ * - Beautiful modal overlay with word cloud layout
+ * - Click tags to toggle selection
+ * - Visual feedback with animations
+ * - Custom value input
+ * - Works great for larger option sets
+ */
+function WordBankModal({
+  options,
+  selected,
+  onSelect,
+  placeholder,
+  title,
+  maxSelections = 6,
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [customValue, setCustomValue] = useState('');
+
+  const currentSelected = Array.isArray(selected) ? selected : [];
+  const selectionCount = currentSelected.length;
+  const isMaxReached = selectionCount >= maxSelections;
+
+  const handleToggle = (value) => {
+    if (currentSelected.includes(value)) {
+      onSelect(currentSelected.filter((v) => v !== value));
+    } else if (!isMaxReached) {
+      onSelect([...currentSelected, value]);
+    }
+  };
+
+  const handleAddCustom = () => {
+    if (customValue.trim() && !isMaxReached && !currentSelected.includes(customValue.trim())) {
+      onSelect([...currentSelected, customValue.trim()]);
+      setCustomValue('');
+    }
+  };
+
+  const handleRemove = (value, e) => {
+    e?.stopPropagation();
+    onSelect(currentSelected.filter((v) => v !== value));
+  };
+
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
+  // Close on escape key
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') setIsOpen(false);
+    };
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+    }
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen]);
+
+  const getDisplayValue = () => {
+    if (selectionCount === 0) return placeholder;
+    if (selectionCount === 1) return currentSelected[0];
+    return `${selectionCount} selected`;
+  };
+
+  const modalContent = (
+    <div className={styles.modalOverlay} onClick={() => setIsOpen(false)}>
+      <div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className={styles.modalHeader}>
+          <div className={styles.modalTitleRow}>
+            <Sparkles className={styles.modalIcon} />
+            <h3 className={styles.modalTitle}>{title || 'Select options'}</h3>
+          </div>
+          <div className={styles.modalMeta}>
+            <span className={styles.modalCount}>
+              {selectionCount} / {maxSelections} selected
+            </span>
+            <button
+              type="button"
+              className={styles.modalClose}
+              onClick={() => setIsOpen(false)}
+              aria-label="Close"
+            >
+              <X />
+            </button>
+          </div>
+        </div>
+
+        {/* Word Bank Grid */}
+        <div className={styles.wordBankGrid}>
+          {options.map((option) => {
+            const optionSelected = currentSelected.includes(option.label);
+            const disabled = !optionSelected && isMaxReached;
+
+            return (
+              <button
+                key={option.id || option.label}
+                type="button"
+                className={`
+                  ${styles.wordBankTag}
+                  ${optionSelected ? styles.wordBankTagSelected : ''}
+                  ${disabled ? styles.wordBankTagDisabled : ''}
+                `}
+                onClick={() => !disabled && handleToggle(option.label)}
+                disabled={disabled}
+              >
+                {optionSelected && <Check className={styles.wordBankCheck} />}
+                <span>{option.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Custom Input */}
+        <div className={styles.modalCustomInput}>
+          <input
+            type="text"
+            placeholder={isMaxReached ? `Max ${maxSelections} reached` : "Add your own..."}
+            value={customValue}
+            onChange={(e) => setCustomValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAddCustom();
+              }
+            }}
+            disabled={isMaxReached}
+          />
+          <button
+            type="button"
+            onClick={handleAddCustom}
+            disabled={!customValue.trim() || isMaxReached}
+          >
+            <Plus />
+          </button>
+        </div>
+
+        {/* Footer */}
+        <div className={styles.modalFooter}>
+          <Button variant="primary" onClick={() => setIsOpen(false)}>
+            Done
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Trigger */}
+      <div className={styles.selectorContainer}>
+        <button
+          type="button"
+          className={`${styles.selectorTrigger} ${styles.modalTrigger} ${selectionCount > 0 ? styles.filled : ''}`}
+          onClick={() => setIsOpen(true)}
+        >
+          <span className={styles.selectorValue}>{getDisplayValue()}</span>
+          {selectionCount > 0 && (
+            <span className={styles.selectionCount}>{selectionCount}</span>
+          )}
+          <Sparkles className={styles.sparkleIcon} />
+        </button>
+
+        {/* Selected tags below trigger */}
+        {selectionCount > 0 && (
+          <div className={styles.selectedTags}>
+            {currentSelected.map((item) => (
+              <span key={item} className={styles.tag}>
+                {item}
+                <button
+                  type="button"
+                  onClick={(e) => handleRemove(item, e)}
+                  aria-label={`Remove ${item}`}
+                >
+                  <X className={styles.tagRemove} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Modal via portal */}
+      {isOpen && createPortal(modalContent, document.body)}
+    </>
+  );
+}
+
+/**
  * MadlibsProfile - Main component
  */
 function MadlibsProfile({ data = {}, referenceData = {}, onSave, saving, enrichedData = {} }) {
@@ -427,12 +626,12 @@ function MadlibsProfile({ data = {}, referenceData = {}, onSave, saving, enriche
         <h3 className={styles.sectionTitle}>Your Clients</h3>
         <div className={styles.madlibsText}>
           <span>My clients are typically </span>
-          <WordBankSelector
+          <WordBankModal
             options={wordBanks.clientTypes || []}
             selected={profile.client_types}
             onSelect={(value) => updateField('client_types', value)}
-            placeholder="client types"
-            multiple
+            placeholder="choose client types"
+            title="Who are your ideal clients?"
             maxSelections={6}
           />
           <span>.</span>
@@ -440,12 +639,12 @@ function MadlibsProfile({ data = {}, referenceData = {}, onSave, saving, enriche
 
         <div className={styles.madlibsText}>
           <span>They're sometimes part of these communities: </span>
-          <WordBankSelector
+          <WordBankModal
             options={wordBanks.subcultures || []}
             selected={profile.client_subcultures}
             onSelect={(value) => updateField('client_subcultures', value)}
-            placeholder="communities/subcultures"
-            multiple
+            placeholder="choose communities"
+            title="What communities do they belong to?"
             maxSelections={5}
           />
           <span>.</span>
@@ -453,12 +652,12 @@ function MadlibsProfile({ data = {}, referenceData = {}, onSave, saving, enriche
 
         <div className={styles.madlibsText}>
           <span>They come to me because they're trying to </span>
-          <WordBankSelector
+          <WordBankModal
             options={wordBanks.clientProblems || []}
             selected={profile.client_problems}
             onSelect={(value) => updateField('client_problems', value)}
-            placeholder="problems to solve"
-            multiple
+            placeholder="choose their goals"
+            title="What problems are they trying to solve?"
             maxSelections={5}
           />
           <span>.</span>

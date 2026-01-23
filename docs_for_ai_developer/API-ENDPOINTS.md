@@ -1302,6 +1302,60 @@ X-RateLimit-Reset: 1673625600
 
 ---
 
+## Audio Transcription (Planned Enhancement)
+
+> **Status**: Researched & Planned - See [AUDIO-TRANSCRIPTION-IMPLEMENTATION.md](./AUDIO-TRANSCRIPTION-IMPLEMENTATION.md)
+
+### POST `/api/transcription/upload`
+
+Upload an audio file for transcription using OpenAI GPT-4o Mini Transcribe.
+
+**Request**: `multipart/form-data`
+- `file` (required): Audio file (MP3, M4A, WAV, MP4, MPEG, MPGA, WEBM)
+- Max size: 25 MB
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "transcript": "Full transcript text from the audio...",
+  "metadata": {
+    "duration_seconds": 2700,
+    "language": "en",
+    "model": "gpt-4o-mini-transcribe",
+    "cost_usd": 0.135,
+    "original_filename": "episode-42.mp3"
+  }
+}
+```
+
+**Error Response (400 Bad Request):**
+```json
+{
+  "error": "Validation failed",
+  "message": "File exceeds 25 MB limit",
+  "details": {
+    "file_size_bytes": 30000000,
+    "max_allowed_bytes": 25000000
+  }
+}
+```
+
+**Error Response (415 Unsupported Media Type):**
+```json
+{
+  "error": "Unsupported file type",
+  "message": "Only MP3, M4A, WAV, MP4, MPEG, MPGA, and WEBM formats are supported",
+  "details": {
+    "received_type": "audio/ogg"
+  }
+}
+```
+
+**Cost**: ~$0.003 per minute of audio ($0.14 for a 45-minute episode)
+
+---
+
 ## Webhooks (Future Enhancement)
 
 For async operations, consider adding webhooks:

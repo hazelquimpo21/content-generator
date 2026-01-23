@@ -415,9 +415,10 @@ router.get('/feeds/:id', requireAuth, async (req, res, next) => {
     }
 
     // Build episodes query
+    // Use explicit FK hint to avoid ambiguity (bidirectional relationship)
     let episodesQuery = supabase
       .from('feed_episodes')
-      .select('*, episodes(id, title, status, current_stage)', { count: 'exact' })
+      .select('*, linked_episode:episodes!episode_id(id, title, status, current_stage)', { count: 'exact' })
       .eq('feed_id', id)
       .order('published_at', { ascending: false })
       .range(offset, offset + limit - 1);

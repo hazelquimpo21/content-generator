@@ -26,6 +26,8 @@ const Input = forwardRef(function Input(
     disabled = false,
     className,
     containerClassName,
+    leftIcon: LeftIcon,
+    rightIcon: RightIcon,
     ...props
   },
   ref
@@ -67,7 +69,26 @@ const Input = forwardRef(function Input(
       {multiline ? (
         <textarea rows={rows} {...fieldProps} />
       ) : (
-        <input {...fieldProps} />
+        <div className={clsx(styles.inputWrapper, (LeftIcon || RightIcon) && styles.hasIcon)}>
+          {LeftIcon && (
+            <span className={styles.leftIcon}>
+              <LeftIcon size={18} />
+            </span>
+          )}
+          <input
+            {...fieldProps}
+            className={clsx(
+              fieldProps.className,
+              LeftIcon && styles.hasLeftIcon,
+              RightIcon && styles.hasRightIcon
+            )}
+          />
+          {RightIcon && (
+            <span className={styles.rightIcon}>
+              <RightIcon size={18} />
+            </span>
+          )}
+        </div>
       )}
 
       {/* Error message */}

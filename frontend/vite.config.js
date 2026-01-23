@@ -28,8 +28,9 @@ export default defineConfig({
         target: 'http://localhost:3001',
         changeOrigin: true,
         // Increase timeout for large file uploads (e.g., audio transcription)
-        timeout: 300000, // 5 minutes
-        proxyTimeout: 300000,
+        // 15 minutes to handle long transcriptions (large files can take 5-10+ minutes)
+        timeout: 900000, // 15 minutes
+        proxyTimeout: 900000,
         // Configure proxy for large uploads with proper error handling
         configure: (proxy) => {
           // Handle proxy errors (network issues, timeouts)

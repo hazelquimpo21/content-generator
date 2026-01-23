@@ -16,7 +16,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Mic, Upload, Loader2, AlertCircle, Check, X, RefreshCw, Clock, Zap, Minimize2, Users } from 'lucide-react';
+import { Mic, Upload, Loader2, AlertCircle, Check, X, RefreshCw, Clock, Zap, Minimize2, Users, FileText, Sparkles } from 'lucide-react';
 import clsx from 'clsx';
 import Button from './Button';
 import ProgressBar from './ProgressBar';
@@ -39,13 +39,22 @@ const TRANSCRIPTION_TIPS = [
   'Transcription cost is based on audio duration (~$0.006/minute)',
 ];
 
-// Tips for speaker diarization
+// Tips for speaker diarization (AssemblyAI)
 const SPEAKER_TIPS = [
   'Speaker diarization identifies who said what in your audio',
   'Each speaker is automatically labeled (Speaker A, Speaker B, etc.)',
   'You can rename speakers after transcription to their real names',
   'Timestamps are included for each utterance in the transcript',
   'Speaker detection works best with clear audio and distinct voices',
+];
+
+// Tips for enhanced transcription (no AssemblyAI)
+const ENHANCED_TIPS = [
+  'Enhanced mode adds timestamps without requiring AssemblyAI',
+  'Speaker estimation uses AI to detect conversation turns',
+  'You can preview the entire transcript with timestamps',
+  'Speaker names can be customized after transcription',
+  'Cost-effective alternative to full speaker diarization',
 ];
 
 // ============================================================================
@@ -92,10 +101,12 @@ function formatSpeed(bytesPerSecond) {
  * @param {Function} props.onError - Callback when an error occurs
  * @param {Function} props.onUploadStart - Callback when upload starts (for navigation)
  * @param {string} props.className - Additional CSS class
- * @param {boolean} props.showSpeakerOption - Show speaker diarization toggle (default: true)
+ * @param {boolean} props.showSpeakerOption - Show speaker diarization toggle (default: false)
+ * @param {boolean} props.showEnhancedOption - Show enhanced transcription toggle (default: true)
  * @param {boolean} props.defaultWithSpeakers - Default value for speaker diarization
+ * @param {boolean} props.defaultEnhanced - Default value for enhanced transcription
  */
-function AudioUpload({ onTranscriptReady, onError, onUploadStart, className, showSpeakerOption = false, defaultWithSpeakers = false }) {
+function AudioUpload({ onTranscriptReady, onError, onUploadStart, className, showSpeakerOption = false, showEnhancedOption = true, defaultWithSpeakers = false, defaultEnhanced = true }) {
   // Global upload state from context
   const {
     state,
@@ -121,12 +132,18 @@ function AudioUpload({ onTranscriptReady, onError, onUploadStart, className, sho
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
   const [withSpeakers, setWithSpeakers] = useState(defaultWithSpeakers);
   const [speakersExpected, setSpeakersExpected] = useState(2);
+  const [useEnhanced, setUseEnhanced] = useState(defaultEnhanced);
+  const [estimateSpeakers, setEstimateSpeakers] = useState(true);
 
   // Refs
   const fileInputRef = useRef(null);
 
-  // Select tips based on speaker diarization mode
-  const currentTips = useSpeakerDiarization ? SPEAKER_TIPS : TRANSCRIPTION_TIPS;
+  // Select tips based on transcription mode
+  const currentTips = useSpeakerDiarization
+    ? SPEAKER_TIPS
+    : useEnhanced
+      ? ENHANCED_TIPS
+      : TRANSCRIPTION_TIPS;
 
   // Rotate tips during transcription
   useEffect(() => {
@@ -150,15 +167,20 @@ function AudioUpload({ onTranscriptReady, onError, onUploadStart, className, sho
     const success = startUpload(selectedFile, {
       onComplete: onTranscriptReady,
       onError: onError,
-      withSpeakers: withSpeakers,
-      speakersExpected: withSpeakers ? speakersExpected : undefined,
+      // AssemblyAI speaker diarization (premium)
+      withSpeakers: withSpeakers && !useEnhanced,
+      // Enhanced mode (timestamps + optional speaker estimation without AssemblyAI)
+      useEnhanced: useEnhanced,
+      estimateSpeakers: useEnhanced ? estimateSpeakers : false,
+      useLLM: true,
+      speakersExpected: (withSpeakers || estimateSpeakers) ? speakersExpected : undefined,
     });
 
     // Notify parent that upload started (for navigation)
     if (success && onUploadStart) {
       onUploadStart(selectedFile);
     }
-  }, [startUpload, onTranscriptReady, onError, onUploadStart, withSpeakers, speakersExpected]);
+  }, [startUpload, onTranscriptReady, onError, onUploadStart, withSpeakers, useEnhanced, estimateSpeakers, speakersExpected]);
 
   /**
    * Handles file input change
@@ -228,13 +250,16 @@ function AudioUpload({ onTranscriptReady, onError, onUploadStart, className, sho
       startUpload(file, {
         onComplete: onTranscriptReady,
         onError: onError,
-        withSpeakers: withSpeakers,
-        speakersExpected: withSpeakers ? speakersExpected : undefined,
+        withSpeakers: withSpeakers && !useEnhanced,
+        useEnhanced: useEnhanced,
+        estimateSpeakers: useEnhanced ? estimateSpeakers : false,
+        useLLM: true,
+        speakersExpected: (withSpeakers || estimateSpeakers) ? speakersExpected : undefined,
       });
     } else {
       reset();
     }
-  }, [file, startUpload, reset, onTranscriptReady, onError, withSpeakers, speakersExpected]);
+  }, [file, startUpload, reset, onTranscriptReady, onError, withSpeakers, useEnhanced, estimateSpeakers, speakersExpected]);
 
   /**
    * Resets to upload another file
@@ -279,8 +304,60 @@ function AudioUpload({ onTranscriptReady, onError, onUploadStart, className, sho
             </span>
           </div>
 
-          {/* Speaker diarization option */}
-          {showSpeakerOption && (
+          {/* Enhanced transcription option (timestamps + speaker estimation) */}
+          {showEnhancedOption && (
+            <div className={styles.speakerOption}>
+              <label className={styles.speakerToggle}>
+                <input
+                  type="checkbox"
+                  checked={useEnhanced}
+                  onChange={(e) => setUseEnhanced(e.target.checked)}
+                  className={styles.speakerCheckbox}
+                />
+                <Clock size={16} className={styles.speakerIcon} />
+                <span className={styles.speakerLabel}>Add timestamps</span>
+              </label>
+
+              {useEnhanced && (
+                <div className={styles.speakerSettings}>
+                  <label className={styles.speakerToggle} style={{ marginBottom: '8px' }}>
+                    <input
+                      type="checkbox"
+                      checked={estimateSpeakers}
+                      onChange={(e) => setEstimateSpeakers(e.target.checked)}
+                      className={styles.speakerCheckbox}
+                    />
+                    <Users size={14} className={styles.speakerIcon} />
+                    <span className={styles.speakerLabel}>Estimate speakers</span>
+                    <span className={styles.speakerBadge}>AI</span>
+                  </label>
+
+                  {estimateSpeakers && (
+                    <>
+                      <span className={styles.speakerSettingsLabel}>Expected speakers:</span>
+                      <select
+                        value={speakersExpected}
+                        onChange={(e) => setSpeakersExpected(parseInt(e.target.value, 10))}
+                        className={styles.speakerSelect}
+                      >
+                        {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                          <option key={n} value={n}>{n} speakers</option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+
+                  <span className={styles.speakerNote}>
+                    <FileText size={12} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                    Preview full transcript with timestamps
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Speaker diarization option (AssemblyAI - premium) */}
+          {showSpeakerOption && !useEnhanced && (
             <div className={styles.speakerOption}>
               <label className={styles.speakerToggle}>
                 <input
@@ -290,8 +367,8 @@ function AudioUpload({ onTranscriptReady, onError, onUploadStart, className, sho
                   className={styles.speakerCheckbox}
                 />
                 <Users size={16} className={styles.speakerIcon} />
-                <span className={styles.speakerLabel}>Identify speakers</span>
-                <span className={styles.speakerBadge}>Beta</span>
+                <span className={styles.speakerLabel}>Premium speaker detection</span>
+                <span className={styles.speakerBadge}>AssemblyAI</span>
               </label>
 
               {withSpeakers && (
@@ -308,7 +385,7 @@ function AudioUpload({ onTranscriptReady, onError, onUploadStart, className, sho
                     ))}
                   </select>
                   <span className={styles.speakerNote}>
-                    Names each speaker with timestamps
+                    High-accuracy speaker identification
                   </span>
                 </div>
               )}
@@ -473,11 +550,25 @@ function AudioUpload({ onTranscriptReady, onError, onUploadStart, className, sho
                 </span>
               </div>
             )}
+            {transcriptionResult.utterances && (
+              <div className={styles.stat}>
+                <span className={styles.statLabel}>Segments</span>
+                <span className={styles.statValue}>
+                  {transcriptionResult.utterances.length}
+                </span>
+              </div>
+            )}
           </div>
           {hasSpeakerLabels && (
             <div className={styles.speakerInfo}>
               <Users size={14} />
               <span>Speakers detected and labeled with timestamps</span>
+            </div>
+          )}
+          {transcriptionResult.formattedTranscript && !hasSpeakerLabels && (
+            <div className={styles.speakerInfo}>
+              <Clock size={14} />
+              <span>Transcript includes timestamps for each segment</span>
             </div>
           )}
           <Button

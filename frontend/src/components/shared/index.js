@@ -23,3 +23,5 @@ export { ToastProvider, useToast } from './Toast';
 export { default as LibraryPickerModal } from './LibraryPickerModal';
 export { default as TagManager } from './TagManager';
 export { default as AudioUpload } from './AudioUpload';
+export { default as SpeakerLabeling } from './SpeakerLabeling';
+export { default as TranscriptPreview } from './TranscriptPreview';

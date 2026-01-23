@@ -122,9 +122,12 @@ export function UploadProvider({ children }) {
    * @param {Function} options.onComplete - Callback when transcription completes
    * @param {Function} options.onError - Callback on error
    * @param {boolean} options.withSpeakers - Enable speaker diarization (AssemblyAI)
+   * @param {boolean} options.useEnhanced - Use enhanced mode (timestamps + speakers without AssemblyAI)
+   * @param {boolean} options.estimateSpeakers - Estimate speakers in enhanced mode
+   * @param {boolean} options.useLLM - Use LLM for speaker estimation (default: true)
    * @param {number} options.speakersExpected - Expected number of speakers (1-10)
    */
-  const startUpload = useCallback((selectedFile, { onComplete, onError, withSpeakers = false, speakersExpected } = {}) => {
+  const startUpload = useCallback((selectedFile, { onComplete, onError, withSpeakers = false, useEnhanced = false, estimateSpeakers = false, useLLM = true, speakersExpected } = {}) => {
     // Validate file
     const validation = validateFile(selectedFile);
     if (!validation.valid) {
@@ -166,9 +169,18 @@ export function UploadProvider({ children }) {
     const formData = new FormData();
     formData.append('audio', selectedFile);
 
-    // Add speaker diarization options if enabled
-    if (withSpeakers && speakersExpected) {
+    // Add speaker diarization options if enabled (AssemblyAI mode)
+    if (withSpeakers && !useEnhanced && speakersExpected) {
       formData.append('speakers_expected', speakersExpected.toString());
+    }
+
+    // Add enhanced transcription options
+    if (useEnhanced) {
+      formData.append('estimate_speakers', estimateSpeakers.toString());
+      formData.append('use_llm', useLLM.toString());
+      if (speakersExpected) {
+        formData.append('expected_speakers', speakersExpected.toString());
+      }
     }
 
     // Create XHR for progress tracking
@@ -269,8 +281,13 @@ export function UploadProvider({ children }) {
       onErrorCallbackRef.current?.(timeoutError);
     });
 
-    // Use speaker endpoint if diarization is enabled
-    const endpoint = withSpeakers ? '/api/transcription/speaker' : '/api/transcription';
+    // Determine endpoint based on transcription mode
+    let endpoint = '/api/transcription';
+    if (useEnhanced) {
+      endpoint = '/api/transcription/enhanced';
+    } else if (withSpeakers) {
+      endpoint = '/api/transcription/speaker';
+    }
     xhr.open('POST', endpoint);
     // Set 15 minute timeout for long transcriptions (large audio files can take 5-10+ minutes)
     xhr.timeout = 900000;

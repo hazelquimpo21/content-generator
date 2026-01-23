@@ -29,6 +29,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Mic,
+  ArrowLeft,
+  Clock,
+  Zap,
+  Lightbulb,
 } from 'lucide-react';
 import { Button, Card, Input, useToast, AudioUpload } from '@components/shared';
 import { useProcessing } from '@contexts/ProcessingContext';
@@ -44,6 +48,15 @@ import styles from './NewEpisode.module.css';
 // Spam protection for title regeneration
 const REGENERATE_COOLDOWN_SECONDS = 5;
 const MAX_REGENERATIONS = 5;
+
+// Tips shown during transcription
+const TRANSCRIPTION_TIPS = [
+  'AI transcription converts speech to text with high accuracy',
+  'Longer audio files are automatically split into chunks',
+  'The transcript will be used to generate your content',
+  'You can start filling in episode details while waiting',
+  'Transcription typically takes 1-3 minutes',
+];
 
 // ============================================================================
 // COMPONENT
@@ -91,6 +104,9 @@ function NewEpisode() {
   const [regenerationCount, setRegenerationCount] = useState(0);
   const [regenerateCooldown, setRegenerateCooldown] = useState(0);
   const [isRegenerating, setIsRegenerating] = useState(false);
+
+  // Progress tip rotation
+  const [currentTipIndex, setCurrentTipIndex] = useState(0);
 
   // Auto-populate hook
   const {
@@ -197,6 +213,17 @@ function NewEpisode() {
 
     return () => clearInterval(timer);
   }, [regenerateCooldown]);
+
+  // Rotate tips during transcription
+  useEffect(() => {
+    if (!upload.isProcessing) return;
+
+    const timer = setInterval(() => {
+      setCurrentTipIndex((prev) => (prev + 1) % TRANSCRIPTION_TIPS.length);
+    }, 5000);
+
+    return () => clearInterval(timer);
+  }, [upload.isProcessing]);
 
   // ============================================================================
   // POPULATE FROM PENDING TRANSCRIPT (without consuming)
@@ -578,6 +605,80 @@ function NewEpisode() {
           Upload your podcast transcript to generate content
         </p>
       </header>
+
+      {/* Transcription Progress Banner - shows when upload is in progress */}
+      {isUploadInProgress && (
+        <div className={styles.progressBanner}>
+          <div className={styles.progressBannerHeader}>
+            <div className={styles.progressBannerTitle}>
+              <div className={styles.progressBannerIcon}>
+                <Loader2 size={20} />
+              </div>
+              <div className={styles.progressBannerInfo}>
+                <h3>{upload.state === 'uploading' ? 'Uploading Audio' : 'Transcribing Audio'}</h3>
+                <p>{upload.file?.name || 'Audio file'}</p>
+              </div>
+            </div>
+            <div className={styles.progressBannerActions}>
+              <button
+                type="button"
+                className={styles.progressBannerBackButton}
+                onClick={() => {
+                  upload.minimize();
+                  navigate('/');
+                }}
+              >
+                <ArrowLeft size={16} />
+                Back to Dashboard
+              </button>
+            </div>
+          </div>
+
+          <div className={styles.progressBannerContent}>
+            {upload.state === 'uploading' && (
+              <div className={styles.progressBarWrapper}>
+                <div className={styles.progressBarTrack}>
+                  <div
+                    className={styles.progressBarFill}
+                    style={{ width: `${upload.uploadProgress}%` }}
+                  />
+                </div>
+                <span className={styles.progressBarText}>{upload.uploadProgress}%</span>
+              </div>
+            )}
+
+            <div className={styles.progressStats}>
+              {upload.state === 'uploading' && upload.uploadSpeed > 0 && (
+                <span className={styles.progressStat}>
+                  <Zap size={14} />
+                  {(upload.uploadSpeed / 1024).toFixed(1)} KB/s
+                </span>
+              )}
+              {upload.state === 'uploading' && upload.timeRemaining > 0 && (
+                <span className={styles.progressStat}>
+                  <Clock size={14} />
+                  ~{Math.ceil(upload.timeRemaining)}s remaining
+                </span>
+              )}
+              {upload.state === 'transcribing' && (
+                <span className={styles.progressStat}>
+                  <Clock size={14} />
+                  This may take 1-3 minutes...
+                </span>
+              )}
+            </div>
+
+            <div className={styles.progressTip}>
+              <Lightbulb size={16} />
+              <span>{TRANSCRIPTION_TIPS[currentTipIndex]}</span>
+            </div>
+          </div>
+
+          <p className={styles.transcribingNote}>
+            You can fill in episode details below while waiting, or go back to the dashboard.
+          </p>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className={styles.form}>
         {/* Error message */}

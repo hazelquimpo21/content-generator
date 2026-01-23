@@ -23,6 +23,9 @@
   --color-primary-hover: #5A7A5F;
   --color-primary-light: #E3EDE4;
   --color-primary-dark: #3D5240;
+  --color-primary-subtle: rgba(107, 143, 113, 0.08);
+  --color-primary-muted: rgba(107, 143, 113, 0.15);
+  --color-primary-rgb: 107, 143, 113;
 
   /* Neutrals - Cool stone scale */
   --color-bg-primary: #F8F9FA;       /* Main background - clean white */
@@ -30,11 +33,25 @@
   --color-bg-tertiary: #E9ECEF;      /* Hover states - medium gray */
   --color-bg-accent: #DEE2E6;        /* Borders, dividers */
 
+  /* Surface colors (aliases for consistency) */
+  --color-surface: #F8F9FA;
+  --color-surface-secondary: #F1F3F5;
+  --color-surface-hover: #E9ECEF;
+
+  /* Border colors */
+  --color-border: #DEE2E6;
+  --color-border-dark: #CED4DA;
+
+  /* Semantic - Rose for destructive actions */
+  --color-rose: #E57373;
+  --color-rose-light: #FFEBEE;
+
   /* Text colors */
   --color-text-primary: #212529;     /* Main text - near black */
   --color-text-secondary: #495057;   /* Secondary text */
   --color-text-tertiary: #868E96;    /* Placeholder, hints */
   --color-text-inverse: #F8F9FA;     /* Text on dark backgrounds */
+  --color-text: #212529;             /* Alias for primary text */
 
   /* Semantic colors */
   --color-success: #51A05E;          /* Success green (fresh, clear) */
@@ -111,6 +128,20 @@
   --space-16: 4rem;        /* 64px */
   --space-20: 5rem;        /* 80px */
   --space-24: 6rem;        /* 96px */
+
+  /* Spacing aliases (for backward compatibility) */
+  --spacing-1: var(--space-1);
+  --spacing-2: var(--space-2);
+  --spacing-3: var(--space-3);
+  --spacing-4: var(--space-4);
+  --spacing-5: var(--space-5);
+  --spacing-6: var(--space-6);
+  --spacing-8: var(--space-8);
+  --spacing-10: var(--space-10);
+  --spacing-12: var(--space-12);
+  --spacing-16: var(--space-16);
+  --spacing-20: var(--space-20);
+  --spacing-24: var(--space-24);
 
   /* ========================================================================
    * BORDERS & RADIUS

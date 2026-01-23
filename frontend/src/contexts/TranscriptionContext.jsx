@@ -6,9 +6,10 @@
  * Ensures only one transcription runs at a time to manage costs and resources.
  *
  * Features:
- * - Track active transcription job
+ * - Track active transcription job with progress estimation
  * - Prevent multiple simultaneous transcriptions
  * - Show transcription status across the app
+ * - Create "draft" state after transcription completes (like manual upload)
  * ============================================================================
  */
 
@@ -19,8 +20,20 @@ import api from '@utils/api-client';
 // CONSTANTS
 // ============================================================================
 
-const POLL_INTERVAL = 5000; // 5 seconds
 const STORAGE_KEY = 'active_transcription';
+const DRAFT_STORAGE_KEY = 'feed_transcription_draft';
+
+// Default estimated duration for episodes (in seconds)
+// Used when we don't know the actual duration
+const DEFAULT_EPISODE_DURATION_SECONDS = 30 * 60; // 30 minutes
+
+// Transcription states (similar to UPLOAD_STATE)
+export const TRANSCRIPTION_STATE = {
+  IDLE: 'idle',
+  TRANSCRIBING: 'transcribing',
+  COMPLETE: 'complete',
+  ERROR: 'error',
+};
 
 // ============================================================================
 // CONTEXT
@@ -32,16 +45,26 @@ const TranscriptionContext = createContext(null);
  * Transcription Provider - manages the transcription queue
  */
 export function TranscriptionProvider({ children }) {
-  // Active transcription state
+  // Transcription state
+  const [state, setState] = useState(TRANSCRIPTION_STATE.IDLE);
   const [activeTranscription, setActiveTranscription] = useState(null);
-  const [isPolling, setIsPolling] = useState(false);
-  const pollIntervalRef = useRef(null);
+  const [error, setError] = useState(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // Draft state - completed transcription ready for processing
+  const [draftEpisode, setDraftEpisode] = useState(null);
+  const [draftFeedEpisode, setDraftFeedEpisode] = useState(null);
+
+  // Timer ref for elapsed time tracking
+  const timerRef = useRef(null);
+  const startTimeRef = useRef(null);
 
   /**
-   * Load any active transcription from localStorage on mount
+   * Load any active transcription or draft from localStorage on mount
    * (handles page refresh during transcription)
    */
   useEffect(() => {
+    // Check for active transcription
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       try {
@@ -52,6 +75,9 @@ export function TranscriptionProvider({ children }) {
           const elapsed = Date.now() - data.startedAt;
           if (elapsed < 30 * 60 * 1000) {
             setActiveTranscription(data);
+            setState(TRANSCRIPTION_STATE.TRANSCRIBING);
+            startTimeRef.current = data.startedAt;
+            setElapsedSeconds(Math.floor(elapsed / 1000));
           } else {
             localStorage.removeItem(STORAGE_KEY);
           }
@@ -60,7 +86,90 @@ export function TranscriptionProvider({ children }) {
         localStorage.removeItem(STORAGE_KEY);
       }
     }
+
+    // Check for draft
+    const draftStored = localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (draftStored) {
+      try {
+        const data = JSON.parse(draftStored);
+        if (data.episode && data.feedEpisode) {
+          // If draft is more than 24 hours old, clear it
+          const age = Date.now() - (data.completedAt || 0);
+          if (age < 24 * 60 * 60 * 1000) {
+            setDraftEpisode(data.episode);
+            setDraftFeedEpisode(data.feedEpisode);
+            setState(TRANSCRIPTION_STATE.COMPLETE);
+          } else {
+            localStorage.removeItem(DRAFT_STORAGE_KEY);
+          }
+        }
+      } catch {
+        localStorage.removeItem(DRAFT_STORAGE_KEY);
+      }
+    }
   }, []);
+
+  /**
+   * Track elapsed time during transcription
+   */
+  useEffect(() => {
+    if (state === TRANSCRIPTION_STATE.TRANSCRIBING && startTimeRef.current) {
+      timerRef.current = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
+        setElapsedSeconds(elapsed);
+      }, 1000);
+
+      return () => {
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+        }
+      };
+    }
+  }, [state]);
+
+  /**
+   * Estimate total transcription time based on episode duration
+   * Returns time in seconds
+   */
+  const getEstimatedTotalSeconds = useCallback(() => {
+    if (!activeTranscription) return 120; // Default 2 min estimate
+
+    // If we know the duration, estimate based on that
+    // Rough estimate: 1 minute of audio takes about 4-5 seconds to transcribe
+    // Plus download time (~30s buffer)
+    const durationSeconds = activeTranscription.durationSeconds || DEFAULT_EPISODE_DURATION_SECONDS;
+    const estimatedMinutes = durationSeconds / 60;
+
+    // Base transcription time + download time buffer
+    return Math.ceil(estimatedMinutes * 4) + 30; // 4 sec/min + 30s buffer
+  }, [activeTranscription]);
+
+  /**
+   * Calculate transcription progress as percentage
+   */
+  const getProgress = useCallback(() => {
+    const estimatedTotal = getEstimatedTotalSeconds();
+    if (estimatedTotal <= 0) return 0;
+
+    // Cap at 95% until actually complete
+    return Math.min(95, Math.round((elapsedSeconds / estimatedTotal) * 100));
+  }, [elapsedSeconds, getEstimatedTotalSeconds]);
+
+  /**
+   * Get estimated time remaining
+   */
+  const getTimeRemaining = useCallback(() => {
+    const estimatedTotal = getEstimatedTotalSeconds();
+    const remaining = Math.max(0, estimatedTotal - elapsedSeconds);
+
+    if (remaining > 60) {
+      return `~${Math.ceil(remaining / 60)}m remaining`;
+    }
+    if (remaining > 0) {
+      return `~${remaining}s remaining`;
+    }
+    return 'Almost done...';
+  }, [elapsedSeconds, getEstimatedTotalSeconds]);
 
   /**
    * Start a transcription job
@@ -68,7 +177,7 @@ export function TranscriptionProvider({ children }) {
    */
   const startTranscription = useCallback(async (feedEpisode, options = {}) => {
     // Check if already transcribing
-    if (activeTranscription) {
+    if (state === TRANSCRIPTION_STATE.TRANSCRIBING || activeTranscription) {
       return {
         success: false,
         error: 'A transcription is already in progress. Please wait for it to complete.',
@@ -76,50 +185,119 @@ export function TranscriptionProvider({ children }) {
       };
     }
 
+    // Clear any existing draft
+    setDraftEpisode(null);
+    setDraftFeedEpisode(null);
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
+
     // Set active state
     const transcriptionData = {
       feedEpisodeId: feedEpisode.id,
       feedId: feedEpisode.feed_id,
       title: feedEpisode.title,
+      description: feedEpisode.description,
+      durationSeconds: feedEpisode.duration_seconds,
+      publishedAt: feedEpisode.published_at,
+      artworkUrl: feedEpisode.artwork_url,
       startedAt: Date.now(),
-      status: 'transcribing',
     };
 
     setActiveTranscription(transcriptionData);
+    setState(TRANSCRIPTION_STATE.TRANSCRIBING);
+    setError(null);
+    setElapsedSeconds(0);
+    startTimeRef.current = Date.now();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(transcriptionData));
 
     try {
       // Start the transcription
       const result = await api.podcasts.transcribeEpisode(feedEpisode.id, options);
 
-      // Success - clear active state
+      // Success - transition to draft state
       setActiveTranscription(null);
       localStorage.removeItem(STORAGE_KEY);
+
+      // Store as draft
+      const draftData = {
+        episode: result.episode,
+        feedEpisode: {
+          ...feedEpisode,
+          ...transcriptionData,
+        },
+        transcription: result.transcription,
+        completedAt: Date.now(),
+      };
+
+      setDraftEpisode(result.episode);
+      setDraftFeedEpisode(feedEpisode);
+      setState(TRANSCRIPTION_STATE.COMPLETE);
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draftData));
 
       return {
         success: true,
         episode: result.episode,
         transcription: result.transcription,
       };
-    } catch (error) {
+    } catch (err) {
       // Error - clear active state
       setActiveTranscription(null);
       localStorage.removeItem(STORAGE_KEY);
+      setState(TRANSCRIPTION_STATE.ERROR);
+      setError(err.message || 'Transcription failed');
+      startTimeRef.current = null;
 
       return {
         success: false,
-        error: error.message || 'Transcription failed',
+        error: err.message || 'Transcription failed',
       };
     }
-  }, [activeTranscription]);
+  }, [state, activeTranscription]);
 
   /**
    * Clear the active transcription (for error recovery)
    */
   const clearTranscription = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+    }
     setActiveTranscription(null);
+    setState(TRANSCRIPTION_STATE.IDLE);
+    setError(null);
+    setElapsedSeconds(0);
+    startTimeRef.current = null;
     localStorage.removeItem(STORAGE_KEY);
   }, []);
+
+  /**
+   * Clear the draft and reset to idle
+   */
+  const clearDraft = useCallback(() => {
+    setDraftEpisode(null);
+    setDraftFeedEpisode(null);
+    setState(TRANSCRIPTION_STATE.IDLE);
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
+  }, []);
+
+  /**
+   * Consume the draft episode (marks it as used)
+   * Returns the episode data and clears the draft
+   */
+  const consumeDraft = useCallback(() => {
+    if (!draftEpisode) return null;
+
+    const result = {
+      episode: draftEpisode,
+      feedEpisode: draftFeedEpisode,
+    };
+
+    // Clear draft after consuming
+    setDraftEpisode(null);
+    setDraftFeedEpisode(null);
+    setState(TRANSCRIPTION_STATE.IDLE);
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
+
+    return result;
+  }, [draftEpisode, draftFeedEpisode]);
 
   /**
    * Check if a specific episode is currently being transcribed
@@ -128,19 +306,39 @@ export function TranscriptionProvider({ children }) {
     return activeTranscription?.feedEpisodeId === feedEpisodeId;
   }, [activeTranscription]);
 
-  /**
-   * Check if any transcription is active
-   */
-  const hasActiveTranscription = !!activeTranscription;
+  // Computed values
+  const hasActiveTranscription = state === TRANSCRIPTION_STATE.TRANSCRIBING && !!activeTranscription;
+  const hasReadyDraft = state === TRANSCRIPTION_STATE.COMPLETE && !!draftEpisode;
+  const isProcessing = state === TRANSCRIPTION_STATE.TRANSCRIBING;
+  const progress = getProgress();
+  const timeRemaining = getTimeRemaining();
 
   return (
     <TranscriptionContext.Provider
       value={{
+        // State
+        state,
         activeTranscription,
+        error,
+        elapsedSeconds,
+        progress,
+        timeRemaining,
+
+        // Draft state
+        draftEpisode,
+        draftFeedEpisode,
+        hasReadyDraft,
+
+        // Computed
         hasActiveTranscription,
-        isTranscribing,
+        isProcessing,
+
+        // Actions
         startTranscription,
         clearTranscription,
+        clearDraft,
+        consumeDraft,
+        isTranscribing,
       }}
     >
       {children}

@@ -70,7 +70,14 @@ function formatDate(dateString) {
 function FeedEpisodesList({ feed, onBack, onEpisodeProcessed }) {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const { activeTranscription, hasActiveTranscription, startTranscription, isTranscribing } = useTranscription();
+  const {
+    activeTranscription,
+    hasActiveTranscription,
+    startTranscription,
+    isTranscribing,
+    progress,
+    timeRemaining,
+  } = useTranscription();
 
   // State
   const [loading, setLoading] = useState(true);
@@ -243,14 +250,18 @@ function FeedEpisodesList({ feed, onBack, onEpisodeProcessed }) {
         </div>
       </div>
 
-      {/* Active transcription banner */}
+      {/* Active transcription banner with progress */}
       {hasActiveTranscription && (
         <div className={styles.transcriptionBanner}>
-          <Info size={16} />
-          <span>
-            Transcribing: <strong>{activeTranscription.title}</strong>
-          </span>
-          <Loader2 size={14} className={styles.spinning} />
+          <Loader2 size={16} className={styles.spinning} />
+          <div className={styles.transcriptionBannerContent}>
+            <span>
+              Transcribing: <strong>{activeTranscription.title}</strong>
+            </span>
+            <span className={styles.transcriptionProgress}>
+              {progress}% {timeRemaining && `· ${timeRemaining}`}
+            </span>
+          </div>
         </div>
       )}
 

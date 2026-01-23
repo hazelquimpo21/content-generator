@@ -78,6 +78,18 @@
   color: var(--color-text);
 }
 
+.transcriptionBannerContent {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.transcriptionProgress {
+  font-size: 0.75rem;
+  opacity: 0.9;
+}
+
 /* Filters */
 .filters {
   display: flex;

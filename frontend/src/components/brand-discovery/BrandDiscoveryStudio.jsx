@@ -40,6 +40,13 @@ const MODULE_CONFIG = {
     icon: 'Sliders',
     color: '#C4A77D',
   },
+  voice: {
+    id: 'voice',
+    title: 'Voice Style',
+    description: 'Pick your "this, not that" guidelines',
+    icon: 'MessageSquare',
+    color: '#9B7653',
+  },
   values: {
     id: 'values',
     title: 'Values',
@@ -71,7 +78,7 @@ const MODULE_CONFIG = {
 };
 
 // Module display order
-const MODULE_ORDER = ['sources', 'vibe', 'values', 'method', 'audience', 'channels'];
+const MODULE_ORDER = ['sources', 'vibe', 'voice', 'values', 'method', 'audience', 'channels'];
 
 /**
  * BrandDiscoveryStudio - Main container for brand discovery modules

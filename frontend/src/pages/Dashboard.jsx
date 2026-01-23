@@ -322,7 +322,16 @@ function Dashboard() {
               file={upload.file}
               progress={upload.uploadProgress}
               isComplete={upload.hasReadyTranscript}
-              onClick={() => navigate('/episodes/new')}
+              onClick={() => {
+                if (upload.hasReadyTranscript) {
+                  // Transcript ready - navigate to form
+                  navigate('/episodes/new');
+                } else {
+                  // Still processing - expand the indicator to show progress
+                  upload.expand();
+                  navigate('/episodes/new');
+                }
+              }}
             />
           )}
           {filteredEpisodes.map((episode) => (

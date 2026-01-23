@@ -31,6 +31,12 @@ import logger from './logger.js';
 import { APIError, ValidationError } from './errors.js';
 import { retryWithBackoff, createAPIRetryConfig } from './retry-logic.js';
 import { apiLogRepo } from './supabase-client.js';
+import {
+  splitAudioIntoChunks,
+  isFFmpegAvailable,
+  MAX_LARGE_FILE_SIZE_BYTES,
+  MAX_LARGE_FILE_SIZE_MB,
+} from './audio-chunking.js';
 
 // ============================================================================
 // CONFIGURATION
@@ -103,16 +109,18 @@ const openai = new OpenAI({
  * @param {Object} options - Validation options
  * @param {string} options.filename - Original filename (for extension detection)
  * @param {string} [options.mimeType] - MIME type of the audio file
+ * @param {boolean} [options.allowLargeFiles=false] - Allow files up to 100MB (will be chunked)
  * @throws {ValidationError} If validation fails
  */
 function validateAudioFile(audioData, options = {}) {
-  const { filename, mimeType } = options;
+  const { filename, mimeType, allowLargeFiles = false } = options;
 
   // Log validation attempt for debugging
   logger.debug('Validating audio file', {
     hasFilename: !!filename,
     mimeType: mimeType || 'not provided',
     dataSize: audioData?.length || audioData?.size || 0,
+    allowLargeFiles,
   });
 
   // Check if data exists
@@ -129,17 +137,21 @@ function validateAudioFile(audioData, options = {}) {
   // Get file size (works for both Buffer and Blob)
   const fileSize = audioData.length || audioData.size;
 
-  // Check file size
-  if (fileSize > MAX_FILE_SIZE_BYTES) {
+  // Check file size - use larger limit if chunking is enabled
+  const maxSize = allowLargeFiles ? MAX_LARGE_FILE_SIZE_BYTES : MAX_FILE_SIZE_BYTES;
+  const maxSizeMB = allowLargeFiles ? MAX_LARGE_FILE_SIZE_MB : (MAX_FILE_SIZE_BYTES / (1024 * 1024));
+
+  if (fileSize > maxSize) {
     const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
     logger.error('Audio validation failed: File too large', {
       filename,
       fileSizeMB,
-      maxSizeMB: MAX_FILE_SIZE_BYTES / (1024 * 1024),
+      maxSizeMB,
+      allowLargeFiles,
     });
     throw new ValidationError(
       'audioData',
-      `Audio file size (${fileSizeMB} MB) exceeds maximum of 25 MB`
+      `Audio file size (${fileSizeMB} MB) exceeds maximum of ${maxSizeMB} MB`
     );
   }
 
@@ -667,10 +679,134 @@ export function getAudioRequirements() {
   return {
     supportedFormats: SUPPORTED_FORMATS,
     supportedMimeTypes: Object.keys(MIME_TO_EXTENSION),
-    maxFileSizeMB: MAX_FILE_SIZE_BYTES / (1024 * 1024),
-    maxFileSizeBytes: MAX_FILE_SIZE_BYTES,
+    maxFileSizeMB: MAX_LARGE_FILE_SIZE_MB, // Updated to support larger files with chunking
+    maxFileSizeBytes: MAX_LARGE_FILE_SIZE_BYTES,
+    whisperMaxFileSizeMB: MAX_FILE_SIZE_BYTES / (1024 * 1024),
+    whisperMaxFileSizeBytes: MAX_FILE_SIZE_BYTES,
     pricePerMinute: WHISPER_PRICE_PER_MINUTE,
     model: WHISPER_MODEL,
+    chunkingEnabled: true,
+  };
+}
+
+// ============================================================================
+// LARGE FILE TRANSCRIPTION (WITH CHUNKING)
+// ============================================================================
+
+/**
+ * Transcribes an audio file, automatically chunking if larger than 25MB.
+ * Uses FFmpeg to split large files into smaller chunks for Whisper API.
+ *
+ * @param {Buffer} audioData - The audio file data
+ * @param {Object} options - Same options as transcribeAudio
+ * @returns {Promise<Object>} Transcription result
+ */
+export async function transcribeAudioWithChunking(audioData, options = {}) {
+  const { filename = 'audio.mp3' } = options;
+  const fileSize = audioData.length || audioData.size;
+
+  // Validate with large file support enabled
+  validateAudioFile(audioData, { ...options, allowLargeFiles: true });
+
+  // If file is small enough, use regular transcription
+  if (fileSize <= MAX_FILE_SIZE_BYTES) {
+    logger.debug('File is under 25MB, using direct transcription', {
+      filename,
+      fileSizeMB: (fileSize / (1024 * 1024)).toFixed(2),
+    });
+    return transcribeAudio(audioData, options);
+  }
+
+  // Check FFmpeg availability for large files
+  const ffmpegAvailable = await isFFmpegAvailable();
+  if (!ffmpegAvailable) {
+    throw new ValidationError(
+      'audioData',
+      `File is ${(fileSize / (1024 * 1024)).toFixed(1)} MB. Files over 25 MB require FFmpeg to be installed on the server.`
+    );
+  }
+
+  const startTime = Date.now();
+
+  logger.info('Starting large file transcription with chunking', {
+    filename,
+    fileSizeMB: (fileSize / (1024 * 1024)).toFixed(2),
+  });
+
+  // Split into chunks
+  const { chunks, totalChunks, audioDurationSeconds } = await splitAudioIntoChunks(
+    audioData,
+    { filename, mimeType: options.mimeType }
+  );
+
+  logger.info('Audio split into chunks', {
+    filename,
+    totalChunks,
+    chunkSizes: chunks.map(c => (c.size / (1024 * 1024)).toFixed(2) + ' MB'),
+  });
+
+  // Transcribe each chunk
+  const chunkResults = [];
+  let totalCost = 0;
+  let totalAudioDuration = 0;
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+
+    logger.info(`Transcribing chunk ${i + 1}/${totalChunks}`, {
+      chunkFilename: chunk.filename,
+      chunkSizeMB: (chunk.size / (1024 * 1024)).toFixed(2),
+    });
+
+    const result = await transcribeAudio(chunk.buffer, {
+      ...options,
+      filename: chunk.filename,
+    });
+
+    chunkResults.push({
+      index: i,
+      transcript: result.transcript,
+      cost: result.estimatedCost,
+      duration: result.audioDurationSeconds,
+    });
+
+    totalCost += result.estimatedCost;
+    totalAudioDuration += result.audioDurationSeconds || 0;
+  }
+
+  // Merge transcripts with paragraph breaks
+  const mergedTranscript = chunkResults
+    .sort((a, b) => a.index - b.index)
+    .map(r => r.transcript)
+    .join('\n\n');
+
+  const processingDurationMs = Date.now() - startTime;
+
+  // Use detected duration or estimated from chunks
+  const finalDuration = audioDurationSeconds || totalAudioDuration || null;
+
+  logger.info('Large audio transcription completed', {
+    filename,
+    totalChunks,
+    totalCost: totalCost.toFixed(4),
+    processingDurationMs,
+    transcriptLength: mergedTranscript.length,
+    wordCount: mergedTranscript.split(/\s+/).filter(w => w.length > 0).length,
+    audioDurationMinutes: finalDuration ? (finalDuration / 60).toFixed(1) : 'unknown',
+  });
+
+  return {
+    transcript: mergedTranscript,
+    audioDurationSeconds: finalDuration,
+    audioDurationMinutes: finalDuration ? Math.round((finalDuration / 60) * 100) / 100 : null,
+    processingDurationMs,
+    estimatedCost: totalCost,
+    formattedCost: `$${totalCost.toFixed(4)}`,
+    model: WHISPER_MODEL,
+    responseFormat: options.responseFormat || 'text',
+    filename,
+    chunked: true,
+    totalChunks,
   };
 }
 
@@ -680,12 +816,15 @@ export function getAudioRequirements() {
 
 export default {
   transcribeAudio,
+  transcribeAudioWithChunking,
   estimateTranscriptionCost,
   calculateTranscriptionCost,
   testWhisperConnection,
   getAudioRequirements,
+  isFFmpegAvailable,
   WHISPER_MODEL,
   WHISPER_PRICE_PER_MINUTE,
   MAX_FILE_SIZE_BYTES,
+  MAX_LARGE_FILE_SIZE_BYTES,
   SUPPORTED_FORMATS,
 };

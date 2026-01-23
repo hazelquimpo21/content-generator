@@ -26,7 +26,7 @@ import styles from './AudioUpload.module.css';
 // ============================================================================
 
 const SUPPORTED_FORMATS = ['mp3', 'mp4', 'm4a', 'wav', 'webm', 'flac', 'ogg', 'mpeg', 'mpga'];
-const MAX_FILE_SIZE_MB = 25;
+const MAX_FILE_SIZE_MB = 100; // Large files are automatically chunked on the server
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 // Upload states
@@ -222,6 +222,8 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
         audioDurationSeconds: result.audioDurationSeconds,
         estimatedCost: result.estimatedCost,
         formattedCost: result.formattedCost,
+        chunked: result.chunked,
+        totalChunks: result.totalChunks,
         filename: selectedFile.name,
         fileSize: selectedFile.size,
         model: result.model,
@@ -397,7 +399,12 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
           </div>
           <div className={styles.transcribingStatus}>
             <Loader2 className={styles.spinner} />
-            <span>Transcribing audio... This may take 1-2 minutes</span>
+            <span>
+              Transcribing audio...
+              {file?.size > 25 * 1024 * 1024
+                ? ' Large files may take several minutes.'
+                : ' This may take 1-2 minutes.'}
+            </span>
           </div>
         </div>
       )}

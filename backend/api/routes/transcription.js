@@ -17,14 +17,14 @@
  * File Upload:
  * - Uses multer for multipart/form-data handling
  * - Supports: mp3, mp4, mpeg, mpga, m4a, wav, webm, flac, ogg
- * - Max file size: 25 MB
+ * - Max file size: 100 MB (files over 25MB are automatically chunked)
  * ============================================================================
  */
 
 import { Router } from 'express';
 import multer from 'multer';
 import {
-  transcribeAudio,
+  transcribeAudioWithChunking,
   estimateTranscriptionCost,
   getAudioRequirements,
 } from '../../lib/audio-transcription.js';
@@ -117,14 +117,14 @@ const fileFilter = (req, file, cb) => {
  * Multer upload middleware instance.
  * Configured for single audio file upload with:
  * - Memory storage (files as Buffer)
- * - 25 MB size limit (Whisper API limit)
+ * - 100 MB size limit (files over 25MB are chunked automatically)
  * - Audio file type filtering
  */
 const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 25 * 1024 * 1024, // 25 MB max (Whisper API limit)
+    fileSize: 100 * 1024 * 1024, // 100 MB max (chunked if > 25MB)
     files: 1, // Only allow one file per request
   },
 });
@@ -155,7 +155,7 @@ function handleUpload(fieldName) {
               });
               return next(new ValidationError(
                 'file',
-                'Audio file exceeds maximum size of 25 MB. Please compress the file or split it into smaller segments.'
+                'Audio file exceeds maximum size of 100 MB. Please compress the file or split it into smaller segments.'
               ));
 
             case 'LIMIT_FILE_COUNT':
@@ -360,8 +360,8 @@ router.post('/', requireAuth, handleUpload('audio'), async (req, res, next) => {
       );
     }
 
-    // Perform transcription
-    const result = await transcribeAudio(req.file.buffer, {
+    // Perform transcription (automatically chunks large files)
+    const result = await transcribeAudioWithChunking(req.file.buffer, {
       filename: req.file.originalname,
       mimeType: req.file.mimetype,
       language,
@@ -377,6 +377,8 @@ router.post('/', requireAuth, handleUpload('audio'), async (req, res, next) => {
       transcriptLength: result.transcript?.length || 0,
       estimatedCost: result.estimatedCost,
       processingDurationMs: result.processingDurationMs,
+      chunked: result.chunked || false,
+      totalChunks: result.totalChunks || 1,
     });
 
     // Return result
@@ -397,6 +399,10 @@ router.post('/', requireAuth, handleUpload('audio'), async (req, res, next) => {
       estimatedCost: result.estimatedCost,
       formattedCost: result.formattedCost,
       processingDurationMs: result.processingDurationMs,
+
+      // Chunking info
+      chunked: result.chunked || false,
+      totalChunks: result.totalChunks || 1,
 
       // Request info
       model: result.model,
@@ -458,8 +464,8 @@ router.post('/with-episode', requireAuth, handleUpload('audio'), async (req, res
       hasContext: !!episode_context,
     });
 
-    // Step 1: Transcribe the audio
-    const transcriptionResult = await transcribeAudio(req.file.buffer, {
+    // Step 1: Transcribe the audio (automatically chunks large files)
+    const transcriptionResult = await transcribeAudioWithChunking(req.file.buffer, {
       filename: req.file.originalname,
       mimeType: req.file.mimetype,
       language,

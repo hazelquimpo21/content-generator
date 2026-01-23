@@ -8,12 +8,12 @@
  * ----------------------
  * The pipeline is organized into 4 phases with 10 focused analyzers:
  *
- *   PRE-GATE (conditional):
- *   └── Stage 0: preprocessTranscript - Compress long transcripts
+ *   PRE-GATE (always runs):
+ *   └── Stage 0: createContentBrief - Create content brief with themes, metadata
  *
  *   PHASE 1: EXTRACT (parallel)
- *   ├── Stage 1: analyzeTranscript - Extract metadata, themes, episode_crux
- *   └── Stage 2: extractQuotes - Extract verbatim quotes
+ *   ├── Stage 1: createEpisodeSummary - Create in-depth summary and episode_crux
+ *   └── Stage 2: extractQuotesAndTips - Extract verbatim quotes and actionable tips
  *
  *   PHASE 2: PLAN (outline first, then parallel)
  *   ├── Stage 3: outlineHighLevel - Create blog structure
@@ -25,8 +25,8 @@
  *   └── Stage 7: refineWithClaude - Polish and improve prose
  *
  *   PHASE 4: DISTRIBUTE (parallel)
- *   ├── Stage 8: generateSocial - Create social media posts
- *   └── Stage 9: generateEmail - Create email newsletter
+ *   ├── Stage 8: generateInstagram/Twitter/LinkedIn/Facebook - Social posts
+ *   └── Stage 9: generateEmail - Email newsletter
  *
  * Design Philosophy:
  * ------------------
@@ -37,14 +37,13 @@
  *
  * Canonical Data Sources:
  * -----------------------
- * - CANONICAL SUMMARY: Stage 1's `episode_crux` field
- * - CANONICAL QUOTES: Stage 2's `quotes[]` array
- *
- * All downstream stages reference these - no duplicate summarization.
+ * - CANONICAL CONTENT BRIEF: Stage 0's themes, metadata, SEO overview
+ * - CANONICAL SUMMARY: Stage 1's `summary` and `episode_crux` fields
+ * - CANONICAL QUOTES/TIPS: Stage 2's `quotes[]` and `tips[]` arrays
  *
  * Usage:
  *   // Named imports (recommended)
- *   import { analyzeTranscript, extractQuotes } from './analyzers/index.js';
+ *   import { createContentBrief, createEpisodeSummary } from './analyzers/index.js';
  *
  *   // All analyzers
  *   import * as analyzers from './analyzers/index.js';
@@ -53,56 +52,64 @@
  */
 
 // ============================================================================
-// PRE-GATE: PREPROCESSING
+// PRE-GATE: CONTENT BRIEF
 // ============================================================================
 
 /**
- * Stage 0: Transcript Preprocessing
+ * Stage 0: Content Brief ⭐ CANONICAL CONTENT BRIEF SOURCE
  *
- * Model: Claude Haiku 3.5 (200K context, cheap)
- * Purpose: Compress long transcripts for downstream processing
- * Trigger: Only runs if transcript > 8000 tokens
+ * Model: Claude Sonnet 4 (quality analysis)
+ * Purpose: Create comprehensive content brief with themes, metadata, SEO overview
+ * Trigger: ALWAYS runs (no longer conditional)
  *
- * Output: { comprehensive_summary, key_topics, speakers, episode_metadata }
+ * Output:
+ * - episode_name, episode_subtitle
+ * - host_name, guest_name, guest_bio
+ * - seo_overview: SEO paragraph overview
+ * - themes[]: 4 themes with what_was_discussed and practical_value
+ * - tags[]: 4 topic tags
+ * - has_promotion, promotion_details
+ * - date_released
+ *
+ * Also outputs human-readable content brief as output_text.
  */
-export { preprocessTranscript } from './stage-00-preprocess-transcript.js';
+export { createContentBrief, preprocessTranscript } from './stage-00-content-brief.js';
 
 // ============================================================================
 // PHASE 1: EXTRACT
 // ============================================================================
 
 /**
- * Stage 1: Transcript Analysis ⭐ CANONICAL SUMMARY SOURCE
+ * Stage 1: Episode Summary ⭐ CANONICAL SUMMARY SOURCE
  *
  * Model: GPT-5 mini (OpenAI)
- * Purpose: Extract episode metadata, themes, and core insight
+ * Purpose: Create in-depth summary and distill core insight
+ * Dependencies: Stage 0 (themes)
  *
  * Output:
- * - episode_basics: { title, date, duration_estimate, main_topics[] }
- * - guest_info: { name, credentials, expertise, website } | null
- * - episode_crux: "2-3 sentence core insight" ← CANONICAL SUMMARY
+ * - summary: In-depth narrative summary (400-600 words)
+ * - episode_crux: Core insight in 2-3 sentences ← CANONICAL
  *
- * This stage produces the SINGLE source of truth for the episode's
- * core message. All downstream stages reference episode_crux.
+ * This stage produces the CANONICAL summary for the episode.
+ * All downstream stages reference summary and episode_crux.
  */
-export { analyzeTranscript } from './stage-01-analyze-transcript.js';
+export { createEpisodeSummary, analyzeTranscript } from './stage-01-episode-summary.js';
 
 /**
- * Stage 2: Quote Extraction ⭐ CANONICAL QUOTES SOURCE
+ * Stage 2: Quotes & Tips Extraction ⭐ CANONICAL QUOTES/TIPS SOURCE
  *
  * Model: Claude Haiku 3.5 (fast, accurate)
- * Purpose: Extract 8-12 verbatim quotes from transcript
+ * Purpose: Extract 8-12 verbatim quotes and 3-5 actionable tips
  *
  * Output:
  * - quotes[]: Array of { text, speaker, context, usage }
+ * - tips[]: Array of { tip, context, category }
  * - extraction_notes: Brief notes about the extraction
  *
- * IMPORTANT: Always uses ORIGINAL transcript (not Stage 0 summary)
+ * IMPORTANT: Always uses ORIGINAL transcript (not Stage 0 output)
  * to ensure quotes are verbatim and accurate.
- *
- * This stage produces the CANONICAL quotes used by all downstream stages.
  */
-export { extractQuotes } from './stage-02-extract-quotes.js';
+export { extractQuotesAndTips, extractQuotes } from './stage-02-extract-quotes.js';
 
 // ============================================================================
 // PHASE 2: PLAN
@@ -113,13 +120,13 @@ export { extractQuotes } from './stage-02-extract-quotes.js';
  *
  * Model: GPT-5 mini (OpenAI)
  * Purpose: Create high-level blog post structure
- * Dependencies: Stage 1 (episode_crux), Stage 2 (quotes)
+ * Dependencies: Stage 0 (content brief), Stage 1 (summary, episode_crux), Stage 2 (quotes, tips)
  *
  * Output:
  * - post_structure: { hook, hook_type, sections[], context, cta }
  * - estimated_total_words: Target word count (~750)
  *
- * Note: Does NOT create its own summary - uses Stage 1's episode_crux.
+ * Note: Does NOT create its own summary - uses Stage 1's content.
  */
 export { outlineHighLevel } from './stage-03-outline-high-level.js';
 
@@ -128,7 +135,7 @@ export { outlineHighLevel } from './stage-03-outline-high-level.js';
  *
  * Model: GPT-5 mini (OpenAI)
  * Purpose: Create detailed paragraph-level plans for each section
- * Dependencies: Stage 2 (quotes), Stage 3 (outline)
+ * Dependencies: Stage 2 (quotes, tips), Stage 3 (outline)
  *
  * Output:
  * - section_details[]: Array of { section_number, section_title, paragraphs[] }
@@ -141,7 +148,7 @@ export { outlineParagraphs } from './stage-04-outline-paragraphs.js';
  *
  * Model: GPT-5 mini (OpenAI)
  * Purpose: Generate multiple title and copy variations
- * Dependencies: Stage 1 (episode_crux), Stage 3 (outline)
+ * Dependencies: Stage 1 (summary, episode_crux), Stage 3 (outline)
  *
  * Output:
  * - headlines[]: 10-15 title options
@@ -160,7 +167,7 @@ export { generateHeadlines } from './stage-05-generate-headlines.js';
  *
  * Model: GPT-5 mini (OpenAI)
  * Purpose: Write the complete ~750-word blog post
- * Dependencies: All Stages 1-5 (uses BlogContentCompiler)
+ * Dependencies: All Stages 0-5 (uses BlogContentCompiler)
  *
  * Output (BOTH types):
  * - output_data: { word_count, char_count, structure, ai_patterns_detected }
@@ -193,18 +200,29 @@ export { refineWithClaude } from './stage-07-refine-with-claude.js';
 // ============================================================================
 
 /**
- * Stage 8: Social Content Generation
+ * Stage 8: Social Content Generation (Platform-Specific)
  *
  * Model: Claude Sonnet 4 (creative content)
  * Purpose: Create platform-specific social media posts
- * Dependencies: Stage 7 (refined blog), Stage 2 (quotes), Stage 5 (headlines)
+ * Dependencies: Stage 7 (refined blog), Stage 2 (quotes, tips), Stage 5 (headlines)
  *
- * Output:
- * - instagram[]: { type, content, hashtags } - short/medium/long variants
- * - twitter[]: { content, type } - 5 tweet options
- * - linkedin[]: { content } - 2 professional posts
- * - facebook[]: { content } - 2 community posts
+ * Platform-specific exports:
+ * - generateInstagram: Instagram posts with hashtags
+ * - generateTwitter: Twitter/X thread options
+ * - generateLinkedIn: Professional LinkedIn posts
+ * - generateFacebook: Community-focused Facebook posts
+ *
+ * Each runs in parallel as a focused analyzer.
  */
+export {
+  generateInstagram,
+  generateTwitter,
+  generateLinkedIn,
+  generateFacebook,
+  generateSocialContent,
+} from './stage-08-social-platform.js';
+
+// Also export the combined social generator for backward compatibility
 export { generateSocial } from './stage-08-generate-social.js';
 
 /**
@@ -212,7 +230,7 @@ export { generateSocial } from './stage-08-generate-social.js';
  *
  * Model: Claude Sonnet 4 (creative content)
  * Purpose: Create email newsletter content
- * Dependencies: Stage 7 (refined blog), Stage 1 (metadata), Stage 5 (headlines)
+ * Dependencies: Stage 7 (refined blog), Stage 0 (content brief), Stage 5 (headlines)
  *
  * Output:
  * - subject_lines[]: 5 email subject options (<50 chars)
@@ -231,16 +249,24 @@ export { generateEmail } from './stage-09-generate-email.js';
  * Used for parallel execution grouping.
  */
 export const ANALYZER_PHASES = {
-  preprocessTranscript: 'pregate',
-  analyzeTranscript: 'extract',
-  extractQuotes: 'extract',
+  createContentBrief: 'pregate',
+  createEpisodeSummary: 'extract',
+  extractQuotesAndTips: 'extract',
   outlineHighLevel: 'plan',
   outlineParagraphs: 'plan',
   generateHeadlines: 'plan',
   draftBlogPost: 'write',
   refineWithClaude: 'write',
-  generateSocial: 'distribute',
+  generateInstagram: 'distribute',
+  generateTwitter: 'distribute',
+  generateLinkedIn: 'distribute',
+  generateFacebook: 'distribute',
   generateEmail: 'distribute',
+  // Backward compatibility aliases
+  preprocessTranscript: 'pregate',
+  analyzeTranscript: 'extract',
+  extractQuotes: 'extract',
+  generateSocial: 'distribute',
 };
 
 /**
@@ -248,15 +274,15 @@ export const ANALYZER_PHASES = {
  * Used for backward compatibility with database.
  */
 export const STAGE_ANALYZERS = {
-  0: 'preprocessTranscript',
-  1: 'analyzeTranscript',
-  2: 'extractQuotes',
+  0: 'createContentBrief',
+  1: 'createEpisodeSummary',
+  2: 'extractQuotesAndTips',
   3: 'outlineHighLevel',
   4: 'outlineParagraphs',
   5: 'generateHeadlines',
   6: 'draftBlogPost',
   7: 'refineWithClaude',
-  8: 'generateSocial',
+  8: 'generateInstagram',  // Primary platform for stage 8
   9: 'generateEmail',
 };
 
@@ -265,12 +291,12 @@ export const STAGE_ANALYZERS = {
  * Used in UI progress indicators.
  */
 export const STAGE_NAMES = {
-  0: 'Transcript Preprocessing',
-  1: 'Transcript Analysis',
-  2: 'Quote Extraction',
-  3: 'Blog Outline - High Level',
-  4: 'Paragraph-Level Outlines',
-  5: 'Headlines & Copy Options',
+  0: 'Content Brief',
+  1: 'Episode Summary',
+  2: 'Quotes & Tips',
+  3: 'Blog Outline',
+  4: 'Paragraph Outlines',
+  5: 'Headlines & Copy',
   6: 'Draft Generation',
   7: 'Refinement Pass',
   8: 'Social Content',
@@ -282,9 +308,9 @@ export const STAGE_NAMES = {
  * Used for cost estimation and debugging.
  */
 export const STAGE_PROVIDERS = {
-  0: 'anthropic',  // Haiku
+  0: 'anthropic',  // Sonnet (content brief)
   1: 'openai',     // GPT-5 mini
-  2: 'anthropic',  // Haiku
+  2: 'anthropic',  // Haiku (quotes/tips)
   3: 'openai',     // GPT-5 mini
   4: 'openai',     // GPT-5 mini
   5: 'openai',     // GPT-5 mini

@@ -8,7 +8,8 @@
  * Architecture Context:
  * ---------------------
  * This module is used in PHASE 3 (Write) to compile outputs from:
- * - PHASE 1 (Extract): Stage 1 (episode_crux), Stage 2 (quotes)
+ * - PRE-GATE: Stage 0 (content_brief with themes, metadata, SEO overview)
+ * - PHASE 1 (Extract): Stage 1 (summary, episode_crux), Stage 2 (quotes, tips)
  * - PHASE 2 (Plan): Stage 3 (outline), Stage 4 (paragraphs), Stage 5 (headlines)
  *
  * It transforms these into a single coherent context document for Stage 6.
@@ -20,24 +21,14 @@
  * - It does NOT call any AI APIs
  * - It does NOT write content
  *
- * The compiler transforms fragmented JSON outputs from Stages 1-5 into a
- * cohesive, human-readable document that gives the AI everything it needs
- * to write a complete 750-word blog post.
- *
  * Key Data Sources:
  * -----------------
- * - Stage 1: episode_crux (CANONICAL SUMMARY) - The core insight to build around
- * - Stage 2: quotes[] (CANONICAL QUOTES) - Verbatim quotes to integrate
+ * - Stage 0: content_brief (episode_name, themes, seo_overview, guest info)
+ * - Stage 1: summary + episode_crux (CANONICAL SUMMARY)
+ * - Stage 2: quotes[] + tips[] (CANONICAL QUOTES & TIPS)
  * - Stage 3: post_structure - High-level blog outline
  * - Stage 4: section_details - Paragraph-level guidance
  * - Stage 5: headlines, subheadings - Title options
- *
- * Why This Exists:
- * ----------------
- * Stage 6 was failing with "blog post too short" because:
- * 1. Previous outputs were passed as raw JSON blobs
- * 2. The AI couldn't see the "big picture" of what to write
- * 3. Quote placement and section structure were unclear
  *
  * Usage:
  *   import { compileBlogContext } from './lib/blog-content-compiler.js';
@@ -192,6 +183,42 @@ as blockquotes or inline attributions. Aim to use 2-4 quotes total.
   }
 
   return quotesSection;
+}
+
+// ============================================================================
+// TIPS COMPILATION
+// ============================================================================
+
+/**
+ * Compiles tips into a formatted section
+ *
+ * @param {Object} stage2Output - Stage 2 quotes and tips extraction output
+ * @returns {string} Formatted tips section for the prompt
+ */
+function compileTips(stage2Output) {
+  const tips = stage2Output?.tips || [];
+
+  if (tips.length === 0) {
+    return '';  // No tips section if none available
+  }
+
+  let tipsSection = `
+## ACTIONABLE TIPS (${tips.length} total)
+
+Consider weaving these practical tips into your blog post where appropriate:
+
+`;
+
+  tips.forEach((tip, idx) => {
+    tipsSection += `**Tip ${idx + 1}** (${tip.category}):\n`;
+    tipsSection += `${tip.tip}\n`;
+    if (tip.context) {
+      tipsSection += `*When to use:* ${tip.context}\n`;
+    }
+    tipsSection += '\n';
+  });
+
+  return tipsSection;
 }
 
 // ============================================================================
@@ -351,20 +378,30 @@ Use these as H2 headings within your post:
 // ============================================================================
 
 /**
- * Compiles episode context and analysis into a summary
+ * Compiles episode context from Stage 0 content brief and Stage 1 summary
  *
- * @param {Object} stage1Output - Stage 1 transcript analysis
+ * @param {Object} stage0Output - Stage 0 content brief (episode_name, themes, guest info, etc.)
+ * @param {Object} stage1Output - Stage 1 summary (summary, episode_crux)
  * @param {Object} evergreen - Evergreen content (podcast info, therapist profile)
  * @returns {string} Formatted episode context
  */
-function compileEpisodeContext(stage1Output, evergreen) {
-  const episodeBasics = stage1Output?.episode_basics || {};
-  const guestInfo = stage1Output?.guest_info;
+function compileEpisodeContext(stage0Output, stage1Output, evergreen) {
+  // Get data from Stage 0 content brief
+  const episodeName = stage0Output?.episode_name || '';
+  const episodeSubtitle = stage0Output?.episode_subtitle || '';
+  const guestName = stage0Output?.guest_name;
+  const guestBio = stage0Output?.guest_bio;
+  const seoOverview = stage0Output?.seo_overview || '';
+  const themes = stage0Output?.themes || [];
+  const tags = stage0Output?.tags || [];
+
+  // Get summary data from Stage 1
+  const summary = stage1Output?.summary || '';
   const episodeCrux = stage1Output?.episode_crux || '';
 
-  // Podcast and host info
+  // Podcast and host info from evergreen
   const podcastName = evergreen?.podcast_info?.name || 'the podcast';
-  const hostName = evergreen?.therapist_profile?.name || 'the host';
+  const hostName = stage0Output?.host_name || evergreen?.therapist_profile?.name || 'the host';
   const credentials = evergreen?.therapist_profile?.credentials || '';
   const targetAudience = evergreen?.podcast_info?.target_audience || 'general audience';
 
@@ -377,29 +414,43 @@ function compileEpisodeContext(stage1Output, evergreen) {
 
 `;
 
-  // Episode details
-  if (episodeBasics.title) {
-    contextSection += `**Episode Title:** ${episodeBasics.title}\n`;
+  // Episode details from Stage 0
+  if (episodeName) {
+    contextSection += `**Episode Title:** ${episodeName}\n`;
+  }
+  if (episodeSubtitle) {
+    contextSection += `**Episode Subtitle:** ${episodeSubtitle}\n`;
   }
 
-  // Main topics
-  const topics = episodeBasics.main_topics || [];
-  if (topics.length > 0) {
-    contextSection += `**Main Topics:**\n${formatBulletList(topics)}\n\n`;
-  }
-
-  // Guest info
-  if (guestInfo) {
-    contextSection += `**Guest:** ${guestInfo.name}`;
-    if (guestInfo.credentials) contextSection += `, ${guestInfo.credentials}`;
-    contextSection += '\n';
-    if (guestInfo.expertise) {
-      contextSection += `**Guest Expertise:** ${guestInfo.expertise}\n`;
+  // Guest info from Stage 0
+  if (guestName) {
+    contextSection += `**Guest:** ${guestName}\n`;
+    if (guestBio) {
+      contextSection += `**Guest Bio:** ${guestBio}\n`;
     }
     contextSection += '\n';
   }
 
-  // Episode crux (THE MOST IMPORTANT PART)
+  // SEO Overview
+  if (seoOverview) {
+    contextSection += `**SEO Overview:**\n${seoOverview}\n\n`;
+  }
+
+  // Themes from Stage 0
+  if (themes.length > 0) {
+    contextSection += `**Key Themes:**\n`;
+    themes.forEach(theme => {
+      contextSection += `- **${theme.name}**: ${theme.what_was_discussed}\n`;
+    });
+    contextSection += '\n';
+  }
+
+  // Tags
+  if (tags.length > 0) {
+    contextSection += `**Topics:** ${tags.join(', ')}\n\n`;
+  }
+
+  // Episode crux from Stage 1 (THE MOST IMPORTANT PART)
   if (episodeCrux) {
     contextSection += `### THE CORE MESSAGE (Build your entire post around this!)
 
@@ -407,6 +458,15 @@ ${episodeCrux}
 
 This is the KEY INSIGHT your blog post must communicate. Every section should
 support and develop this central message.
+
+`;
+  }
+
+  // In-depth summary from Stage 1
+  if (summary) {
+    contextSection += `### EPISODE SUMMARY
+
+${summary}
 
 `;
   }
@@ -450,15 +510,17 @@ export function compileBlogContext(previousStages, evergreen, options = {}) {
   });
 
   // Extract stage outputs
-  const stage1Output = previousStages[1] || {};
-  const stage2Output = previousStages[2] || {};
+  const stage0Output = previousStages[0] || {};  // Content brief
+  const stage1Output = previousStages[1] || {};  // Summary
+  const stage2Output = previousStages[2] || {};  // Quotes & tips
   const stage3Output = previousStages[3] || {};
   const stage4Output = previousStages[4] || {};
   const stage5Output = previousStages[5] || {};
 
   // Compile each section
-  const episodeContext = compileEpisodeContext(stage1Output, evergreen);
+  const episodeContext = compileEpisodeContext(stage0Output, stage1Output, evergreen);
   const quotesSection = compileQuotes(stage2Output, stage4Output);
+  const tipsSection = compileTips(stage2Output);
   const outlineSection = compileOutline(stage3Output, stage4Output);
   const headlinesSection = compileHeadlines(stage5Output);
 
@@ -487,6 +549,7 @@ ${voiceSection}
 ${outlineSection}
 ${headlinesSection}
 ${quotesSection}
+${tipsSection}
 ${includeTranscript && transcript ? `
 ## REFERENCE: ORIGINAL TRANSCRIPT
 
@@ -502,30 +565,35 @@ ${'='.repeat(60)}
 
   // Calculate summary stats
   const quoteCount = stage2Output?.quotes?.length || 0;
+  const tipCount = stage2Output?.tips?.length || 0;
   const sectionCount = stage3Output?.post_structure?.sections?.length || 0;
   const hasEpisodeCrux = !!stage1Output?.episode_crux;
-  // NOTE: We no longer track hasNarrativeSummary since Stage 3 no longer
-  // produces it. Stage 1's episode_crux is the canonical "big picture" summary.
+  const hasContentBrief = !!stage0Output?.episode_name;
 
   logger.info('📚 Blog context compiled successfully', {
     contextLength: fullContext.length,
     quoteCount,
+    tipCount,
     sectionCount,
     hasEpisodeCrux,
+    hasContentBrief,
     hasVoiceGuidelines: Object.keys(voiceGuidelines).length > 0,
   });
 
   return {
     fullContext,
     summary: {
-      episodeTitle: stage1Output?.episode_basics?.title || 'Untitled',
+      episodeTitle: stage0Output?.episode_name || 'Untitled',
       quoteCount,
+      tipCount,
       sectionCount,
       hasEpisodeCrux,
+      hasContentBrief,
       contextLength: fullContext.length,
     },
     wordCountTarget: TARGET_TOTAL_WORDS,
     quoteCount,
+    tipCount,
     sectionCount,
   };
 }

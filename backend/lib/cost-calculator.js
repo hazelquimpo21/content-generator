@@ -239,19 +239,22 @@ export function calculateCostDetailed(model, inputTokens, outputTokens) {
  * Average token usage per stage (based on testing)
  * These are estimates - actual usage varies by transcript length
  *
- * Stage 0: Preprocessing (only runs for long transcripts > 8000 tokens)
- * - Uses full transcript input, outputs ~2000 token summary + quotes
- * - Uses Claude Haiku (200K context window, cheap)
+ * Stage 0: Content Brief (ALWAYS runs)
+ * - Uses full transcript input, outputs content brief with themes, metadata
+ * - Uses Claude Sonnet (quality analysis)
  *
- * Stages 1-2: Use preprocessed summary if Stage 0 ran, otherwise raw transcript
+ * Stages 1-2: Run in parallel after Stage 0
+ * - Stage 1: Summary (uses transcript + Stage 0 themes)
+ * - Stage 2: Quotes & Tips (uses original transcript)
+ *
  * Stages 3-7: Use outputs from previous stages (smaller context)
  * Stage 8: Now runs 4 parallel platform-specific analyzers (Instagram, Twitter, LinkedIn, Facebook)
  * Stage 9: Email campaign
  */
 const STAGE_TOKEN_ESTIMATES = {
-  0: { input: 0, output: 2500 },     // Preprocessing (input varies by transcript size)
-  1: { input: 3000, output: 500 },   // Transcript Analysis (uses preprocessed if available)
-  2: { input: 3500, output: 600 },   // Quote Extraction (uses preprocessed if available)
+  0: { input: 8000, output: 2000 },  // Content Brief (uses full transcript, outputs brief)
+  1: { input: 4000, output: 800 },   // Episode Summary (uses transcript + themes)
+  2: { input: 3500, output: 800 },   // Quotes & Tips Extraction (uses transcript)
   3: { input: 2000, output: 400 },   // Blog Outline High Level
   4: { input: 2500, output: 800 },   // Paragraph Outlines
   5: { input: 2000, output: 1200 },  // Headlines
@@ -272,9 +275,9 @@ const STAGE_8_PLATFORM_ESTIMATES = {
 };
 
 const STAGE_MODELS = {
-  0: 'claude-3-5-haiku-20241022',  // Haiku for preprocessing (200K context, cheap)
-  1: 'gpt-5-mini',
-  2: 'gpt-5-mini',
+  0: 'claude-sonnet-4-20250514',   // Sonnet for content brief (quality analysis)
+  1: 'gpt-5-mini',                 // Summary generation
+  2: 'claude-3-5-haiku-20241022',  // Quotes & tips extraction (fast, cheap)
   3: 'gpt-5-mini',
   4: 'gpt-5-mini',
   5: 'gpt-5-mini',
@@ -291,8 +294,7 @@ const STAGE_8_PLATFORM_MODELS = {
   facebook: 'claude-sonnet-4-20250514',
 };
 
-// Threshold for when preprocessing is needed (in estimated tokens)
-const PREPROCESSING_THRESHOLD = 8000;
+// Note: Stage 0 (Content Brief) now ALWAYS runs - no threshold check needed
 
 /**
  * Estimates total cost for processing an episode
@@ -307,39 +309,37 @@ const PREPROCESSING_THRESHOLD = 8000;
  */
 export function estimateEpisodeCost(transcript) {
   const transcriptTokens = estimateTokens(transcript);
-  const needsPreprocessing = transcriptTokens > PREPROCESSING_THRESHOLD;
 
   let totalCost = 0;
   const stageBreakdown = [];
 
-  // Stage 0: Preprocessing (only for long transcripts)
-  if (needsPreprocessing) {
-    const stage0Model = STAGE_MODELS[0];
-    const stage0Input = transcriptTokens + 500; // transcript + prompt overhead
-    const stage0Output = STAGE_TOKEN_ESTIMATES[0].output;
-    const stage0Cost = calculateCost(stage0Model, stage0Input, stage0Output);
-    totalCost += stage0Cost;
+  // Stage 0: Content Brief (ALWAYS runs)
+  const stage0Model = STAGE_MODELS[0];
+  const stage0Input = transcriptTokens + 500; // transcript + prompt overhead
+  const stage0Output = STAGE_TOKEN_ESTIMATES[0].output;
+  const stage0Cost = calculateCost(stage0Model, stage0Input, stage0Output);
+  totalCost += stage0Cost;
 
-    stageBreakdown.push({
-      stage: 0,
-      name: 'Transcript Preprocessing',
-      model: stage0Model,
-      inputTokens: stage0Input,
-      outputTokens: stage0Output,
-      cost: stage0Cost,
-      note: 'Uses Claude Haiku (200K context) to compress long transcript',
-    });
-  } else {
-    stageBreakdown.push({
-      stage: 0,
-      name: 'Transcript Preprocessing',
-      model: STAGE_MODELS[0],
-      inputTokens: 0,
-      outputTokens: 0,
-      cost: 0,
-      note: 'Skipped - transcript small enough for direct processing',
-    });
-  }
+  stageBreakdown.push({
+    stage: 0,
+    name: 'Content Brief',
+    model: stage0Model,
+    inputTokens: stage0Input,
+    outputTokens: stage0Output,
+    cost: stage0Cost,
+    note: 'Creates content brief with themes, metadata, SEO overview',
+  });
+
+  // Stage names for logging
+  const stageNames = {
+    1: 'Episode Summary',
+    2: 'Quotes & Tips',
+    3: 'Blog Outline',
+    4: 'Paragraph Outlines',
+    5: 'Headlines',
+    6: 'Draft Generation',
+    7: 'Refinement',
+  };
 
   // Stages 1-7 (non-social stages)
   for (let stage = 1; stage <= 7; stage++) {
@@ -348,10 +348,8 @@ export function estimateEpisodeCost(transcript) {
 
     let adjustedInput;
     if (stage <= 2) {
-      // Stages 1-2: Use preprocessed summary (~3000 tokens) or full transcript
-      adjustedInput = needsPreprocessing
-        ? input + 3000  // preprocessed summary size
-        : input + transcriptTokens;
+      // Stages 1-2: Use transcript + Stage 0 output
+      adjustedInput = input + transcriptTokens;
     } else if (stage <= 6) {
       // Stages 3-6: Use outputs from previous stages (not full transcript)
       adjustedInput = input + 2000; // approximate context from previous stages
@@ -365,6 +363,7 @@ export function estimateEpisodeCost(transcript) {
 
     stageBreakdown.push({
       stage,
+      name: stageNames[stage],
       model,
       inputTokens: adjustedInput,
       outputTokens: output,
@@ -427,18 +426,14 @@ export function estimateEpisodeCost(transcript) {
   }
 
   // Calculate estimated time
-  // Stages 1-7 + stage 8 (parallel, counts as 1 time slot) + stage 9 = 9 stages
-  // Add 1 for preprocessing if needed
-  const baseStages = 9; // stages 1-7 + 1 for parallel stage 8 + stage 9
-  const totalStages = needsPreprocessing ? baseStages + 1 : baseStages;
+  // Stage 0 + Stages 1-7 + stage 8 (parallel, counts as 1 time slot) + stage 9 = 10 stages
+  const totalStages = 10;
   const estimatedTimeSeconds = totalStages * 30;
   const minutes = Math.ceil(estimatedTimeSeconds / 60);
 
   return {
     transcriptTokens,
     transcriptCharacters: transcript?.length || 0,
-    needsPreprocessing,
-    preprocessingThreshold: PREPROCESSING_THRESHOLD,
     totalCost,
     formattedCost: `$${totalCost.toFixed(2)}`,
     stageBreakdown,

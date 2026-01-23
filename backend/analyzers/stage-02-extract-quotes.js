@@ -1,11 +1,11 @@
 /**
  * ============================================================================
- * STAGE 2: QUOTE EXTRACTION
+ * STAGE 2: QUOTES AND TIPS EXTRACTION
  * ============================================================================
- * Extracts key verbatim quotes from the podcast transcript.
+ * Extracts key verbatim quotes AND actionable tips from the podcast transcript.
  *
- * This is the SOLE source of quotes for the entire pipeline.
- * All downstream stages (blog, social, email) use quotes from this stage.
+ * This is the SOLE source of quotes and tips for the entire pipeline.
+ * All downstream stages (blog, social, email) reference these.
  *
  * Architecture Notes:
  * -------------------
@@ -14,8 +14,8 @@
  * - This ensures quotes are verbatim and accurate
  * - Uses tool_use for guaranteed structured JSON output
  *
- * Quote Structure (standardized across the pipeline):
- * ---------------------------------------------------
+ * Quote Structure:
+ * ----------------
  * {
  *   text: "The actual quote...",           // Verbatim quote (required)
  *   speaker: "Dr. Jane Smith",             // Who said it (required)
@@ -23,8 +23,16 @@
  *   usage: "headline|pullquote|social|key_point"  // Suggested use (optional)
  * }
  *
- * Input: Original transcript + Stage 1 analysis for context
- * Output: Array of 8-12 quotes with standardized structure
+ * Tip Structure:
+ * --------------
+ * {
+ *   tip: "Specific actionable advice",     // The tip itself (required)
+ *   context: "When/why to use this",       // Context (required)
+ *   category: "mindset|communication|..."  // Category (required)
+ * }
+ *
+ * Input: Original transcript + Stage 0 themes for context
+ * Output: Array of 8-12 quotes + 3-5 tips
  * Model: Claude Haiku (fast, accurate extraction)
  * ============================================================================
  */
@@ -37,24 +45,25 @@ import { ValidationError } from '../lib/errors.js';
 // CONFIGURATION
 // ============================================================================
 
-// Model for quote extraction - Haiku is perfect for precise extraction tasks
-const QUOTE_EXTRACTION_MODEL = 'claude-3-5-haiku-20241022';
+// Model for extraction - Haiku is perfect for precise extraction tasks
+const EXTRACTION_MODEL = 'claude-3-5-haiku-20241022';
 
-// Target quote count
+// Target counts
 const MIN_QUOTES = 5;
 const MAX_QUOTES = 15;
 const TARGET_QUOTES = 10;
 
+const MIN_TIPS = 3;
+const MAX_TIPS = 7;
+const TARGET_TIPS = 5;
+
 // ============================================================================
 // JSON SCHEMA FOR TOOL_USE
 // ============================================================================
-// This schema is used with Claude's tool_use for guaranteed structured output.
-// Fields marked as required will always be present in the output.
-// ============================================================================
 
-const QUOTE_EXTRACTION_SCHEMA = {
+const QUOTES_AND_TIPS_SCHEMA = {
   type: 'object',
-  description: 'Extracted quotes from the podcast transcript',
+  description: 'Extracted quotes and tips from the podcast transcript',
   properties: {
     quotes: {
       type: 'array',
@@ -85,12 +94,37 @@ const QUOTE_EXTRACTION_SCHEMA = {
       minItems: MIN_QUOTES,
       maxItems: MAX_QUOTES,
     },
+    tips: {
+      type: 'array',
+      description: `Array of ${TARGET_TIPS} specific, actionable tips from the episode`,
+      items: {
+        type: 'object',
+        properties: {
+          tip: {
+            type: 'string',
+            description: 'Specific, actionable advice that listeners can immediately apply. Be concrete, not vague.',
+          },
+          context: {
+            type: 'string',
+            description: 'When or why to use this tip (1 sentence)',
+          },
+          category: {
+            type: 'string',
+            enum: ['mindset', 'communication', 'practice', 'boundary', 'self-care', 'relationship', 'professional'],
+            description: 'Category of tip: mindset (thinking shifts), communication (what to say), practice (habits/routines), boundary (limits/rules), self-care (wellness), relationship (interpersonal), professional (work/career)',
+          },
+        },
+        required: ['tip', 'context', 'category'],
+      },
+      minItems: MIN_TIPS,
+      maxItems: MAX_TIPS,
+    },
     extraction_notes: {
       type: 'string',
-      description: 'Brief notes about the quote extraction (e.g., "Found strong quotes on attachment theory, fewer on practical exercises")',
+      description: 'Brief notes about the extraction (e.g., "Found strong quotes on attachment theory, fewer practical tips on communication")',
     },
   },
-  required: ['quotes'],
+  required: ['quotes', 'tips'],
 };
 
 // ============================================================================
@@ -98,34 +132,25 @@ const QUOTE_EXTRACTION_SCHEMA = {
 // ============================================================================
 
 /**
- * Validates the extracted quotes output.
- * Ensures quotes are present, properly structured, and meet quality standards.
- *
+ * Validates the extracted quotes and tips output.
  * @param {Object} data - The extracted data from Claude
  * @throws {ValidationError} If validation fails
  * @returns {boolean} True if validation passes
  */
 function validateOutput(data) {
-  logger.debug('🔍 Validating quote extraction output', {
+  logger.debug('Validating quotes and tips extraction output', {
     hasQuotes: !!data.quotes,
     quoteCount: data.quotes?.length || 0,
+    hasTips: !!data.tips,
+    tipCount: data.tips?.length || 0,
   });
 
-  // Check quotes array exists
+  // Validate quotes array
   if (!data.quotes || !Array.isArray(data.quotes)) {
-    logger.error('❌ Validation failed: quotes missing or invalid', {
-      exists: !!data.quotes,
-      isArray: Array.isArray(data.quotes),
-    });
     throw new ValidationError('quotes', 'Missing or invalid quotes array');
   }
 
-  // Check minimum quote count
   if (data.quotes.length < MIN_QUOTES) {
-    logger.error('❌ Validation failed: not enough quotes', {
-      count: data.quotes.length,
-      minimum: MIN_QUOTES,
-    });
     throw new ValidationError('quotes', `Need at least ${MIN_QUOTES} quotes, got ${data.quotes.length}`);
   }
 
@@ -133,7 +158,6 @@ function validateOutput(data) {
   for (let i = 0; i < data.quotes.length; i++) {
     const quote = data.quotes[i];
 
-    // Check required fields
     if (!quote.text || typeof quote.text !== 'string') {
       throw new ValidationError(`quotes[${i}].text`, 'Quote text is required');
     }
@@ -142,41 +166,63 @@ function validateOutput(data) {
       throw new ValidationError(`quotes[${i}].speaker`, 'Speaker is required');
     }
 
-    // Check quote length (should be substantial but not too long)
+    // Check quote length
     const wordCount = quote.text.split(/\s+/).length;
     if (wordCount < 8) {
-      logger.warn('⚠️ Quote may be too short', {
-        quoteIndex: i,
-        wordCount,
-        text: quote.text.substring(0, 50),
-      });
+      logger.warn('Quote may be too short', { quoteIndex: i, wordCount });
     }
-
     if (wordCount > 80) {
-      logger.warn('⚠️ Quote may be too long', {
-        quoteIndex: i,
-        wordCount,
-        text: quote.text.substring(0, 50) + '...',
-      });
+      logger.warn('Quote may be too long', { quoteIndex: i, wordCount });
     }
   }
 
-  // Log success with stats
-  const usageCounts = data.quotes.reduce((acc, q) => {
-    if (q.usage) {
-      acc[q.usage] = (acc[q.usage] || 0) + 1;
+  // Validate tips array
+  if (!data.tips || !Array.isArray(data.tips)) {
+    throw new ValidationError('tips', 'Missing or invalid tips array');
+  }
+
+  if (data.tips.length < MIN_TIPS) {
+    throw new ValidationError('tips', `Need at least ${MIN_TIPS} tips, got ${data.tips.length}`);
+  }
+
+  // Validate each tip
+  for (let i = 0; i < data.tips.length; i++) {
+    const tip = data.tips[i];
+
+    if (!tip.tip || typeof tip.tip !== 'string') {
+      throw new ValidationError(`tips[${i}].tip`, 'Tip text is required');
     }
+
+    if (!tip.context || typeof tip.context !== 'string') {
+      throw new ValidationError(`tips[${i}].context`, 'Tip context is required');
+    }
+
+    if (!tip.category) {
+      throw new ValidationError(`tips[${i}].category`, 'Tip category is required');
+    }
+
+    // Check tip specificity (should be actionable, not vague)
+    if (tip.tip.length < 20) {
+      logger.warn('Tip may be too vague', { tipIndex: i, tip: tip.tip });
+    }
+  }
+
+  // Log success stats
+  const quoteUsageCounts = data.quotes.reduce((acc, q) => {
+    if (q.usage) acc[q.usage] = (acc[q.usage] || 0) + 1;
     return acc;
   }, {});
 
-  const speakers = [...new Set(data.quotes.map(q => q.speaker))];
+  const tipCategoryCounts = data.tips.reduce((acc, t) => {
+    acc[t.category] = (acc[t.category] || 0) + 1;
+    return acc;
+  }, {});
 
-  logger.info('✅ Quote extraction validation passed', {
+  logger.info('Quotes and tips extraction validation passed', {
     totalQuotes: data.quotes.length,
-    uniqueSpeakers: speakers.length,
-    speakers,
-    usageDistribution: usageCounts,
-    hasExtractionNotes: !!data.extraction_notes,
+    totalTips: data.tips.length,
+    quoteUsageDistribution: quoteUsageCounts,
+    tipCategoryDistribution: tipCategoryCounts,
   });
 
   return true;
@@ -187,134 +233,118 @@ function validateOutput(data) {
 // ============================================================================
 
 /**
- * Extracts key verbatim quotes from the podcast transcript.
+ * Extracts key verbatim quotes and actionable tips from the podcast transcript.
  *
- * This function is the CANONICAL source of quotes for the entire pipeline.
- * Downstream stages (blog, social, email) all reference these quotes.
- *
- * Key Design Decisions:
- * ---------------------
- * 1. Always uses ORIGINAL transcript (not Stage 0 summary) for verbatim accuracy
- * 2. Uses Claude Haiku - fast, cheap, excellent at extraction
- * 3. Uses tool_use for guaranteed JSON structure
- * 4. Standardized output format used by all downstream stages
+ * This function is the CANONICAL source of quotes and tips for the entire pipeline.
+ * Downstream stages (blog, social, email) all reference these.
  *
  * @param {Object} context - Processing context
  * @param {string} context.episodeId - Episode UUID
  * @param {string} context.transcript - ORIGINAL transcript (always used, not summary)
  * @param {Object} context.evergreen - Evergreen content settings
- * @param {Object} context.previousStages - Previous stage outputs (uses Stage 1 for context)
- * @returns {Promise<Object>} Result with output_data containing quotes array
+ * @param {Object} context.previousStages - Previous stage outputs (uses Stage 0 for context)
+ * @returns {Promise<Object>} Result with output_data containing quotes and tips arrays
  */
-export async function extractQuotes(context) {
-  const { episodeId, transcript, evergreen, previousStages } = context;
+export async function extractQuotesAndTips(context) {
+  const { episodeId, transcript, evergreen, previousStages = {} } = context;
 
-  logger.stageStart(2, 'Quote Extraction', episodeId);
+  logger.stageStart(2, 'Quotes & Tips Extraction', episodeId);
 
-  // -------------------------------------------------------------------------
-  // IMPORTANT: Always use ORIGINAL transcript for quote extraction
-  // This ensures quotes are verbatim and accurate, even if Stage 0 preprocessed
-  // -------------------------------------------------------------------------
+  // Always use ORIGINAL transcript for accurate extraction
   const originalTranscript = transcript;
 
-  logger.debug('📝 Using ORIGINAL transcript for quote extraction', {
+  logger.debug('Using ORIGINAL transcript for extraction', {
     episodeId,
     transcriptLength: originalTranscript?.length,
     wordCount: originalTranscript?.split(/\s+/).length || 0,
-    wasPreprocessed: previousStages[0]?.preprocessed === true,
   });
 
-  // Get context from Stage 1 analysis (helps guide quote selection)
-  const stage1Output = previousStages[1] || {};
-  const episodeCrux = stage1Output.episode_crux || '';
-  const keyThemes = stage1Output.key_themes || [];
+  // Get context from Stage 0 content brief (themes guide extraction)
+  const stage0Output = previousStages[0] || {};
+  const themes = stage0Output.themes || [];
+  const episodeName = stage0Output.episode_name || '';
 
-  // -------------------------------------------------------------------------
-  // Build the prompt for Claude Haiku
-  // -------------------------------------------------------------------------
-  const systemPrompt = `You are an expert content curator specializing in extracting powerful, quotable moments from podcast transcripts.
+  // Build the system prompt
+  const systemPrompt = `You are an expert content curator specializing in extracting two things from podcast transcripts:
 
-Your task is to find the most impactful verbatim quotes that could be used for:
-- Headlines and article titles
-- Pull quotes in blog posts
-- Social media posts
-- Key takeaway callouts
+1. **Powerful verbatim quotes** - word-for-word statements that could be headlines, pull quotes, or social posts
+2. **Actionable tips** - specific, practical advice listeners can immediately apply
 
-CRITICAL REQUIREMENTS:
+CRITICAL REQUIREMENTS FOR QUOTES:
 - Quotes MUST be EXACT verbatim text from the transcript
-- Do NOT paraphrase, clean up grammar, or modify the quotes in any way
+- Do NOT paraphrase, clean up grammar, or modify quotes
 - Include quotes from different parts of the conversation
-- Capture a mix of insightful, practical, and emotionally resonant quotes
-- Aim for ${TARGET_QUOTES} quotes total`;
+- Mix of insightful, practical, and emotionally resonant quotes
+
+CRITICAL REQUIREMENTS FOR TIPS:
+- Tips must be SPECIFIC and ACTIONABLE (not vague platitudes)
+- Good: "When you notice yourself spiraling, name five things you can see"
+- Bad: "Practice mindfulness" (too vague)
+- Tips should be things someone can do TODAY`;
 
   const userPrompt = `## Episode Context
 
 **Podcast:** ${evergreen?.podcast_info?.name || 'Podcast'}
 **Host:** ${evergreen?.therapist_profile?.name || 'Host'}
+${episodeName ? `**Episode:** ${episodeName}` : ''}
 
-${episodeCrux ? `**Episode Crux:** ${episodeCrux}` : ''}
-
-${keyThemes.length > 0 ? `**Key Themes:**
-${keyThemes.map(t => `- ${t.theme}: ${t.description}`).join('\n')}` : ''}
+${themes.length > 0 ? `**Key Themes:**
+${themes.map(t => `- ${t.name}: ${t.what_was_discussed}`).join('\n')}` : ''}
 
 ## Instructions
 
-Extract ${TARGET_QUOTES} powerful verbatim quotes from this transcript. Focus on:
+### Extract ${TARGET_QUOTES} Quotes
+Focus on:
 1. **Headline-worthy statements** - Bold, attention-grabbing insights
 2. **Practical wisdom** - Actionable advice listeners can apply
 3. **Emotional resonance** - Moments that will connect with readers
 4. **Expert insights** - Credible, authoritative statements
 5. **Unique perspectives** - Fresh takes not commonly heard
 
-For each quote:
-- Copy the EXACT words from the transcript (verbatim)
-- Note who said it
-- Explain briefly why it's significant (context)
-- Suggest the best use (headline, pullquote, social, or key_point)
+### Extract ${TARGET_TIPS} Tips
+Focus on:
+1. **Immediate applicability** - Can do this today
+2. **Specificity** - Exact action, not vague advice
+3. **Memorability** - Easy to recall and share
+4. **Variety** - Different categories (mindset, communication, practice, etc.)
 
 ## Full Transcript
 
 ${originalTranscript}`;
 
-  // -------------------------------------------------------------------------
-  // Call Claude Haiku with tool_use for structured output
-  // -------------------------------------------------------------------------
+  // Call Claude Haiku with tool_use
   const response = await callClaudeStructured(userPrompt, {
-    model: QUOTE_EXTRACTION_MODEL,
+    model: EXTRACTION_MODEL,
     system: systemPrompt,
-    toolName: 'extract_quotes',
-    toolDescription: 'Extract key verbatim quotes from the podcast transcript',
-    inputSchema: QUOTE_EXTRACTION_SCHEMA,
+    toolName: 'extract_quotes_and_tips',
+    toolDescription: 'Extract verbatim quotes and actionable tips from the podcast transcript',
+    inputSchema: QUOTES_AND_TIPS_SCHEMA,
     episodeId,
     stageNumber: 2,
     temperature: 0.3, // Low temperature for accurate extraction
-    maxTokens: 4096,
+    maxTokens: 6000,
   });
 
   // Extract the structured output
   const outputData = response.toolInput;
 
-  logger.debug('📥 Received quote extraction response', {
+  logger.debug('Received extraction response', {
     episodeId,
     quoteCount: outputData.quotes?.length || 0,
-    hasExtractionNotes: !!outputData.extraction_notes,
+    tipCount: outputData.tips?.length || 0,
   });
 
   // Validate the output
   validateOutput(outputData);
 
-  // Log success with detailed stats
-  const avgQuoteLength = Math.round(
-    outputData.quotes.reduce((sum, q) => sum + q.text.split(/\s+/).length, 0) / outputData.quotes.length
-  );
+  // Log success
+  logger.stageComplete(2, 'Quotes & Tips Extraction', episodeId, response.durationMs, response.cost);
 
-  logger.stageComplete(2, 'Quote Extraction', episodeId, response.durationMs, response.cost);
-
-  logger.info('📝 Quote extraction complete', {
+  logger.info('Quotes and tips extraction complete', {
     episodeId,
     totalQuotes: outputData.quotes.length,
-    avgQuoteWords: avgQuoteLength,
-    model: QUOTE_EXTRACTION_MODEL,
+    totalTips: outputData.tips.length,
+    model: EXTRACTION_MODEL,
     cost: response.cost,
   });
 
@@ -327,4 +357,6 @@ ${originalTranscript}`;
   };
 }
 
-export default extractQuotes;
+// Export with aliases for compatibility
+export { extractQuotesAndTips as extractQuotes };
+export default extractQuotesAndTips;

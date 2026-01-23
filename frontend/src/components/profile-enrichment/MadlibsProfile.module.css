@@ -13,11 +13,11 @@
 }
 
 /* ============================================================================
-   SECTIONS - Generous separation between profile areas
+   SECTIONS - Clean separation between profile areas
    ============================================================================ */
 .section {
-  margin-bottom: var(--spacing-12);
-  padding: var(--spacing-6) 0 var(--spacing-10);
+  margin-bottom: var(--spacing-8);
+  padding: var(--spacing-4) 0 var(--spacing-6);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -27,8 +27,8 @@
 
 .section:last-of-type {
   border-bottom: none;
-  margin-bottom: var(--spacing-8);
-  padding-bottom: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
+  padding-bottom: var(--spacing-2);
 }
 
 .sectionTitle {
@@ -37,10 +37,10 @@
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--color-primary);
-  margin-bottom: var(--spacing-8);
+  margin-bottom: var(--spacing-5);
   display: flex;
   align-items: center;
-  gap: var(--spacing-3);
+  gap: var(--spacing-2);
 }
 
 .sectionTitle::before {
@@ -53,19 +53,19 @@
 }
 
 /* ============================================================================
-   MADLIBS TEXT - Flowing sentence pattern with generous line spacing
+   MADLIBS TEXT - Flowing sentence pattern with balanced spacing
    ============================================================================ */
 .madlibsText {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  row-gap: var(--spacing-6);
-  column-gap: var(--spacing-2);
+  row-gap: var(--spacing-3);
+  column-gap: var(--spacing-1);
   font-size: var(--text-lg);
-  line-height: 2.2;
+  line-height: 1.7;
   color: var(--color-text);
-  margin-bottom: var(--spacing-8);
-  padding: var(--spacing-3) 0;
+  margin-bottom: var(--spacing-5);
+  padding: var(--spacing-2) 0;
 }
 
 .madlibsText:last-child {
@@ -75,7 +75,7 @@
 
 .madlibsText > span {
   white-space: nowrap;
-  padding: var(--spacing-2) var(--spacing-1);
+  padding: var(--spacing-1) 0;
 }
 
 /* ============================================================================
@@ -83,17 +83,17 @@
    ============================================================================ */
 .inlineInput {
   display: inline-block;
-  min-width: 150px;
-  margin: var(--spacing-2) var(--spacing-3);
-  padding: var(--spacing-3) var(--spacing-5);
+  min-width: 140px;
+  margin: var(--spacing-1) var(--spacing-2);
+  padding: var(--spacing-2) var(--spacing-3);
   border: 1.5px solid var(--color-border);
-  border-bottom: 2.5px solid var(--color-primary);
+  border-bottom: 2px solid var(--color-primary);
   background: white;
   border-radius: var(--radius-md);
   font-family: inherit;
   font-size: inherit;
   color: var(--color-text);
-  transition: all 0.25s ease;
+  transition: all 0.2s ease;
 }
 
 .inlineInput:hover {
@@ -116,11 +116,11 @@
 }
 
 .inlineInput.wide {
-  min-width: 220px;
+  min-width: 200px;
 }
 
 .inlineInput.extraWide {
-  min-width: 320px;
+  min-width: 280px;
   flex: 1;
 }
 
@@ -132,17 +132,17 @@
   flex-direction: column;
   position: relative;
   vertical-align: baseline;
-  margin: var(--spacing-2) var(--spacing-3);
+  margin: var(--spacing-1) var(--spacing-2);
 }
 
 .selectorTrigger {
   display: inline-flex;
   align-items: center;
-  gap: var(--spacing-3);
-  min-width: 200px;
-  padding: var(--spacing-3) var(--spacing-5);
-  border: 2px dashed var(--color-primary);
-  border-bottom-width: 3px;
+  gap: var(--spacing-2);
+  min-width: 180px;
+  padding: var(--spacing-2) var(--spacing-3);
+  border: 1.5px dashed var(--color-primary);
+  border-bottom-width: 2px;
   background: linear-gradient(to bottom, var(--color-surface), white);
   border-radius: var(--radius-lg);
   cursor: pointer;
@@ -150,7 +150,7 @@
   font-size: inherit;
   color: var(--color-primary);
   font-style: italic;
-  transition: all 0.25s ease;
+  transition: all 0.2s ease;
 }
 
 .selectorTrigger:hover {
@@ -453,71 +453,65 @@
 .selectedTags {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--spacing-3);
-  margin-top: var(--spacing-4);
-  padding: var(--spacing-4) 0 var(--spacing-2);
+  gap: var(--spacing-2);
+  margin-top: var(--spacing-3);
+  padding: var(--spacing-2) 0;
 }
 
 .tag {
   display: inline-flex;
   align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-3) var(--spacing-2) var(--spacing-4);
-  background: linear-gradient(135deg, var(--color-primary-light) 0%, white 100%);
-  border: 1.5px solid var(--color-primary);
+  gap: var(--spacing-1);
+  padding: var(--spacing-1) var(--spacing-2) var(--spacing-1) var(--spacing-3);
+  background: var(--color-primary-subtle, #e8f5e9);
+  border: 1px solid var(--color-primary);
   border-radius: var(--radius-full);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--color-primary-dark);
-  animation: tagAppear 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 6px rgba(107, 143, 113, 0.12);
+  animation: tagAppear 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: all 0.15s ease;
 }
 
 @keyframes tagAppear {
   0% {
     opacity: 0;
-    transform: scale(0.8) translateY(4px);
+    transform: scale(0.9);
   }
   100% {
     opacity: 1;
-    transform: scale(1) translateY(0);
+    transform: scale(1);
   }
 }
 
 .tag:hover {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-  border-color: var(--color-primary-dark);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
   color: white;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(107, 143, 113, 0.25);
 }
 
 .tag button {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.3);
+  background: transparent;
   cursor: pointer;
-  opacity: 0.7;
-  transition: all 0.2s ease;
+  opacity: 0.6;
+  transition: all 0.15s ease;
 }
 
 .tag:hover button {
-  background: rgba(255, 255, 255, 0.4);
   opacity: 1;
 }
 
 .tag button:hover {
   opacity: 1;
-  background: var(--color-rose);
-  color: white;
-  transform: scale(1.15);
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .tagRemove {
@@ -574,16 +568,16 @@
 /* Modal card */
 .modalCard {
   background: white;
-  border-radius: var(--radius-2xl);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.2),
-              0 8px 32px rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15),
+              0 4px 20px rgba(0, 0, 0, 0.1);
   width: 100%;
-  max-width: 680px;
-  max-height: 85vh;
+  max-width: 560px;
+  max-height: 80vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: modalSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: modalSlideIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 @keyframes modalSlideIn {
@@ -602,25 +596,25 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--spacing-6) var(--spacing-8);
+  padding: var(--spacing-4) var(--spacing-5);
   border-bottom: 1px solid var(--color-border);
-  background: linear-gradient(to bottom, white, var(--color-surface));
+  background: white;
 }
 
 .modalTitleRow {
   display: flex;
   align-items: center;
-  gap: var(--spacing-3);
+  gap: var(--spacing-2);
 }
 
 .modalIcon {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   color: var(--color-primary);
 }
 
 .modalTitle {
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--color-text);
   margin: 0;
@@ -629,14 +623,14 @@
 .modalMeta {
   display: flex;
   align-items: center;
-  gap: var(--spacing-4);
+  gap: var(--spacing-3);
 }
 
 .modalCount {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   color: var(--color-text-secondary);
-  background: var(--color-surface-secondary);
-  padding: var(--spacing-2) var(--spacing-4);
+  background: var(--color-surface-hover, #f5f5f5);
+  padding: var(--spacing-1) var(--spacing-3);
   border-radius: var(--radius-full);
 }
 
@@ -668,12 +662,12 @@
 .wordBankGrid {
   flex: 1;
   overflow-y: auto;
-  padding: var(--spacing-6) var(--spacing-8);
+  padding: var(--spacing-5) var(--spacing-6);
   display: flex;
   flex-wrap: wrap;
-  gap: var(--spacing-4);
+  gap: var(--spacing-3);
   align-content: flex-start;
-  background: linear-gradient(135deg, #f8faf8 0%, #f5f7f5 100%);
+  background: var(--color-surface, #fafafa);
 }
 
 /* Individual word bank tags */
@@ -681,8 +675,8 @@
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-2);
-  padding: var(--spacing-3) var(--spacing-6);
-  border: 2px solid var(--color-border);
+  padding: var(--spacing-2) var(--spacing-4);
+  border: 1.5px solid var(--color-border);
   border-radius: var(--radius-full);
   background: white;
   font-family: inherit;
@@ -690,62 +684,50 @@
   font-weight: 500;
   color: var(--color-text-secondary);
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: all 0.15s ease;
   white-space: nowrap;
 }
 
 .wordBankTag:hover:not(:disabled) {
   border-color: var(--color-primary);
-  background: var(--color-primary-subtle);
+  background: var(--color-primary-subtle, #e8f5e9);
   color: var(--color-primary-dark);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(107, 143, 113, 0.15);
 }
 
 .wordBankTag:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(107, 143, 113, 0.2);
+  transform: scale(0.98);
 }
 
 .wordBankTagSelected {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  background: var(--color-primary);
   border-color: var(--color-primary);
   color: white;
   font-weight: 600;
-  box-shadow: 0 4px 12px rgba(107, 143, 113, 0.3);
 }
 
 .wordBankTagSelected:hover:not(:disabled) {
-  background: linear-gradient(135deg, var(--color-primary-dark) 0%, #2d4030 100%);
+  background: var(--color-primary-dark);
   border-color: var(--color-primary-dark);
-  box-shadow: 0 6px 16px rgba(107, 143, 113, 0.4);
-  transform: translateY(-2px);
 }
 
 .wordBankTagDisabled {
-  opacity: 0.35;
+  opacity: 0.4;
   cursor: not-allowed;
-  background: var(--color-bg-tertiary);
 }
 
 .wordBankCheck {
-  width: 14px;
-  height: 14px;
-  animation: checkPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.1));
+  width: 12px;
+  height: 12px;
+  animation: checkPop 0.2s ease-out;
 }
 
 @keyframes checkPop {
   0% {
-    transform: scale(0) rotate(-45deg);
+    transform: scale(0);
     opacity: 0;
   }
-  50% {
-    transform: scale(1.2) rotate(0deg);
-  }
   100% {
-    transform: scale(1) rotate(0deg);
+    transform: scale(1);
     opacity: 1;
   }
 }
@@ -753,26 +735,26 @@
 /* Modal custom input */
 .modalCustomInput {
   display: flex;
-  gap: var(--spacing-3);
-  padding: var(--spacing-5) var(--spacing-8);
+  gap: var(--spacing-2);
+  padding: var(--spacing-4) var(--spacing-5);
   border-top: 1px solid var(--color-border);
-  background: var(--color-surface-secondary);
+  background: var(--color-surface, #fafafa);
 }
 
 .modalCustomInput input {
   flex: 1;
-  padding: var(--spacing-4) var(--spacing-5);
-  border: 2px solid var(--color-border);
+  padding: var(--spacing-3) var(--spacing-4);
+  border: 1.5px solid var(--color-border);
   border-radius: var(--radius-lg);
-  font-size: var(--text-base);
+  font-size: var(--text-sm);
   background: white;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .modalCustomInput input:focus {
   outline: none;
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 4px rgba(var(--color-primary-rgb, 200, 139, 111), 0.12);
+  box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb, 200, 139, 111), 0.1);
 }
 
 .modalCustomInput input::placeholder {
@@ -783,14 +765,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 52px;
+  width: 40px;
+  height: 40px;
   border: none;
   border-radius: var(--radius-lg);
   background: var(--color-primary);
   color: white;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .modalCustomInput button:disabled {
@@ -800,19 +782,18 @@
 
 .modalCustomInput button:not(:disabled):hover {
   background: var(--color-primary-dark);
-  transform: scale(1.05);
 }
 
 .modalCustomInput button svg {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
 }
 
 /* Modal footer */
 .modalFooter {
   display: flex;
   justify-content: flex-end;
-  padding: var(--spacing-5) var(--spacing-8);
+  padding: var(--spacing-4) var(--spacing-5);
   border-top: 1px solid var(--color-border);
   background: white;
 }
@@ -823,8 +804,8 @@
 .actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: var(--spacing-12);
-  padding: var(--spacing-10) 0 var(--spacing-4);
+  margin-top: var(--spacing-8);
+  padding: var(--spacing-6) 0 var(--spacing-3);
   border-top: 1px solid var(--color-border);
 }
 
@@ -833,33 +814,33 @@
    ============================================================================ */
 @media (max-width: 640px) {
   .container {
-    padding: var(--spacing-6) var(--spacing-4);
+    padding: var(--spacing-4) var(--spacing-3);
   }
 
   .section {
-    margin-bottom: var(--spacing-10);
-    padding: var(--spacing-4) 0 var(--spacing-8);
+    margin-bottom: var(--spacing-6);
+    padding: var(--spacing-3) 0 var(--spacing-5);
   }
 
   .sectionTitle {
-    margin-bottom: var(--spacing-6);
+    margin-bottom: var(--spacing-4);
   }
 
   .madlibsText {
     font-size: var(--text-base);
-    line-height: 1.9;
-    row-gap: var(--spacing-4);
-    margin-bottom: var(--spacing-6);
+    line-height: 1.6;
+    row-gap: var(--spacing-2);
+    margin-bottom: var(--spacing-4);
   }
 
   .inlineInput {
-    min-width: 130px;
-    margin: var(--spacing-2) var(--spacing-3);
-    padding: var(--spacing-3) var(--spacing-4);
+    min-width: 120px;
+    margin: var(--spacing-1) var(--spacing-1);
+    padding: var(--spacing-2) var(--spacing-3);
   }
 
   .inlineInput.wide {
-    min-width: 180px;
+    min-width: 160px;
   }
 
   .inlineInput.extraWide {
@@ -867,12 +848,12 @@
   }
 
   .selectorContainer {
-    margin: var(--spacing-2) var(--spacing-3);
+    margin: var(--spacing-1) var(--spacing-1);
   }
 
   .selectorTrigger {
-    min-width: 150px;
-    padding: var(--spacing-3) var(--spacing-4);
+    min-width: 140px;
+    padding: var(--spacing-2) var(--spacing-3);
   }
 
   /* Mobile dropdown as bottom sheet */
@@ -919,18 +900,18 @@
   }
 
   .selectedTags {
-    margin-top: var(--spacing-4);
-    gap: var(--spacing-3);
+    margin-top: var(--spacing-2);
+    gap: var(--spacing-2);
   }
 
   .tag {
-    font-size: var(--text-sm);
-    padding: var(--spacing-2) var(--spacing-3) var(--spacing-2) var(--spacing-4);
+    font-size: var(--text-xs);
+    padding: var(--spacing-1) var(--spacing-2) var(--spacing-1) var(--spacing-3);
   }
 
   .actions {
-    margin-top: var(--spacing-10);
-    padding: var(--spacing-8) 0 var(--spacing-4);
+    margin-top: var(--spacing-6);
+    padding: var(--spacing-5) 0 var(--spacing-3);
   }
 
   /* Mobile modal adjustments */

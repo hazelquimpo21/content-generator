@@ -240,7 +240,7 @@ function MadlibsProfile({ data = {}, referenceData = {}, onSave, saving, enriche
     // Location
     location: data.location || enrichedData.location?.value || '',
     client_locations: data.client_locations || [],
-    service_scope: data.service_scope || 'nationwide',
+    service_scope: data.service_scope || enrichedData.service_scope?.value || [],
 
     // Properties
     podcast_name: data.podcast_name || enrichedData.podcast_name?.value || '',
@@ -349,7 +349,9 @@ function MadlibsProfile({ data = {}, referenceData = {}, onSave, saving, enriche
             options={wordBanks.serviceScopes || []}
             selected={profile.service_scope}
             onSelect={(value) => updateField('service_scope', value)}
-            placeholder="service area"
+            placeholder="service areas"
+            multiple
+            maxSelections={4}
           />
           <span>.</span>
         </div>

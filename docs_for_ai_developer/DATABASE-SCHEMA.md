@@ -971,6 +971,141 @@ CREATE INDEX idx_topic_pillar_pillar ON topic_pillar_associations(pillar_id);
 
 ---
 
+### `episode_speakers`
+
+Stores speaker information for episodes with speaker diarization. User-scoped via episode ownership.
+
+```sql
+CREATE TABLE episode_speakers (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  episode_id UUID NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
+
+  -- Speaker identification
+  speaker_id TEXT NOT NULL,  -- 'A', 'B', 'C', etc. from diarization
+  label TEXT NOT NULL,        -- User-friendly name, e.g., "Dr. Smith"
+
+  -- Optional speaker metadata
+  role TEXT,                  -- 'host', 'guest', 'interviewer', etc.
+  description TEXT,           -- Additional notes about the speaker
+
+  -- Timestamps
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+  -- Ensure unique speaker IDs per episode
+  UNIQUE(episode_id, speaker_id)
+);
+
+-- Indexes
+CREATE INDEX idx_episode_speakers_episode ON episode_speakers(episode_id);
+CREATE INDEX idx_episode_speakers_label ON episode_speakers(label);
+```
+
+**Field Descriptions:**
+
+- `id`: Unique identifier (UUID v4)
+- `episode_id`: Foreign key to episodes table
+- `speaker_id`: Speaker label from diarization ('A', 'B', 'C', etc.)
+- `label`: Human-readable name (e.g., "Dr. Smith", "Host")
+- `role`: Optional role descriptor (host, guest, interviewer, etc.)
+- `description`: Optional notes about the speaker
+
+---
+
+### `episode_utterances`
+
+Stores timestamped utterances from speaker diarization. Each row is one continuous speech segment.
+
+```sql
+CREATE TABLE episode_utterances (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  episode_id UUID NOT NULL REFERENCES episodes(id) ON DELETE CASCADE,
+
+  -- Speaker reference
+  speaker_id TEXT NOT NULL,   -- 'A', 'B', etc.
+
+  -- Timing (in milliseconds from start)
+  start_ms INTEGER NOT NULL,
+  end_ms INTEGER NOT NULL,
+
+  -- Content
+  text TEXT NOT NULL,
+
+  -- Optional metadata
+  confidence DECIMAL(5, 4),   -- 0.0000 to 1.0000
+  word_count INTEGER GENERATED ALWAYS AS (
+    array_length(regexp_split_to_array(trim(text), '\s+'), 1)
+  ) STORED,
+
+  -- Ordering
+  sequence_number INTEGER NOT NULL,
+
+  -- Timestamps
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Indexes
+CREATE INDEX idx_episode_utterances_episode ON episode_utterances(episode_id);
+CREATE INDEX idx_episode_utterances_speaker ON episode_utterances(episode_id, speaker_id);
+CREATE INDEX idx_episode_utterances_sequence ON episode_utterances(episode_id, sequence_number);
+CREATE INDEX idx_episode_utterances_timing ON episode_utterances(episode_id, start_ms);
+```
+
+**Field Descriptions:**
+
+- `id`: Unique identifier (UUID v4)
+- `episode_id`: Foreign key to episodes table
+- `speaker_id`: Which speaker said this ('A', 'B', etc.)
+- `start_ms`: Start time in milliseconds from audio start
+- `end_ms`: End time in milliseconds from audio start
+- `text`: The spoken text content
+- `confidence`: Confidence score from diarization (0-1)
+- `word_count`: Automatically computed word count
+- `sequence_number`: Order of utterance in transcript
+
+**Example query - Get transcript with speaker labels:**
+```sql
+SELECT
+  eu.start_ms, eu.end_ms, eu.text,
+  COALESCE(es.label, 'Speaker ' || eu.speaker_id) as speaker_label
+FROM episode_utterances eu
+LEFT JOIN episode_speakers es ON es.episode_id = eu.episode_id
+  AND es.speaker_id = eu.speaker_id
+WHERE eu.episode_id = $1
+ORDER BY eu.sequence_number;
+```
+
+---
+
+### Episodes Table - Speaker Columns
+
+The `episodes` table has been extended with speaker diarization columns:
+
+```sql
+ALTER TABLE episodes
+ADD COLUMN speaker_data JSONB DEFAULT NULL,
+ADD COLUMN transcript_format TEXT DEFAULT 'plain'
+  CHECK (transcript_format IN ('plain', 'speaker_labeled'));
+```
+
+- `speaker_data`: JSON containing speaker metadata from AssemblyAI
+  ```json
+  {
+    "speakers": [
+      { "id": "A", "label": "Dr. Smith (Host)" },
+      { "id": "B", "label": "Jane Doe (Guest)" }
+    ],
+    "provider": "assemblyai",
+    "transcriptId": "abc123",
+    "hasSpeakerDiarization": true
+  }
+  ```
+- `transcript_format`: Format of the transcript text
+  - `plain`: Basic text without speaker labels
+  - `speaker_labeled`: Formatted with timestamps and speaker IDs
+
+---
+
 ## Migration Strategy
 
 ### Initial Migration

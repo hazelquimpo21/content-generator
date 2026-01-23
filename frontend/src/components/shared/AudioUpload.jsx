@@ -16,7 +16,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Mic, Upload, Loader2, AlertCircle, Check, X, RefreshCw, Clock, Zap, Minimize2 } from 'lucide-react';
+import { Mic, Upload, Loader2, AlertCircle, Check, X, RefreshCw, Clock, Zap, Minimize2, Users } from 'lucide-react';
 import clsx from 'clsx';
 import Button from './Button';
 import ProgressBar from './ProgressBar';
@@ -37,6 +37,15 @@ const TRANSCRIPTION_TIPS = [
   'The transcript will be used to generate your episode content',
   'You can edit the transcript after upload if needed',
   'Transcription cost is based on audio duration (~$0.006/minute)',
+];
+
+// Tips for speaker diarization
+const SPEAKER_TIPS = [
+  'Speaker diarization identifies who said what in your audio',
+  'Each speaker is automatically labeled (Speaker A, Speaker B, etc.)',
+  'You can rename speakers after transcription to their real names',
+  'Timestamps are included for each utterance in the transcript',
+  'Speaker detection works best with clear audio and distinct voices',
 ];
 
 // ============================================================================
@@ -82,8 +91,10 @@ function formatSpeed(bytesPerSecond) {
  * @param {Function} props.onTranscriptReady - Callback when transcription is complete
  * @param {Function} props.onError - Callback when an error occurs
  * @param {string} props.className - Additional CSS class
+ * @param {boolean} props.showSpeakerOption - Show speaker diarization toggle (default: true)
+ * @param {boolean} props.defaultWithSpeakers - Default value for speaker diarization
  */
-function AudioUpload({ onTranscriptReady, onError, className }) {
+function AudioUpload({ onTranscriptReady, onError, className, showSpeakerOption = true, defaultWithSpeakers = false }) {
   // Global upload state from context
   const {
     state,
@@ -95,6 +106,8 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
     timeRemaining,
     transcriptionResult,
     isMinimized,
+    useSpeakerDiarization,
+    hasSpeakerLabels,
     startUpload,
     cancelUpload,
     reset,
@@ -102,23 +115,28 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
     expand,
   } = useUpload();
 
-  // Local state for drag-drop
+  // Local state for drag-drop and options
   const [isDragOver, setIsDragOver] = useState(false);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
+  const [withSpeakers, setWithSpeakers] = useState(defaultWithSpeakers);
+  const [speakersExpected, setSpeakersExpected] = useState(2);
 
   // Refs
   const fileInputRef = useRef(null);
+
+  // Select tips based on speaker diarization mode
+  const currentTips = useSpeakerDiarization ? SPEAKER_TIPS : TRANSCRIPTION_TIPS;
 
   // Rotate tips during transcription
   useEffect(() => {
     if (state !== UPLOAD_STATE.TRANSCRIBING) return;
 
     const interval = setInterval(() => {
-      setCurrentTipIndex((prev) => (prev + 1) % TRANSCRIPTION_TIPS.length);
+      setCurrentTipIndex((prev) => (prev + 1) % currentTips.length);
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [state]);
+  }, [state, currentTips.length]);
 
   // ============================================================================
   // HANDLERS
@@ -131,8 +149,10 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
     startUpload(selectedFile, {
       onComplete: onTranscriptReady,
       onError: onError,
+      withSpeakers: withSpeakers,
+      speakersExpected: withSpeakers ? speakersExpected : undefined,
     });
-  }, [startUpload, onTranscriptReady, onError]);
+  }, [startUpload, onTranscriptReady, onError, withSpeakers, speakersExpected]);
 
   /**
    * Handles file input change
@@ -202,11 +222,13 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
       startUpload(file, {
         onComplete: onTranscriptReady,
         onError: onError,
+        withSpeakers: withSpeakers,
+        speakersExpected: withSpeakers ? speakersExpected : undefined,
       });
     } else {
       reset();
     }
-  }, [file, startUpload, reset, onTranscriptReady, onError]);
+  }, [file, startUpload, reset, onTranscriptReady, onError, withSpeakers, speakersExpected]);
 
   /**
    * Resets to upload another file
@@ -232,23 +254,61 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
 
       {/* Idle state - Drop zone */}
       {state === UPLOAD_STATE.IDLE && (
-        <div
-          className={clsx(styles.dropZone, isDragOver && styles.dragOver)}
-          onClick={handleClick}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => e.key === 'Enter' && handleClick()}
-        >
-          <Mic className={styles.icon} />
-          <span className={styles.title}>Drop audio file here</span>
-          <span className={styles.subtitle}>or click to browse</span>
-          <span className={styles.formats}>
-            MP3, M4A, WAV, MP4, WEBM, FLAC, OGG (max {MAX_FILE_SIZE_MB} MB)
-          </span>
-        </div>
+        <>
+          <div
+            className={clsx(styles.dropZone, isDragOver && styles.dragOver)}
+            onClick={handleClick}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && handleClick()}
+          >
+            <Mic className={styles.icon} />
+            <span className={styles.title}>Drop audio file here</span>
+            <span className={styles.subtitle}>or click to browse</span>
+            <span className={styles.formats}>
+              MP3, M4A, WAV, MP4, WEBM, FLAC, OGG (max {MAX_FILE_SIZE_MB} MB)
+            </span>
+          </div>
+
+          {/* Speaker diarization option */}
+          {showSpeakerOption && (
+            <div className={styles.speakerOption}>
+              <label className={styles.speakerToggle}>
+                <input
+                  type="checkbox"
+                  checked={withSpeakers}
+                  onChange={(e) => setWithSpeakers(e.target.checked)}
+                  className={styles.speakerCheckbox}
+                />
+                <Users size={16} className={styles.speakerIcon} />
+                <span className={styles.speakerLabel}>Identify speakers</span>
+                <span className={styles.speakerBadge}>Beta</span>
+              </label>
+
+              {withSpeakers && (
+                <div className={styles.speakerSettings}>
+                  <span className={styles.speakerSettingsLabel}>Expected speakers:</span>
+                  <select
+                    value={speakersExpected}
+                    onChange={(e) => setSpeakersExpected(parseInt(e.target.value, 10))}
+                    className={styles.speakerSelect}
+                  >
+                    <option value="">Auto-detect</option>
+                    {[2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
+                      <option key={n} value={n}>{n} speakers</option>
+                    ))}
+                  </select>
+                  <span className={styles.speakerNote}>
+                    Names each speaker with timestamps
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {/* Uploading state - only show if not minimized */}
@@ -357,7 +417,7 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
           </div>
           <div className={styles.tipContainer}>
             <span className={styles.tipLabel}>Did you know?</span>
-            <span className={styles.tipText}>{TRANSCRIPTION_TIPS[currentTipIndex]}</span>
+            <span className={styles.tipText}>{currentTips[currentTipIndex]}</span>
           </div>
           <span className={styles.backgroundHint}>
             Click the minimize button to continue browsing while this transcribes
@@ -389,7 +449,22 @@ function AudioUpload({ onTranscriptReady, onError, className }) {
                 {transcriptionResult.transcript?.split(/\s+/).length.toLocaleString()}
               </span>
             </div>
+            {hasSpeakerLabels && transcriptionResult.speakers && (
+              <div className={styles.stat}>
+                <span className={styles.statLabel}>Speakers</span>
+                <span className={styles.statValue}>
+                  <Users size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                  {transcriptionResult.speakers.length}
+                </span>
+              </div>
+            )}
           </div>
+          {hasSpeakerLabels && (
+            <div className={styles.speakerInfo}>
+              <Users size={14} />
+              <span>Speakers detected and labeled with timestamps</span>
+            </div>
+          )}
           <Button
             variant="ghost"
             size="sm"

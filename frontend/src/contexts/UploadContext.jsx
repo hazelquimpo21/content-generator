@@ -103,6 +103,7 @@ export function UploadProvider({ children }) {
   const [timeRemaining, setTimeRemaining] = useState(null);
   const [transcriptionResult, setTranscriptionResult] = useState(null);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [useSpeakerDiarization, setUseSpeakerDiarization] = useState(false);
 
   // Refs for XHR and timing
   const xhrRef = useRef(null);
@@ -114,8 +115,14 @@ export function UploadProvider({ children }) {
 
   /**
    * Starts an upload
+   * @param {File} selectedFile - The audio file to upload
+   * @param {Object} options - Upload options
+   * @param {Function} options.onComplete - Callback when transcription completes
+   * @param {Function} options.onError - Callback on error
+   * @param {boolean} options.withSpeakers - Enable speaker diarization (AssemblyAI)
+   * @param {number} options.speakersExpected - Expected number of speakers (1-10)
    */
-  const startUpload = useCallback((selectedFile, { onComplete, onError } = {}) => {
+  const startUpload = useCallback((selectedFile, { onComplete, onError, withSpeakers = false, speakersExpected } = {}) => {
     // Validate file
     const validation = validateFile(selectedFile);
     if (!validation.valid) {
@@ -139,6 +146,7 @@ export function UploadProvider({ children }) {
     setTimeRemaining(null);
     setTranscriptionResult(null);
     setIsMinimized(false);
+    setUseSpeakerDiarization(withSpeakers);
     lastProgressRef.current = { time: Date.now(), bytes: 0 };
 
     // Get auth token
@@ -154,6 +162,11 @@ export function UploadProvider({ children }) {
     // Create form data
     const formData = new FormData();
     formData.append('audio', selectedFile);
+
+    // Add speaker diarization options if enabled
+    if (withSpeakers && speakersExpected) {
+      formData.append('speakers_expected', speakersExpected.toString());
+    }
 
     // Create XHR for progress tracking
     const xhr = new XMLHttpRequest();
@@ -206,6 +219,13 @@ export function UploadProvider({ children }) {
             filename: selectedFile.name,
             fileSize: selectedFile.size,
             model: data.model,
+            // Speaker diarization data (if applicable)
+            hasSpeakerLabels: data.hasSpeakerLabels || false,
+            formattedTranscript: data.formattedTranscript,
+            speakers: data.speakers,
+            utterances: data.utterances,
+            provider: data.provider,
+            transcriptId: data.transcriptId,
           });
         } catch {
           const parseError = 'Invalid response from server';
@@ -239,7 +259,9 @@ export function UploadProvider({ children }) {
       setState(UPLOAD_STATE.IDLE);
     });
 
-    xhr.open('POST', '/api/transcription');
+    // Use speaker endpoint if diarization is enabled
+    const endpoint = withSpeakers ? '/api/transcription/speaker' : '/api/transcription';
+    xhr.open('POST', endpoint);
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.send(formData);
 
@@ -307,6 +329,7 @@ export function UploadProvider({ children }) {
     timeRemaining,
     transcriptionResult,
     isMinimized,
+    useSpeakerDiarization,
 
     // Actions
     startUpload,
@@ -322,6 +345,7 @@ export function UploadProvider({ children }) {
     isComplete: state === UPLOAD_STATE.COMPLETE,
     isError: state === UPLOAD_STATE.ERROR,
     isIdle: state === UPLOAD_STATE.IDLE,
+    hasSpeakerLabels: transcriptionResult?.hasSpeakerLabels || false,
   };
 
   return (

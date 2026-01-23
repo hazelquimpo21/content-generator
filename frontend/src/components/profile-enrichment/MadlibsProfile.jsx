@@ -8,224 +8,11 @@
  * ============================================================================
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Save, ChevronDown, X, Plus, Check, MousePointerClick, Sparkles } from 'lucide-react';
+import { Save, X, Plus, Check, Sparkles } from 'lucide-react';
 import { Button } from '@components/shared';
 import styles from './MadlibsProfile.module.css';
-
-/**
- * WordBankSelector - Click-to-toggle dropdown for selecting from word bank options
- *
- * Features:
- * - Single or multi-select modes
- * - Visual checkbox indicators for multi-select
- * - Selection count badge
- * - Click to toggle (no ctrl/cmd needed)
- * - Custom value input
- */
-function WordBankSelector({
-  options,
-  selected,
-  onSelect,
-  placeholder,
-  multiple = false,
-  maxSelections = 5,
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [customValue, setCustomValue] = useState('');
-  const containerRef = useRef(null);
-
-  // Close on click outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Get current selection as array for multi-select
-  const currentSelected = multiple
-    ? (Array.isArray(selected) ? selected : [])
-    : (selected ? [selected] : []);
-
-  const selectionCount = currentSelected.length;
-  const isMaxReached = multiple && selectionCount >= maxSelections;
-
-  const handleSelect = (value) => {
-    if (multiple) {
-      if (currentSelected.includes(value)) {
-        // Deselect - always allowed
-        onSelect(currentSelected.filter((v) => v !== value));
-      } else if (!isMaxReached) {
-        // Select - only if under max
-        onSelect([...currentSelected, value]);
-      }
-    } else {
-      onSelect(value);
-      setIsOpen(false);
-    }
-  };
-
-  const handleAddCustom = () => {
-    if (customValue.trim()) {
-      const trimmedValue = customValue.trim();
-      if (multiple) {
-        if (!isMaxReached && !currentSelected.includes(trimmedValue)) {
-          onSelect([...currentSelected, trimmedValue]);
-        }
-      } else {
-        onSelect(trimmedValue);
-        setIsOpen(false);
-      }
-      setCustomValue('');
-    }
-  };
-
-  const handleRemove = (value, e) => {
-    e?.stopPropagation();
-    if (multiple) {
-      onSelect(currentSelected.filter((v) => v !== value));
-    } else {
-      onSelect('');
-    }
-  };
-
-  const isSelected = (value) => currentSelected.includes(value);
-
-  // Display value for trigger button
-  const getDisplayValue = () => {
-    if (multiple) {
-      if (selectionCount === 0) return placeholder;
-      if (selectionCount === 1) return currentSelected[0];
-      return `${selectionCount} selected`;
-    }
-    return selected || placeholder;
-  };
-
-  const hasFilled = multiple ? selectionCount > 0 : !!selected;
-
-  return (
-    <div className={styles.selectorContainer} ref={containerRef}>
-      <button
-        type="button"
-        className={`${styles.selectorTrigger} ${hasFilled ? styles.filled : ''}`}
-        onClick={() => setIsOpen(!isOpen)}
-        aria-expanded={isOpen}
-        aria-haspopup="listbox"
-      >
-        <span className={styles.selectorValue}>{getDisplayValue()}</span>
-        {multiple && selectionCount > 0 && (
-          <span className={styles.selectionCount}>{selectionCount}</span>
-        )}
-        <ChevronDown
-          className={`${styles.selectorIcon} ${isOpen ? styles.open : ''}`}
-        />
-      </button>
-
-      {isOpen && (
-        <div className={styles.dropdown} role="listbox">
-          {/* Header with helpful hint */}
-          {multiple && (
-            <div className={styles.dropdownHeader}>
-              <span className={styles.dropdownHint}>
-                <MousePointerClick />
-                Click to select
-              </span>
-              <span className={styles.selectionStatus}>
-                {selectionCount} / {maxSelections}
-              </span>
-            </div>
-          )}
-
-          <div className={styles.dropdownOptions}>
-            {options.map((option) => {
-              const optionSelected = isSelected(option.label);
-              const disabled = !optionSelected && isMaxReached;
-
-              return (
-                <button
-                  key={option.id || option.label}
-                  type="button"
-                  role="option"
-                  aria-selected={optionSelected}
-                  className={`
-                    ${styles.option}
-                    ${optionSelected ? styles.selectedOption : ''}
-                    ${disabled ? styles.maxReached : ''}
-                  `}
-                  onClick={() => !disabled && handleSelect(option.label)}
-                  disabled={disabled}
-                >
-                  {/* Checkbox indicator for multi-select */}
-                  {multiple && (
-                    <span className={styles.optionCheckbox}>
-                      <Check className={styles.optionCheckIcon} />
-                    </span>
-                  )}
-                  <span className={styles.optionContent}>
-                    <span className={styles.optionLabel}>{option.label}</span>
-                    {option.description && (
-                      <span className={styles.optionDescription}>
-                        {option.description}
-                      </span>
-                    )}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Custom input */}
-          <div className={styles.customInput}>
-            <input
-              type="text"
-              placeholder={isMaxReached ? `Max ${maxSelections} reached` : "Type your own..."}
-              value={customValue}
-              onChange={(e) => setCustomValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleAddCustom();
-                }
-              }}
-              disabled={isMaxReached}
-            />
-            <button
-              type="button"
-              onClick={handleAddCustom}
-              disabled={!customValue.trim() || isMaxReached}
-              aria-label="Add custom option"
-            >
-              <Plus className={styles.addIcon} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Selected items as tags (for multiple selection) */}
-      {multiple && selectionCount > 0 && (
-        <div className={styles.selectedTags}>
-          {currentSelected.map((item) => (
-            <span key={item} className={styles.tag}>
-              {item}
-              <button
-                type="button"
-                onClick={(e) => handleRemove(item, e)}
-                aria-label={`Remove ${item}`}
-              >
-                <X className={styles.tagRemove} />
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 /**
  * WordBankModal - Full-screen modal with clickable tag grid
@@ -236,6 +23,7 @@ function WordBankSelector({
  * - Visual feedback with animations
  * - Custom value input
  * - Works great for larger option sets
+ * - Supports single-select mode
  */
 function WordBankModal({
   options,
@@ -244,32 +32,53 @@ function WordBankModal({
   placeholder,
   title,
   maxSelections = 6,
+  single = false,
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [customValue, setCustomValue] = useState('');
 
-  const currentSelected = Array.isArray(selected) ? selected : [];
+  // Handle both single and multi-select modes
+  const currentSelected = single
+    ? (selected ? [selected] : [])
+    : (Array.isArray(selected) ? selected : []);
   const selectionCount = currentSelected.length;
-  const isMaxReached = selectionCount >= maxSelections;
+  const effectiveMax = single ? 1 : maxSelections;
+  const isMaxReached = selectionCount >= effectiveMax;
 
   const handleToggle = (value) => {
-    if (currentSelected.includes(value)) {
-      onSelect(currentSelected.filter((v) => v !== value));
-    } else if (!isMaxReached) {
-      onSelect([...currentSelected, value]);
+    if (single) {
+      // Single-select: just set the value and close
+      onSelect(value);
+      setIsOpen(false);
+    } else {
+      // Multi-select: toggle
+      if (currentSelected.includes(value)) {
+        onSelect(currentSelected.filter((v) => v !== value));
+      } else if (!isMaxReached) {
+        onSelect([...currentSelected, value]);
+      }
     }
   };
 
   const handleAddCustom = () => {
-    if (customValue.trim() && !isMaxReached && !currentSelected.includes(customValue.trim())) {
-      onSelect([...currentSelected, customValue.trim()]);
+    if (customValue.trim() && !currentSelected.includes(customValue.trim())) {
+      if (single) {
+        onSelect(customValue.trim());
+        setIsOpen(false);
+      } else if (!isMaxReached) {
+        onSelect([...currentSelected, customValue.trim()]);
+      }
       setCustomValue('');
     }
   };
 
   const handleRemove = (value, e) => {
     e?.stopPropagation();
-    onSelect(currentSelected.filter((v) => v !== value));
+    if (single) {
+      onSelect('');
+    } else {
+      onSelect(currentSelected.filter((v) => v !== value));
+    }
   };
 
   // Prevent body scroll when modal is open
@@ -297,7 +106,7 @@ function WordBankModal({
 
   const getDisplayValue = () => {
     if (selectionCount === 0) return placeholder;
-    if (selectionCount === 1) return currentSelected[0];
+    if (single || selectionCount === 1) return currentSelected[0];
     return `${selectionCount} selected`;
   };
 
@@ -311,9 +120,11 @@ function WordBankModal({
             <h3 className={styles.modalTitle}>{title || 'Select options'}</h3>
           </div>
           <div className={styles.modalMeta}>
-            <span className={styles.modalCount}>
-              {selectionCount} / {maxSelections} selected
-            </span>
+            {!single && (
+              <span className={styles.modalCount}>
+                {selectionCount} / {effectiveMax} selected
+              </span>
+            )}
             <button
               type="button"
               className={styles.modalClose}
@@ -354,7 +165,7 @@ function WordBankModal({
         <div className={styles.modalCustomInput}>
           <input
             type="text"
-            placeholder={isMaxReached ? `Max ${maxSelections} reached` : "Add your own..."}
+            placeholder={isMaxReached && !single ? `Max ${effectiveMax} reached` : "Type your own..."}
             value={customValue}
             onChange={(e) => setCustomValue(e.target.value)}
             onKeyDown={(e) => {
@@ -363,12 +174,12 @@ function WordBankModal({
                 handleAddCustom();
               }
             }}
-            disabled={isMaxReached}
+            disabled={isMaxReached && !single}
           />
           <button
             type="button"
             onClick={handleAddCustom}
-            disabled={!customValue.trim() || isMaxReached}
+            disabled={!customValue.trim() || (isMaxReached && !single)}
           >
             <Plus />
           </button>
@@ -400,8 +211,8 @@ function WordBankModal({
           <Sparkles className={styles.sparkleIcon} />
         </button>
 
-        {/* Selected tags below trigger */}
-        {selectionCount > 0 && (
+        {/* Selected tags below trigger (multi-select only) */}
+        {!single && selectionCount > 0 && (
           <div className={styles.selectedTags}>
             {currentSelected.map((item) => (
               <span key={item} className={styles.tag}>
@@ -544,12 +355,12 @@ function MadlibsProfile({ data = {}, referenceData = {}, onSave, saving, enriche
             onChange={(e) => updateField('location', e.target.value)}
           />
           <span> and I serve clients </span>
-          <WordBankSelector
+          <WordBankModal
             options={wordBanks.serviceScopes || []}
             selected={profile.service_scope}
             onSelect={(value) => updateField('service_scope', value)}
             placeholder="service areas"
-            multiple
+            title="Where do you serve clients?"
             maxSelections={4}
           />
           <span>.</span>
@@ -602,19 +413,21 @@ function MadlibsProfile({ data = {}, referenceData = {}, onSave, saving, enriche
         <h3 className={styles.sectionTitle}>Your Business Model</h3>
         <div className={styles.madlibsText}>
           <span>My main revenue stream is </span>
-          <WordBankSelector
+          <WordBankModal
             options={wordBanks.revenueTypes || []}
             selected={profile.primary_revenue}
             onSelect={(value) => updateField('primary_revenue', value)}
             placeholder="primary revenue"
+            title="What's your main revenue stream?"
+            single
           />
           <span>. I also make money from </span>
-          <WordBankSelector
+          <WordBankModal
             options={wordBanks.revenueTypes || []}
             selected={profile.secondary_revenue}
             onSelect={(value) => updateField('secondary_revenue', value)}
             placeholder="other revenue streams"
-            multiple
+            title="What other revenue streams do you have?"
             maxSelections={5}
           />
           <span>.</span>

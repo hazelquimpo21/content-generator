@@ -580,7 +580,8 @@ function NewEpisode() {
   // COMPUTED VALUES
   // ============================================================================
 
-  const isUploadInProgress = upload.isProcessing && inputMode === 'audio';
+  // Show progress regardless of input mode - user shouldn't have to click into audio tab
+  const isUploadInProgress = upload.isProcessing;
   const hasTranscript = transcript.trim().length >= 500;
   const isSubmitDisabled = loading || analyzing || !episodeContext.title.trim() || !hasTranscript || isUploadInProgress;
   const showAnalyzingStatus = analyzing && transcript.length >= minTranscriptLength;

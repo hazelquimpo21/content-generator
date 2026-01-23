@@ -179,17 +179,17 @@ function ConnectedFeedCard({ feed, onSync, onDisconnect, onViewEpisodes }) {
             leftIcon={syncing ? Loader2 : RefreshCw}
             onClick={handleSync}
             disabled={syncing}
-            title="Sync feed"
+            title="Check RSS feed for new episodes"
           >
-            {syncing ? 'Syncing...' : 'Sync'}
+            {syncing ? 'Checking...' : 'Check for New'}
           </Button>
           <Button
-            variant="ghost"
+            variant="primary"
             size="sm"
             rightIcon={ChevronRight}
             onClick={() => onViewEpisodes?.(feed)}
           >
-            Episodes
+            View Episodes
           </Button>
           <Button
             variant="ghost"

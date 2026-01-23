@@ -21,7 +21,6 @@ import {
   Filter,
   Search,
   ExternalLink,
-  Sparkles,
 } from 'lucide-react';
 import { Button, Input, Spinner, useToast } from '@components/shared';
 import api from '@utils/api-client';
@@ -287,10 +286,9 @@ function FeedEpisodesList({ feed, onBack, onEpisodeProcessed }) {
               episode={episode}
               transcribing={transcribing[episode.id]}
               onTranscribe={() => handleTranscribe(episode, false)}
-              onTranscribeAndProcess={() => handleTranscribe(episode, true)}
               onViewEpisode={() => {
-                if (episode.episode_id) {
-                  navigate(`/episodes/${episode.episode_id}`);
+                if (episode.episode_id || episode.linked_episode?.id) {
+                  navigate(`/episodes/${episode.episode_id || episode.linked_episode?.id}`);
                 }
               }}
             />
@@ -333,7 +331,6 @@ function EpisodeRow({
   episode,
   transcribing,
   onTranscribe,
-  onTranscribeAndProcess,
   onViewEpisode,
 }) {
   const StatusIcon = {
@@ -387,7 +384,7 @@ function EpisodeRow({
 
       {/* Actions */}
       <div className={styles.episodeActions}>
-        {episode.status === 'processed' && episode.episode_id && (
+        {episode.status === 'processed' && (episode.episode_id || episode.linked_episode?.id) && (
           <Button
             variant="ghost"
             size="sm"
@@ -399,26 +396,15 @@ function EpisodeRow({
         )}
 
         {(episode.status === 'available' || episode.status === 'error') && (
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onTranscribe}
-              disabled={transcribing}
-              leftIcon={transcribing ? Loader2 : Play}
-            >
-              {transcribing ? 'Transcribing...' : 'Transcribe'}
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={onTranscribeAndProcess}
-              disabled={transcribing}
-              leftIcon={transcribing ? Loader2 : Sparkles}
-            >
-              {transcribing ? 'Processing...' : 'Transcribe & Generate'}
-            </Button>
-          </>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={onTranscribe}
+            disabled={transcribing}
+            leftIcon={transcribing ? Loader2 : Play}
+          >
+            {transcribing ? 'Transcribing...' : 'Transcribe'}
+          </Button>
         )}
 
         {episode.status === 'transcribing' && (

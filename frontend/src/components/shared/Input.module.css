@@ -100,3 +100,43 @@ textarea.field {
   font-size: var(--text-sm);
   color: var(--color-text-tertiary);
 }
+
+/* ============================================================================
+ * INPUT WITH ICONS
+ * ============================================================================ */
+
+.inputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.inputWrapper .field {
+  width: 100%;
+}
+
+.leftIcon,
+.rightIcon {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-tertiary);
+  pointer-events: none;
+}
+
+.leftIcon {
+  left: var(--space-3);
+}
+
+.rightIcon {
+  right: var(--space-3);
+}
+
+.field.hasLeftIcon {
+  padding-left: calc(var(--space-3) + 18px + var(--space-2));
+}
+
+.field.hasRightIcon {
+  padding-right: calc(var(--space-3) + 18px + var(--space-2));
+}

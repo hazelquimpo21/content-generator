@@ -17,11 +17,13 @@ import { Routes, Route } from 'react-router-dom';
 // Authentication
 import { AuthProvider } from './contexts/AuthContext';
 import { ProcessingProvider } from './contexts/ProcessingContext';
+import { UploadProvider } from './contexts/UploadContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import OnboardingRoute from './components/auth/OnboardingRoute';
 
 // Global UI
 import { ToastProvider } from './components/shared';
+import GlobalUploadIndicator from './components/shared/GlobalUploadIndicator';
 
 // Layout
 import Layout from './components/layout/Layout';
@@ -55,80 +57,85 @@ function App() {
   return (
     <AuthProvider>
       <ProcessingProvider>
-        <ToastProvider>
-          {/* Admin bar - only visible to superadmins */}
-          <AdminBar />
+        <UploadProvider>
+          <ToastProvider>
+            {/* Admin bar - only visible to superadmins */}
+            <AdminBar />
 
-          <Routes>
-        {/* ================================================================== */}
-        {/* PUBLIC ROUTES - No authentication required */}
-        {/* ================================================================== */}
+            {/* Global upload indicator - shows when upload is minimized/in background */}
+            <GlobalUploadIndicator />
 
-        {/* Login page */}
-        <Route path="/login" element={<Login />} />
+            <Routes>
+              {/* ================================================================== */}
+              {/* PUBLIC ROUTES - No authentication required */}
+              {/* ================================================================== */}
 
-        {/* Magic link callback handler */}
-        <Route path="/auth/callback" element={<AuthCallback />} />
+              {/* Login page */}
+              <Route path="/login" element={<Login />} />
 
-        {/* ================================================================== */}
-        {/* ONBOARDING ROUTE - Auth required, standalone page */}
-        {/* ================================================================== */}
+              {/* Magic link callback handler */}
+              <Route path="/auth/callback" element={<AuthCallback />} />
 
-        <Route element={<ProtectedRoute />}>
-          {/* Onboarding - standalone page (no Layout wrapper) */}
-          <Route path="/onboarding" element={<Onboarding />} />
-        </Route>
+              {/* ================================================================== */}
+              {/* ONBOARDING ROUTE - Auth required, standalone page */}
+              {/* ================================================================== */}
 
-        {/* ================================================================== */}
-        {/* PROTECTED ROUTES - Authentication + onboarding required */}
-        {/* ================================================================== */}
+              <Route element={<ProtectedRoute />}>
+                {/* Onboarding - standalone page (no Layout wrapper) */}
+                <Route path="/onboarding" element={<Onboarding />} />
+              </Route>
 
-        <Route element={<ProtectedRoute />}>
-          <Route element={<OnboardingRoute />}>
-            {/* Main layout wrapper for authenticated pages */}
-            <Route path="/" element={<Layout />}>
-              {/* Dashboard - default landing page */}
-              <Route index element={<Dashboard />} />
+              {/* ================================================================== */}
+              {/* PROTECTED ROUTES - Authentication + onboarding required */}
+              {/* ================================================================== */}
 
-              {/* Settings - configure user settings and preferences */}
-              <Route path="settings" element={<Settings />} />
+              <Route element={<ProtectedRoute />}>
+                <Route element={<OnboardingRoute />}>
+                  {/* Main layout wrapper for authenticated pages */}
+                  <Route path="/" element={<Layout />}>
+                    {/* Dashboard - default landing page */}
+                    <Route index element={<Dashboard />} />
 
-              {/* New Episode - upload and configure new episode */}
-              <Route path="episodes/new" element={<NewEpisode />} />
+                    {/* Settings - configure user settings and preferences */}
+                    <Route path="settings" element={<Settings />} />
 
-              {/* Processing - watch episode being processed */}
-              <Route path="episodes/:id/processing" element={<ProcessingScreen />} />
+                    {/* New Episode - upload and configure new episode */}
+                    <Route path="episodes/new" element={<NewEpisode />} />
 
-              {/* Review Hub - view and edit generated content */}
-              <Route path="episodes/:id/review" element={<ReviewHub />} />
+                    {/* Processing - watch episode being processed */}
+                    <Route path="episodes/:id/processing" element={<ProcessingScreen />} />
 
-              {/* Content Library - saved content pieces */}
-              <Route path="library" element={<ContentLibrary />} />
+                    {/* Review Hub - view and edit generated content */}
+                    <Route path="episodes/:id/review" element={<ReviewHub />} />
 
-              {/* Content Calendar - scheduled content */}
-              <Route path="calendar" element={<ContentCalendar />} />
-            </Route>
-          </Route>
-        </Route>
+                    {/* Content Library - saved content pieces */}
+                    <Route path="library" element={<ContentLibrary />} />
 
-        {/* ================================================================== */}
-        {/* ADMIN ROUTES - Superadmin role required */}
-        {/* ================================================================== */}
+                    {/* Content Calendar - scheduled content */}
+                    <Route path="calendar" element={<ContentCalendar />} />
+                  </Route>
+                </Route>
+              </Route>
 
-        <Route element={<ProtectedRoute requireSuperadmin />}>
-          <Route path="/" element={<Layout />}>
-            {/* Admin Dashboard - analytics and monitoring */}
-            <Route path="admin" element={<AdminDashboard />} />
-          </Route>
-        </Route>
+              {/* ================================================================== */}
+              {/* ADMIN ROUTES - Superadmin role required */}
+              {/* ================================================================== */}
 
-        {/* ================================================================== */}
-        {/* CATCH-ALL - 404 Page */}
-        {/* ================================================================== */}
+              <Route element={<ProtectedRoute requireSuperadmin />}>
+                <Route path="/" element={<Layout />}>
+                  {/* Admin Dashboard - analytics and monitoring */}
+                  <Route path="admin" element={<AdminDashboard />} />
+                </Route>
+              </Route>
 
-        <Route path="*" element={<NotFound />} />
-          </Routes>
-        </ToastProvider>
+              {/* ================================================================== */}
+              {/* CATCH-ALL - 404 Page */}
+              {/* ================================================================== */}
+
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </ToastProvider>
+        </UploadProvider>
       </ProcessingProvider>
     </AuthProvider>
   );

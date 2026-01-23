@@ -75,7 +75,7 @@
 
 .madlibsText > span {
   white-space: nowrap;
-  padding: var(--spacing-1) 0;
+  padding: var(--spacing-1) var(--spacing-1);
 }
 
 /* ============================================================================
@@ -84,7 +84,7 @@
 .inlineInput {
   display: inline-block;
   min-width: 150px;
-  margin: var(--spacing-1) var(--spacing-2);
+  margin: var(--spacing-2) var(--spacing-4);
   padding: var(--spacing-3) var(--spacing-4);
   border: 1.5px solid var(--color-border);
   border-bottom: 2.5px solid var(--color-primary);
@@ -132,7 +132,7 @@
   flex-direction: column;
   position: relative;
   vertical-align: baseline;
-  margin: var(--spacing-1) var(--spacing-2);
+  margin: var(--spacing-2) var(--spacing-4);
 }
 
 .selectorTrigger {
@@ -832,6 +832,7 @@
 
   .inlineInput {
     min-width: 130px;
+    margin: var(--spacing-2) var(--spacing-3);
     padding: var(--spacing-3) var(--spacing-4);
   }
 
@@ -841,6 +842,10 @@
 
   .inlineInput.extraWide {
     min-width: 100%;
+  }
+
+  .selectorContainer {
+    margin: var(--spacing-2) var(--spacing-3);
   }
 
   .selectorTrigger {

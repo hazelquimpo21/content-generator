@@ -104,6 +104,8 @@ export function UploadProvider({ children }) {
   const [transcriptionResult, setTranscriptionResult] = useState(null);
   const [isMinimized, setIsMinimized] = useState(false);
   const [useSpeakerDiarization, setUseSpeakerDiarization] = useState(false);
+  // Flag to indicate transcript is ready to be consumed by NewEpisode form
+  const [pendingForForm, setPendingForForm] = useState(false);
 
   // Refs for XHR and timing
   const xhrRef = useRef(null);
@@ -147,6 +149,7 @@ export function UploadProvider({ children }) {
     setTranscriptionResult(null);
     setIsMinimized(false);
     setUseSpeakerDiarization(withSpeakers);
+    setPendingForForm(true); // Mark as pending for form consumption
     lastProgressRef.current = { time: Date.now(), bytes: 0 };
 
     // Get auth token
@@ -285,6 +288,7 @@ export function UploadProvider({ children }) {
     setTimeRemaining(null);
     setTranscriptionResult(null);
     setIsMinimized(false);
+    setPendingForForm(false);
     onCompleteCallbackRef.current = null;
     onErrorCallbackRef.current = null;
   }, []);
@@ -302,7 +306,47 @@ export function UploadProvider({ children }) {
     setTimeRemaining(null);
     setTranscriptionResult(null);
     setIsMinimized(false);
+    setPendingForForm(false);
   }, []);
+
+  /**
+   * Consumes the pending transcript and returns it
+   * Used by NewEpisode form to retrieve completed transcription
+   */
+  const consumeTranscript = useCallback(() => {
+    if (state !== UPLOAD_STATE.COMPLETE || !transcriptionResult || !pendingForForm) {
+      return null;
+    }
+
+    const result = {
+      transcript: transcriptionResult.transcript,
+      metadata: {
+        audioDurationMinutes: transcriptionResult.audioDurationMinutes,
+        audioDurationSeconds: transcriptionResult.audioDurationSeconds,
+        estimatedCost: transcriptionResult.estimatedCost,
+        formattedCost: transcriptionResult.formattedCost,
+        chunked: transcriptionResult.chunked,
+        totalChunks: transcriptionResult.totalChunks,
+        filename: file?.name,
+        fileSize: file?.size,
+        model: transcriptionResult.model,
+        hasSpeakerLabels: transcriptionResult.hasSpeakerLabels || false,
+        formattedTranscript: transcriptionResult.formattedTranscript,
+        speakers: transcriptionResult.speakers,
+        utterances: transcriptionResult.utterances,
+        provider: transcriptionResult.provider,
+        transcriptId: transcriptionResult.transcriptId,
+      },
+    };
+
+    // Reset state after consuming
+    setPendingForForm(false);
+    setTranscriptionResult(null);
+    setFile(null);
+    setState(UPLOAD_STATE.IDLE);
+
+    return result;
+  }, [state, transcriptionResult, pendingForForm, file]);
 
   /**
    * Minimizes the upload UI
@@ -330,6 +374,7 @@ export function UploadProvider({ children }) {
     transcriptionResult,
     isMinimized,
     useSpeakerDiarization,
+    pendingForForm,
 
     // Actions
     startUpload,
@@ -337,6 +382,7 @@ export function UploadProvider({ children }) {
     reset,
     minimize,
     expand,
+    consumeTranscript,
 
     // Helpers
     isUploading: state === UPLOAD_STATE.UPLOADING,
@@ -346,6 +392,7 @@ export function UploadProvider({ children }) {
     isError: state === UPLOAD_STATE.ERROR,
     isIdle: state === UPLOAD_STATE.IDLE,
     hasSpeakerLabels: transcriptionResult?.hasSpeakerLabels || false,
+    hasReadyTranscript: state === UPLOAD_STATE.COMPLETE && pendingForForm && !!transcriptionResult,
   };
 
   return (

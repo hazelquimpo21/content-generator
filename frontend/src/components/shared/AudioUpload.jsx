@@ -90,11 +90,12 @@ function formatSpeed(bytesPerSecond) {
  * @param {Object} props
  * @param {Function} props.onTranscriptReady - Callback when transcription is complete
  * @param {Function} props.onError - Callback when an error occurs
+ * @param {Function} props.onUploadStart - Callback when upload starts (for navigation)
  * @param {string} props.className - Additional CSS class
  * @param {boolean} props.showSpeakerOption - Show speaker diarization toggle (default: true)
  * @param {boolean} props.defaultWithSpeakers - Default value for speaker diarization
  */
-function AudioUpload({ onTranscriptReady, onError, className, showSpeakerOption = false, defaultWithSpeakers = false }) {
+function AudioUpload({ onTranscriptReady, onError, onUploadStart, className, showSpeakerOption = false, defaultWithSpeakers = false }) {
   // Global upload state from context
   const {
     state,
@@ -146,13 +147,18 @@ function AudioUpload({ onTranscriptReady, onError, className, showSpeakerOption 
    * Handles file selection (from input or drop)
    */
   const handleFile = useCallback((selectedFile) => {
-    startUpload(selectedFile, {
+    const success = startUpload(selectedFile, {
       onComplete: onTranscriptReady,
       onError: onError,
       withSpeakers: withSpeakers,
       speakersExpected: withSpeakers ? speakersExpected : undefined,
     });
-  }, [startUpload, onTranscriptReady, onError, withSpeakers, speakersExpected]);
+
+    // Notify parent that upload started (for navigation)
+    if (success && onUploadStart) {
+      onUploadStart(selectedFile);
+    }
+  }, [startUpload, onTranscriptReady, onError, onUploadStart, withSpeakers, speakersExpected]);
 
   /**
    * Handles file input change

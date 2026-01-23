@@ -273,6 +273,20 @@
   100% { left: 100%; }
 }
 
+/* Upload complete card - ready for form */
+.uploadCompleteCard {
+  border: 2px solid var(--color-success);
+  background: linear-gradient(
+    135deg,
+    var(--color-bg-secondary) 0%,
+    var(--color-success-light, rgba(72, 184, 92, 0.15)) 100%
+  );
+}
+
+.uploadCompleteCard::before {
+  display: none; /* No shimmer animation when complete */
+}
+
 .processingStatus {
   display: flex;
   flex-direction: column;

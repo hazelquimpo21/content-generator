@@ -294,7 +294,7 @@ function Dashboard() {
             Try Again
           </Button>
         </Card>
-      ) : filteredEpisodes.length === 0 && !upload.isProcessing ? (
+      ) : filteredEpisodes.length === 0 && !upload.isProcessing && !upload.hasReadyTranscript ? (
         <Card className={styles.emptyCard}>
           <div className={styles.emptyContent}>
             <h3>No episodes found</h3>
@@ -315,12 +315,13 @@ function Dashboard() {
         </Card>
       ) : (
         <div className={styles.grid}>
-          {/* Upload in progress card - always shows at the top when processing */}
-          {upload.isProcessing && (
+          {/* Upload in progress or completed card - shows at top */}
+          {(upload.isProcessing || upload.hasReadyTranscript) && (
             <UploadProgressCard
               state={upload.state}
               file={upload.file}
               progress={upload.uploadProgress}
+              isComplete={upload.hasReadyTranscript}
               onClick={() => navigate('/episodes/new')}
             />
           )}
@@ -480,29 +481,30 @@ function EpisodeCard({ episode, onClick, onDelete }) {
 
 /**
  * Upload progress card component
- * Shows when an audio file is being uploaded/transcribed.
+ * Shows when an audio file is being uploaded/transcribed or ready.
  *
- * @param {string} state - Upload state (uploading/transcribing)
+ * @param {string} state - Upload state (uploading/transcribing/complete)
  * @param {File} file - The file being uploaded
  * @param {number} progress - Upload progress percentage
+ * @param {boolean} isComplete - Whether transcription is complete
  * @param {Function} onClick - Handler for card click
  */
-function UploadProgressCard({ state, file, progress, onClick }) {
+function UploadProgressCard({ state, file, progress, isComplete, onClick }) {
   const isUploading = state === UPLOAD_STATE.UPLOADING;
   const isTranscribing = state === UPLOAD_STATE.TRANSCRIBING;
 
   return (
     <Card
-      className={`${styles.episodeCard} ${styles.uploadCard}`}
+      className={`${styles.episodeCard} ${styles.uploadCard} ${isComplete ? styles.uploadCompleteCard : ''}`}
       hoverable
       onClick={onClick}
       padding="md"
     >
       <div className={styles.cardHeader}>
-        <Badge status="processing" dot>
-          {isUploading ? 'Uploading...' : 'Transcribing...'}
+        <Badge status={isComplete ? 'completed' : 'processing'} dot>
+          {isComplete ? 'Ready' : isUploading ? 'Uploading...' : 'Transcribing...'}
         </Badge>
-        <span className={styles.cardDate}>In Progress</span>
+        <span className={styles.cardDate}>{isComplete ? 'Tap to continue' : 'In Progress'}</span>
       </div>
 
       <h3 className={styles.cardTitle}>
@@ -510,28 +512,37 @@ function UploadProgressCard({ state, file, progress, onClick }) {
       </h3>
 
       <div className={styles.processingStatus}>
-        {isUploading && (
-          <div className={styles.progressWrapper}>
-            <div className={styles.progressBar}>
-              <div
-                className={styles.progressFill}
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <span className={styles.progressText}>{progress}%</span>
-          </div>
+        {isComplete ? (
+          <p className={styles.timeEstimate}>
+            <CheckCircle2 className={styles.statusIconSuccess} size={14} />
+            Transcript ready! Click to fill in details and generate content.
+          </p>
+        ) : (
+          <>
+            {isUploading && (
+              <div className={styles.progressWrapper}>
+                <div className={styles.progressBar}>
+                  <div
+                    className={styles.progressFill}
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+                <span className={styles.progressText}>{progress}%</span>
+              </div>
+            )}
+            <p className={styles.timeEstimate}>
+              <Loader2 className={styles.miniSpinner} size={12} />
+              {isUploading
+                ? 'Uploading audio file...'
+                : 'Transcribing audio... This may take a few minutes'}
+            </p>
+          </>
         )}
-        <p className={styles.timeEstimate}>
-          <Loader2 className={styles.miniSpinner} size={12} />
-          {isUploading
-            ? 'Uploading audio file...'
-            : 'Transcribing audio... This may take a few minutes'}
-        </p>
       </div>
 
       <div className={styles.cardFooter}>
         <div className={styles.cardAction}>
-          <span>View Progress</span>
+          <span>{isComplete ? 'Continue to Form' : 'View Progress'}</span>
           <ChevronRight size={16} />
         </div>
       </div>

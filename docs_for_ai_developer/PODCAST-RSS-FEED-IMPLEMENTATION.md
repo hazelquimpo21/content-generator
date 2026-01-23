@@ -1,13 +1,110 @@
-# Podcast RSS Feed Integration Plan
+# Podcast RSS Feed Integration
 
 ## Overview
 
-This document outlines how to integrate podcast RSS feed support into the Podcast-to-Content Pipeline. This feature will allow users to:
+This document describes the podcast RSS feed support integrated into the Podcast-to-Content Pipeline. This feature allows users to:
 
 1. **Import their podcast history** from an RSS feed
 2. **See which episodes** have already been transcribed/processed
 3. **Transcribe episodes directly** from the feed's audio URLs
 4. **Auto-populate podcast metadata** from the feed
+
+---
+
+## Implementation Status
+
+All core features have been implemented and are functional.
+
+### Completed Features
+
+| Feature | Status | Files |
+|---------|--------|-------|
+| PodcastIndex API integration | ✅ Complete | `backend/lib/podcastindex-client.js` |
+| RSS feed parsing | ✅ Complete | `backend/lib/rss-feed-parser.js` |
+| Database migrations | ✅ Complete | `podcast_feeds`, `feed_episodes` tables |
+| API endpoints | ✅ Complete | `backend/api/routes/podcasts.js` |
+| Search & connect UI | ✅ Complete | `frontend/src/components/podcast/` |
+| Feed episodes list | ✅ Complete | `FeedEpisodesList.jsx` |
+| NewEpisode integration | ✅ Complete | "From Feed" tab |
+| Dashboard integration | ✅ Complete | "From Your Podcast" section |
+| Transcription queue protection | ✅ Complete | `TranscriptionContext.jsx` |
+| Source indicators | ✅ Complete | RSS badge on episode cards |
+| Form auto-population | ✅ Complete | Metadata pre-fills from feed episode |
+
+### Frontend Components
+
+```
+frontend/src/
+├── components/
+│   └── podcast/
+│       ├── ConnectPodcastModal.jsx    - Search and connect podcast feeds
+│       ├── ConnectedFeedCard.jsx      - Display connected feed with actions
+│       ├── FeedEpisodesList.jsx       - List feed episodes with transcribe actions
+│       ├── FeedEpisodesList.module.css
+│       ├── PodcastSearchResults.jsx   - Search results display
+│       └── index.js                   - Module exports
+│
+├── contexts/
+│   └── TranscriptionContext.jsx       - Global transcription queue management
+│
+└── pages/
+    ├── Dashboard.jsx                  - Added "From Your Podcast" section
+    ├── NewEpisode.jsx                 - Added "From Feed" tab
+    └── Settings.jsx                   - Added "Connect Podcast" section
+```
+
+### Transcription Queue Protection
+
+The `TranscriptionContext` provides global state management to prevent multiple simultaneous transcriptions:
+
+```javascript
+// Usage in components
+import { useTranscription } from '@contexts/TranscriptionContext';
+
+function MyComponent() {
+  const {
+    activeTranscription,      // Currently transcribing episode info
+    hasActiveTranscription,   // Boolean check
+    isTranscribing,           // Check if specific episode is transcribing
+    startTranscription,       // Start transcription (returns success/error)
+    clearTranscription,       // Clear active transcription state
+  } = useTranscription();
+
+  // Start transcription with queue protection
+  const result = await startTranscription(feedEpisode);
+  if (!result.success) {
+    if (result.activeEpisode) {
+      // Another transcription is in progress
+      console.log('Wait for:', result.activeEpisode.title);
+    } else {
+      // Transcription failed
+      console.error(result.error);
+    }
+  }
+}
+```
+
+**Key behaviors:**
+- Only one transcription can run at a time
+- Active transcription state persists in localStorage
+- UI shows disabled state for transcribe buttons when busy
+- Banner indicates current transcription status
+
+### Dashboard Integration
+
+The Dashboard displays a "From Your Podcast" section showing recent unprocessed feed episodes:
+
+- Quick access to transcribe episodes without navigating to NewEpisode
+- Shows active transcription banner
+- Disabled states when transcription is in progress
+- Source indicator (RSS icon) on episode cards imported from feeds
+
+### Source Indicators
+
+Episodes imported from RSS feeds display a small RSS icon badge:
+- Visible on dashboard episode cards
+- Check `episode.feed_episode_id` or `episode.episode_context.source === 'rss_feed'`
+- Helps users identify content source at a glance
 
 ---
 
@@ -585,5 +682,25 @@ Your show → Settings → RSS Feed
 
 ---
 
-*Last updated: 2025-01-23*
+## Troubleshooting
+
+### Common Issues
+
+**"PodcastIndex API not configured"**
+- Ensure `PODCASTINDEX_API_KEY` and `PODCASTINDEX_API_SECRET` are set in `.env`
+- Get free credentials at https://api.podcastindex.org
+
+**Transcription stuck in "transcribing" state**
+- Check backend logs for errors
+- The `TranscriptionContext` stores state in localStorage - clear `activeTranscription` if needed
+- Feed episode status can be reset in the database
+
+**Feed episodes not showing**
+- Try "Check for New" to sync the feed
+- Verify the RSS feed URL is accessible
+- Check for parsing errors in backend logs
+
+---
+
+*Last updated: 2026-01-23*
 *Related: PROJECT-OVERVIEW.md, AUDIO-TRANSCRIPTION-IMPLEMENTATION.md, PAGE-SPECIFICATIONS.md*

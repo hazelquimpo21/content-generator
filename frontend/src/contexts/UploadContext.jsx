@@ -262,9 +262,18 @@ export function UploadProvider({ children }) {
       setState(UPLOAD_STATE.IDLE);
     });
 
+    xhr.addEventListener('timeout', () => {
+      const timeoutError = 'Request timed out. Large audio files may take longer to process.';
+      setError(timeoutError);
+      setState(UPLOAD_STATE.ERROR);
+      onErrorCallbackRef.current?.(timeoutError);
+    });
+
     // Use speaker endpoint if diarization is enabled
     const endpoint = withSpeakers ? '/api/transcription/speaker' : '/api/transcription';
     xhr.open('POST', endpoint);
+    // Set 15 minute timeout for long transcriptions (large audio files can take 5-10+ minutes)
+    xhr.timeout = 900000;
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.send(formData);
 

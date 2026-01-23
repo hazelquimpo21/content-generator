@@ -263,10 +263,11 @@ async function startServer() {
     }
   });
 
-  // Set longer timeout for large file uploads (5 minutes)
-  server.timeout = 300000;
-  server.headersTimeout = 310000; // Should be larger than timeout
-  server.keepAliveTimeout = 305000;
+  // Set longer timeout for large file uploads and transcriptions
+  // 15 minutes to handle long transcriptions (large audio files can take 5-10+ minutes)
+  server.timeout = 900000; // 15 minutes
+  server.headersTimeout = 910000; // Should be larger than timeout
+  server.keepAliveTimeout = 905000;
 
   // Debug: Add server-level error handlers
   server.on('error', (err) => {

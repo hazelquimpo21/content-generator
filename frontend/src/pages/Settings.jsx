@@ -9,11 +9,12 @@
  * ============================================================================
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Save, RefreshCw, User, Mic, BookOpen, Tag, Layers, Sparkles, Rss, Plus } from 'lucide-react';
 import clsx from 'clsx';
 import { Button, Card, Input, Spinner, TagManager, useToast } from '@components/shared';
 import { BrandDiscoveryStudio } from '@components/brand-discovery';
+import { ProfileEditor } from '@components/profile-enrichment';
 import { ConnectPodcastModal, ConnectedFeedCard, FeedEpisodesList } from '@components/podcast';
 import api from '@utils/api-client';
 import styles from './Settings.module.css';
@@ -72,6 +73,11 @@ function Settings() {
   const [showConnectModal, setShowConnectModal] = useState(false);
   const [selectedFeed, setSelectedFeed] = useState(null); // For viewing episodes
 
+  // Brand discovery state (for profile editor)
+  const [brandDiscovery, setBrandDiscovery] = useState(null);
+  const [referenceData, setReferenceData] = useState(null);
+  const [profileSaving, setProfileSaving] = useState(false);
+
   // Load all settings on mount
   useEffect(() => {
     loadAllSettings();
@@ -85,12 +91,14 @@ function Settings() {
       setLoading(true);
       setError(null);
 
-      // Load evergreen settings, topics, pillars, and podcast feeds in parallel
-      const [evergreenData, topicsData, pillarsData, feedsData] = await Promise.all([
+      // Load evergreen settings, topics, pillars, podcast feeds, and brand discovery in parallel
+      const [evergreenData, topicsData, pillarsData, feedsData, discoveryData, refData] = await Promise.all([
         api.evergreen.get(),
         api.topics.list().catch(() => ({ topics: [] })),
         api.pillars.list().catch(() => ({ pillars: [] })),
         api.podcasts.listFeeds().catch(() => ({ feeds: [] })),
+        api.brandDiscovery.get().catch(() => ({ brandDiscovery: null })),
+        api.brandDiscovery.getReferenceData().catch(() => ({})),
       ]);
 
       // Populate evergreen form fields
@@ -127,6 +135,10 @@ function Settings() {
 
       // Set podcast feeds
       setPodcastFeeds(feedsData.feeds || []);
+
+      // Set brand discovery data (for profile editor)
+      setBrandDiscovery(discoveryData.brandDiscovery);
+      setReferenceData(refData);
 
       console.log('[Settings] All settings loaded successfully');
     } catch (err) {
@@ -180,6 +192,23 @@ function Settings() {
       setSaving(false);
     }
   }
+
+  /**
+   * Save profile module data
+   */
+  const handleProfileSave = useCallback(async (data, status) => {
+    try {
+      setProfileSaving(true);
+      const response = await api.brandDiscovery.updateModule('profile', data, status);
+      setBrandDiscovery(response.brandDiscovery);
+      showToast({ message: 'Profile saved successfully', variant: 'success' });
+    } catch (err) {
+      console.error('[Settings] Failed to save profile:', err);
+      showToast({ message: `Failed to save profile: ${err.message}`, variant: 'error' });
+    } finally {
+      setProfileSaving(false);
+    }
+  }, [showToast]);
 
   // ============================================================================
   // PILLAR HANDLERS
@@ -360,8 +389,23 @@ function Settings() {
         {/* Brand Identity Tab */}
         {activeTab === 'brand' && (
           <div className={styles.tabPanel}>
+            {/* Profile Section */}
+            <Card
+              title="Your Profile"
+              subtitle="Business details that inform your content generation"
+              className={styles.profileCard}
+            >
+              <ProfileEditor
+                data={brandDiscovery?.modules?.profile?.data || {}}
+                referenceData={referenceData}
+                onSave={handleProfileSave}
+                saving={profileSaving}
+              />
+            </Card>
+
+            {/* Brand Discovery Studio */}
             <BrandDiscoveryStudio
-              defaultExpanded={true}
+              defaultExpanded={false}
               onBrandDnaChange={(brandDna) => {
                 console.log('[Settings] Brand DNA updated:', brandDna);
               }}

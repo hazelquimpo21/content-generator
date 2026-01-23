@@ -12,12 +12,13 @@ import logger from '../lib/logger.js';
 
 // Module weights for completion calculation (must sum to 100)
 const MODULE_WEIGHTS = {
-  sources: 15,
-  vibe: 25,
-  values: 25,
+  profile: 20,   // NEW: Core business facts (madlibs)
+  sources: 10,   // Reduced - now partially covered by profile import
+  vibe: 20,      // Reduced from 25
+  values: 20,    // Reduced from 25
   method: 15,
   audience: 10,
-  channels: 10,
+  channels: 5,   // Reduced - least critical
 };
 
 // Valid module IDs

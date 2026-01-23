@@ -1,0 +1,31 @@
+/* ============================================================================
+   PROFILE EDITOR STYLES
+   ============================================================================ */
+
+.container {
+  width: 100%;
+}
+
+.importBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-3) var(--spacing-4);
+  margin-bottom: var(--spacing-4);
+  background: var(--color-surface-secondary);
+  border-radius: var(--radius-md);
+}
+
+.importText {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .importBar {
+    flex-direction: column;
+    gap: var(--spacing-2);
+    text-align: center;
+  }
+}

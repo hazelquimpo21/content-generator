@@ -571,7 +571,7 @@ const brandDiscovery = {
 
   /**
    * Update a specific module
-   * @param {string} moduleId - Module ID (sources, vibe, values, method, audience, channels)
+   * @param {string} moduleId - Module ID (profile, sources, vibe, values, method, audience, channels)
    * @param {Object} data - Module data
    * @param {string} [status] - Optional status (not_started, partial, complete)
    */
@@ -611,9 +611,48 @@ const brandDiscovery = {
     post('/brand-discovery/values/generate-nuances', { value }),
 
   /**
-   * Get reference data (values, archetypes, modalities, etc.)
+   * Get reference data (values, archetypes, modalities, word banks, etc.)
    */
   getReferenceData: () => get('/brand-discovery/reference-data'),
+
+  /**
+   * Get word banks for profile enrichment
+   */
+  getWordBanks: () => get('/brand-discovery/word-banks'),
+
+  // ============================================================================
+  // Profile Enrichment API
+  // ============================================================================
+
+  /**
+   * Start a scrape job for profile enrichment
+   * @param {Object} params - Scrape parameters
+   * @param {string} params.type - Job type (website, podcast_rss, bio_text)
+   * @param {string} [params.url] - Target URL (for website/podcast)
+   * @param {string} [params.text] - Input text (for bio_text)
+   */
+  startScrapeJob: ({ type, url, text }) =>
+    post('/brand-discovery/enrichment/scrape', { type, url, text }),
+
+  /**
+   * Check status of a scrape job
+   * @param {string} jobId - Scrape job UUID
+   */
+  getScrapeJob: (jobId) => get(`/brand-discovery/enrichment/scrape/${jobId}`),
+
+  /**
+   * Get all scrape jobs for the current user
+   * @param {Object} params - Query params (limit)
+   */
+  listScrapeJobs: (params = {}) => get('/brand-discovery/enrichment/jobs', params),
+
+  /**
+   * Apply extracted data from a scrape job to the profile
+   * @param {string} jobId - Scrape job UUID
+   * @param {string[]} [selectedFields] - Fields to apply (all if not specified)
+   */
+  applyEnrichment: (jobId, selectedFields = null) =>
+    post('/brand-discovery/enrichment/apply', { jobId, selectedFields }),
 };
 
 /**

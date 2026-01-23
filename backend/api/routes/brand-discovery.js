@@ -20,6 +20,10 @@ import { AUDIENCE_ARCHETYPES } from '../../data/audience-archetypes.js';
 import { MODALITIES } from '../../data/modalities.js';
 import { SPECIALTIES } from '../../data/specialties.js';
 import { PLATFORMS, DEFAULT_PLATFORM_ORDER } from '../../data/platforms.js';
+import { getAllWordBanks, PROPERTIES_OPTIONS } from '../../data/word-banks.js';
+
+// Import scraper service
+import * as scraperService from '../../services/scraper-service.js';
 
 const router = express.Router();
 
@@ -355,10 +359,234 @@ router.get('/reference-data', async (req, res) => {
       specialties: SPECIALTIES,
       platforms: PLATFORMS,
       defaultPlatformOrder: DEFAULT_PLATFORM_ORDER,
+      // Profile enrichment word banks
+      wordBanks: getAllWordBanks(),
+      propertiesOptions: PROPERTIES_OPTIONS,
     });
   } catch (error) {
     logger.error('Failed to fetch reference data', { ...logContext, error: error.message });
     res.status(500).json({ error: 'Failed to fetch reference data', details: error.message });
+  }
+});
+
+// ============================================================================
+// PROFILE ENRICHMENT ENDPOINTS
+// ============================================================================
+
+// ============================================================================
+// POST /api/brand-discovery/enrichment/scrape
+// Start a scrape job for website, podcast RSS, or bio text
+// ============================================================================
+
+router.post('/enrichment/scrape', async (req, res) => {
+  const { type, url, text } = req.body;
+  const logContext = { userId: req.user.id, type, operation: 'POST /enrichment/scrape' };
+
+  try {
+    logger.info('Starting scrape job', logContext);
+
+    // Validate request
+    const validTypes = ['website', 'podcast_rss', 'bio_text'];
+    if (!type || !validTypes.includes(type)) {
+      return res.status(400).json({
+        error: 'Invalid type',
+        details: `Type must be one of: ${validTypes.join(', ')}`,
+      });
+    }
+
+    if ((type === 'website' || type === 'podcast_rss') && !url) {
+      return res.status(400).json({
+        error: 'URL required',
+        details: `URL is required for type "${type}"`,
+      });
+    }
+
+    if (type === 'bio_text' && (!text || text.trim().length < 50)) {
+      return res.status(400).json({
+        error: 'Text required',
+        details: 'Please provide at least 50 characters of text',
+      });
+    }
+
+    // Create scrape job
+    const job = await scraperService.createScrapeJob(req.user.id, {
+      type,
+      url: url || null,
+      text: text || null,
+    });
+
+    // Start processing asynchronously
+    scraperService.processScrapeJob(job.id).catch((err) => {
+      logger.error('Background scrape job failed', { jobId: job.id, error: err.message });
+    });
+
+    res.json({
+      success: true,
+      job: {
+        id: job.id,
+        status: job.status,
+        type: job.job_type,
+      },
+    });
+  } catch (error) {
+    logger.error('Failed to start scrape job', { ...logContext, error: error.message });
+    res.status(500).json({ error: 'Failed to start scrape job', details: error.message });
+  }
+});
+
+// ============================================================================
+// GET /api/brand-discovery/enrichment/scrape/:jobId
+// Check status of a scrape job
+// ============================================================================
+
+router.get('/enrichment/scrape/:jobId', async (req, res) => {
+  const { jobId } = req.params;
+  const logContext = { userId: req.user.id, jobId, operation: 'GET /enrichment/scrape/:jobId' };
+
+  try {
+    logger.debug('Checking scrape job status', logContext);
+
+    const job = await scraperService.getScrapeJob(req.user.id, jobId);
+
+    if (!job) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    res.json({
+      success: true,
+      job: {
+        id: job.id,
+        status: job.status,
+        type: job.job_type,
+        targetUrl: job.target_url,
+        startedAt: job.started_at,
+        completedAt: job.completed_at,
+        extractedData: job.extracted_data,
+        error: job.error_message,
+      },
+    });
+  } catch (error) {
+    logger.error('Failed to fetch scrape job', { ...logContext, error: error.message });
+    res.status(500).json({ error: 'Failed to fetch scrape job', details: error.message });
+  }
+});
+
+// ============================================================================
+// GET /api/brand-discovery/enrichment/jobs
+// Get all scrape jobs for the current user
+// ============================================================================
+
+router.get('/enrichment/jobs', async (req, res) => {
+  const { limit = 10 } = req.query;
+  const logContext = { userId: req.user.id, operation: 'GET /enrichment/jobs' };
+
+  try {
+    logger.debug('Fetching scrape jobs', logContext);
+
+    const jobs = await scraperService.getUserScrapeJobs(req.user.id, Number(limit));
+
+    res.json({
+      success: true,
+      jobs: jobs.map((job) => ({
+        id: job.id,
+        status: job.status,
+        type: job.job_type,
+        targetUrl: job.target_url,
+        createdAt: job.created_at,
+        completedAt: job.completed_at,
+        hasExtractedData: !!job.extracted_data,
+        error: job.error_message,
+      })),
+    });
+  } catch (error) {
+    logger.error('Failed to fetch scrape jobs', { ...logContext, error: error.message });
+    res.status(500).json({ error: 'Failed to fetch scrape jobs', details: error.message });
+  }
+});
+
+// ============================================================================
+// POST /api/brand-discovery/enrichment/apply
+// Apply extracted data from a scrape job to the profile module
+// ============================================================================
+
+router.post('/enrichment/apply', async (req, res) => {
+  const { jobId, selectedFields } = req.body;
+  const logContext = { userId: req.user.id, jobId, operation: 'POST /enrichment/apply' };
+
+  try {
+    logger.info('Applying enrichment data', logContext);
+
+    // Get the scrape job
+    const job = await scraperService.getScrapeJob(req.user.id, jobId);
+    if (!job) {
+      return res.status(404).json({ error: 'Job not found' });
+    }
+
+    if (job.status !== 'completed' || !job.extracted_data) {
+      return res.status(400).json({
+        error: 'Job not ready',
+        details: 'Scrape job must be completed with extracted data',
+      });
+    }
+
+    // Get current profile module data
+    const brandDiscovery = await brandDiscoveryService.getBrandDiscovery(req.user.id);
+    const currentProfileData = brandDiscovery.modules?.profile?.data || {};
+
+    // Merge selected fields from extracted data
+    const extractedData = job.extracted_data;
+    const mergedData = { ...currentProfileData };
+
+    // Apply selected fields (or all if not specified)
+    const fieldsToApply = selectedFields || Object.keys(extractedData);
+
+    for (const field of fieldsToApply) {
+      if (extractedData[field]?.value !== undefined) {
+        // Use the extracted value
+        mergedData[field] = extractedData[field].value;
+
+        // Also create an inference for tracking
+        await brandDiscoveryService.setInference(req.user.id, `profile.${field}`, {
+          value: extractedData[field].value,
+          source: 'scrape_job',
+          source_job_id: jobId,
+          confidence: extractedData[field].confidence || 0.7,
+        });
+      }
+    }
+
+    // Update the profile module
+    const updated = await brandDiscoveryService.updateModuleData(
+      req.user.id,
+      'profile',
+      mergedData
+    );
+
+    res.json({
+      success: true,
+      brandDiscovery: updated,
+      appliedFields: fieldsToApply,
+    });
+  } catch (error) {
+    logger.error('Failed to apply enrichment data', { ...logContext, error: error.message });
+    res.status(500).json({ error: 'Failed to apply enrichment data', details: error.message });
+  }
+});
+
+// ============================================================================
+// GET /api/brand-discovery/word-banks
+// Get word banks for profile enrichment (convenience endpoint)
+// ============================================================================
+
+router.get('/word-banks', async (req, res) => {
+  const logContext = { userId: req.user.id, operation: 'GET /word-banks' };
+
+  try {
+    logger.debug('Fetching word banks', logContext);
+    res.json(getAllWordBanks());
+  } catch (error) {
+    logger.error('Failed to fetch word banks', { ...logContext, error: error.message });
+    res.status(500).json({ error: 'Failed to fetch word banks', details: error.message });
   }
 });
 

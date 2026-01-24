@@ -65,8 +65,8 @@ const PHASES = [
     description: 'Planning two articles: Episode Recap + Topic Article',
     stages: [
       { number: 3, name: 'Dual Article Planning', description: 'Select idea → outlines in parallel', parallel: true },
-      { number: 4, name: 'Paragraph Details', description: 'Planning paragraph content' },
-      { number: 5, name: 'Headlines & Copy', description: 'Generating title options' },
+      { number: 4, name: 'Dual Paragraph Details', description: 'Planning paragraphs for both articles', parallel: true },
+      { number: 5, name: 'Dual Headlines', description: 'Headlines for both articles', parallel: true },
     ],
   },
   {

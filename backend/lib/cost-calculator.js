@@ -264,8 +264,8 @@ const STAGE_TOKEN_ESTIMATES = {
   1: { input: 4000, output: 800 },   // Episode Summary (uses transcript + themes)
   2: { input: 3500, output: 1200 },  // Quotes, Tips, Q&As, Blog Ideas (increased output)
   3: { input: 3500, output: 900 },   // Blog Selection + 2 Outlines (3 calls: selection + 2 parallel outlines)
-  4: { input: 2500, output: 800 },   // Paragraph Outlines
-  5: { input: 2000, output: 1200 },  // Headlines
+  4: { input: 3000, output: 1600 },  // DUAL Paragraph Outlines (2 parallel calls for both articles)
+  5: { input: 2500, output: 1000 },  // DUAL Headlines (2 parallel calls for both articles)
   6: { input: 4000, output: 3000 },  // DUAL Draft Generation (~1500 words x 2 articles)
   7: { input: 5000, output: 2400 },  // DUAL Refinement (refines both articles in parallel)
   9: { input: 2000, output: 1500 },  // Email Campaign (Claude)
@@ -342,11 +342,11 @@ export function estimateEpisodeCost(transcript) {
   const stageNames = {
     1: 'Episode Summary',
     2: 'Quotes & Tips',
-    3: 'Blog Outline',
-    4: 'Paragraph Outlines',
-    5: 'Headlines',
-    6: 'Draft Generation',
-    7: 'Refinement',
+    3: 'Dual Article Outlines',
+    4: 'Dual Paragraph Outlines',
+    5: 'Dual Headlines',
+    6: 'Dual Draft Generation',
+    7: 'Dual Refinement',
   };
 
   // Stages 1-7 (non-social stages)

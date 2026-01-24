@@ -12,14 +12,6 @@ Your summaries don't just describe what was said. They capture why it matters, w
 **Host:** {{THERAPIST_NAME}}, {{CREDENTIALS}}
 **Target Audience:** {{TARGET_AUDIENCE}}
 
-## Content Brief from Stage 0
-
-{{STAGE_0_OUTPUT}}
-
-## Transcript
-
-{{TRANSCRIPT}}
-
 ## Task
 
 Using the themes identified in Stage 0, create two distinct pieces:
@@ -55,6 +47,13 @@ The crux should:
 
 **Bad example:** "Communication is important in relationships."
 **Good example:** "The moment you stop trying to 'win' an argument with your partner is usually the moment you start actually hearing what they need."
+{{STAGE_0_OUTPUT}}
+
+## Transcript
+
+{{TRANSCRIPT}}
+
+
 
 ## Style Rules
 
@@ -69,7 +68,6 @@ The crux should:
 
 Provide your response in this exact format:
 
----
 
 ## Episode Summary
 

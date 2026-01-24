@@ -58,14 +58,40 @@ import styles from './ReviewHub.module.css';
 // - Stage 7: Refinement Pass (output_text - final blog)
 // - Stage 8: Social Content (instagram, twitter, linkedin, facebook)
 // - Stage 9: Email Campaign (subject_lines, preview_text, email_body)
-const TABS = [
+
+// Base tabs (always shown)
+const BASE_TABS = [
   { id: 'analysis', label: 'Analysis', icon: FileText, stages: [1] },
   { id: 'quotes', label: 'Quotes', icon: Quote, stages: [2] },
   { id: 'titles', label: 'Titles', icon: Type, stages: [5] },
-  { id: 'blog', label: 'Blog Post', icon: AlignLeft, stages: [3, 4, 6, 7] },
+];
+
+// Legacy single blog tab (for backward compatibility)
+const LEGACY_BLOG_TAB = { id: 'blog', label: 'Blog Post', icon: AlignLeft, stages: [3, 4, 6, 7] };
+
+// Dual blog tabs (for new dual-article format)
+const DUAL_BLOG_TABS = [
+  { id: 'episode-recap', label: 'Episode Recap', icon: AlignLeft, stages: [3, 6, 7], articleType: 'episode_recap' },
+  { id: 'topic-article', label: 'Topic Article', icon: Lightbulb, stages: [3, 6, 7], articleType: 'topic_article' },
+];
+
+// Trailing tabs (always shown after blog tabs)
+const TRAILING_TABS = [
   { id: 'social', label: 'Social', icon: Share2, stages: [8] },
   { id: 'email', label: 'Email', icon: Mail, stages: [9] },
 ];
+
+/**
+ * Build tabs array based on whether episode has dual articles
+ * @param {boolean} isDualArticle - Whether the episode uses dual-article format
+ * @returns {Array} Array of tab definitions
+ */
+function buildTabs(isDualArticle) {
+  if (isDualArticle) {
+    return [...BASE_TABS, ...DUAL_BLOG_TABS, ...TRAILING_TABS];
+  }
+  return [...BASE_TABS, LEGACY_BLOG_TAB, ...TRAILING_TABS];
+}
 
 /**
  * ReviewHub page component
@@ -1001,7 +1027,20 @@ function ReviewHub() {
     );
   }
 
-  const currentTab = TABS.find((t) => t.id === activeTab);
+  // ============================================================================
+  // DUAL-ARTICLE DETECTION
+  // ============================================================================
+  // Check if Stage 6 or 7 has dual-article format (object with episode_recap/topic_article)
+  const stage6 = stages.find((s) => s.stage_number === 6 && !s.sub_stage);
+  const stage7 = stages.find((s) => s.stage_number === 7 && !s.sub_stage);
+  const blogOutput = stage7?.output_text || stage6?.output_text;
+  const isDualArticleFormat = blogOutput && typeof blogOutput === 'object' &&
+    (blogOutput.episode_recap || blogOutput.topic_article);
+
+  // Build dynamic tabs based on article format
+  const tabs = buildTabs(isDualArticleFormat);
+  const currentTab = tabs.find((t) => t.id === activeTab);
+
   // Check title from multiple sources: user-provided (episode_context.title), AI-generated (episode.title)
   const episodeTitle = episode.episode_context?.title || episode.title || 'Untitled Episode';
 
@@ -1092,9 +1131,9 @@ function ReviewHub() {
         episodeSummary={getStage(1)?.output_data}
       />
 
-      {/* Tabs */}
+      {/* Tabs - dynamically built based on article format */}
       <div className={styles.tabs}>
-        {TABS.map((tab) => (
+        {tabs.map((tab) => (
           <button
             key={tab.id}
             className={`${styles.tab} ${activeTab === tab.id ? styles.tabActive : ''}`}
@@ -1148,12 +1187,75 @@ function ReviewHub() {
           />
         )}
 
+        {/* Legacy single blog tab (backward compatibility) */}
         {activeTab === 'blog' && (
           <BlogTab
             outlineStage={getStage(3)}
             paragraphsStage={getStage(4)}
             draftStage={getStage(6)}
             editedStage={getStage(7)}
+            onCopy={copyToClipboard}
+            copied={copied}
+            // Blog editing props
+            isEditing={isEditingBlog}
+            editedContent={editedBlogContent}
+            onEditedContentChange={setEditedBlogContent}
+            onStartEdit={handleStartEditBlog}
+            onSaveEdit={handleSaveBlog}
+            onCancelEdit={handleCancelEditBlog}
+            savingEdit={savingBlog}
+            // Library & schedule props
+            onSaveToLibrary={handleOpenSaveLibrary}
+            onSchedule={handleOpenSchedule}
+            onReschedule={handleOpenReschedule}
+            onUnschedule={handleUnschedule}
+            unscheduling={unscheduling}
+            episodeTitle={episodeTitle}
+            // Status tracking
+            getLibraryStatus={getLibraryStatus}
+            getCalendarStatus={getCalendarStatus}
+          />
+        )}
+
+        {/* Episode Recap tab (dual-article format) */}
+        {activeTab === 'episode-recap' && (
+          <BlogTab
+            outlineStage={getStage(3)}
+            paragraphsStage={getStage(4)}
+            draftStage={getStage(6)}
+            editedStage={getStage(7)}
+            articleType="episode_recap"
+            onCopy={copyToClipboard}
+            copied={copied}
+            // Blog editing props
+            isEditing={isEditingBlog}
+            editedContent={editedBlogContent}
+            onEditedContentChange={setEditedBlogContent}
+            onStartEdit={handleStartEditBlog}
+            onSaveEdit={handleSaveBlog}
+            onCancelEdit={handleCancelEditBlog}
+            savingEdit={savingBlog}
+            // Library & schedule props
+            onSaveToLibrary={handleOpenSaveLibrary}
+            onSchedule={handleOpenSchedule}
+            onReschedule={handleOpenReschedule}
+            onUnschedule={handleUnschedule}
+            unscheduling={unscheduling}
+            episodeTitle={episodeTitle}
+            // Status tracking
+            getLibraryStatus={getLibraryStatus}
+            getCalendarStatus={getCalendarStatus}
+          />
+        )}
+
+        {/* Topic Article tab (dual-article format) */}
+        {activeTab === 'topic-article' && (
+          <BlogTab
+            outlineStage={getStage(3)}
+            paragraphsStage={getStage(4)}
+            draftStage={getStage(6)}
+            editedStage={getStage(7)}
+            articleType="topic_article"
             onCopy={copyToClipboard}
             copied={copied}
             // Blog editing props
@@ -2156,6 +2258,7 @@ function BlogTab({
   paragraphsStage,
   draftStage,
   editedStage,
+  articleType, // NEW: 'episode_recap', 'topic_article', or undefined for legacy toggle view
   onCopy,
   copied,
   // Editing props
@@ -2177,8 +2280,8 @@ function BlogTab({
   getLibraryStatus,
   getCalendarStatus,
 }) {
-  // Track which article is active (for dual-article view)
-  const [activeArticle, setActiveArticle] = useState('episode_recap');
+  // Track which article is active (only used when articleType is not specified)
+  const [activeArticleState, setActiveArticleState] = useState('episode_recap');
 
   // ============================================================================
   // DETECT OUTPUT FORMAT (dual articles vs legacy single article)
@@ -2187,6 +2290,12 @@ function BlogTab({
 
   // Check if this is the new dual-article format (object) or legacy (string)
   const isDualArticleFormat = rawOutputText && typeof rawOutputText === 'object';
+
+  // Determine which article to show:
+  // - If articleType prop is provided, use it (separate tab mode)
+  // - Otherwise use the activeArticleState (legacy toggle mode)
+  const activeArticle = articleType || activeArticleState;
+  const showArticleToggle = !articleType && isDualArticleFormat;
 
   // Extract articles based on format
   let episodeRecap = null;
@@ -2201,6 +2310,8 @@ function BlogTab({
       hasTopicArticle: !!topicArticle,
       episodeRecapLength: episodeRecap?.length || 0,
       topicArticleLength: topicArticle?.length || 0,
+      articleType,
+      activeArticle,
     });
   } else if (typeof rawOutputText === 'string') {
     legacyBlogPost = rawOutputText;
@@ -2283,14 +2394,15 @@ function BlogTab({
   return (
     <div className={styles.tabContent}>
       {/* ========================================================================
-       * DUAL ARTICLE TOGGLE - Only show for new dual-article format
+       * DUAL ARTICLE TOGGLE - Only show in legacy toggle mode (no articleType prop)
+       * When articleType is provided, we're in separate tab mode - no toggle needed
        * ======================================================================== */}
-      {isDualArticleFormat && (episodeRecap || topicArticle) && (
+      {showArticleToggle && (episodeRecap || topicArticle) && (
         <div className={styles.articleToggle}>
           <div className={styles.pillNav}>
             <button
               className={`${styles.pill} ${activeArticle === 'episode_recap' ? styles.pillActive : ''}`}
-              onClick={() => setActiveArticle('episode_recap')}
+              onClick={() => setActiveArticleState('episode_recap')}
               disabled={!episodeRecap}
             >
               <AlignLeft size={14} />
@@ -2303,7 +2415,7 @@ function BlogTab({
             </button>
             <button
               className={`${styles.pill} ${activeArticle === 'topic_article' ? styles.pillActive : ''}`}
-              onClick={() => setActiveArticle('topic_article')}
+              onClick={() => setActiveArticleState('topic_article')}
               disabled={!topicArticle}
             >
               <FileText size={14} />
@@ -2315,14 +2427,14 @@ function BlogTab({
               )}
             </button>
           </div>
+        </div>
+      )}
 
-          {/* Selected blog idea context (for Topic Article) */}
-          {activeArticle === 'topic_article' && selectedBlogIdea && (
-            <div className={styles.selectedIdeaBox}>
-              <span className={styles.selectedIdeaLabel}>Based on selected idea:</span>
-              <span className={styles.selectedIdeaTitle}>{selectedBlogIdea.title}</span>
-            </div>
-          )}
+      {/* Selected blog idea context - show for Topic Article in both modes */}
+      {activeArticle === 'topic_article' && selectedBlogIdea && (
+        <div className={styles.selectedIdeaBox}>
+          <span className={styles.selectedIdeaLabel}>Based on selected idea:</span>
+          <span className={styles.selectedIdeaTitle}>{selectedBlogIdea.title}</span>
         </div>
       )}
 
@@ -2451,8 +2563,8 @@ function BlogTab({
                   >
                     Copy
                   </Button>
-                  {/* Copy Both Articles - only show for dual article format with both articles */}
-                  {isDualArticleFormat && episodeRecap && topicArticle && (
+                  {/* Copy Both Articles - only show in toggle mode (not separate tab mode) */}
+                  {showArticleToggle && episodeRecap && topicArticle && (
                     <Button
                       variant="ghost"
                       size="sm"

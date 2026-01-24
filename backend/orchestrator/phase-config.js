@@ -382,17 +382,20 @@ export const REQUIRED_PREVIOUS_DATA = {
   ],
   paragraphs: [
     { stage: 2, fields: ['quotes'] },
-    { stage: 3, fields: ['post_structure'] },
+    // Stage 3 dual-article format: episode_recap_outline + topic_article_outline
+    { stage: 3, fields: ['episode_recap_outline', 'topic_article_outline'] },
   ],
   headlines: [
     { stage: 1, fields: ['episode_crux'] },
-    { stage: 3, fields: ['post_structure'] },
+    // Stage 3 dual-article format: episode_recap_outline + topic_article_outline
+    { stage: 3, fields: ['episode_recap_outline', 'topic_article_outline'] },
   ],
   draft: [
     { stage: 0, fields: ['episode_name', 'seo_overview'] },
     { stage: 1, fields: ['summary', 'episode_crux'] },
     { stage: 2, fields: ['quotes', 'tips'] },
-    { stage: 3, fields: ['post_structure'] },
+    // Stage 3 dual-article format
+    { stage: 3, fields: ['episode_recap_outline', 'topic_article_outline'] },
     { stage: 4, fields: ['section_details'] },
     { stage: 5, fields: ['headlines'] },
   ],

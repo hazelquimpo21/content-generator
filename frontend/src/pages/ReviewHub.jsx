@@ -37,8 +37,11 @@ import {
   CheckCircle,
   MoreVertical,
   CalendarX,
+  Lightbulb,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
-import { Button, Card, Spinner, Badge, ConfirmDialog, EditableText, EditableCard, useToast } from '@components/shared';
+import { Button, Card, Spinner, Badge, ConfirmDialog, EditableText, EditableCard, useToast, EpisodeHero } from '@components/shared';
 import ScheduleModal from '@components/shared/ScheduleModal';
 import SaveToLibraryModal from '@components/shared/SaveToLibraryModal';
 import api from '@utils/api-client';
@@ -1055,6 +1058,13 @@ function ReviewHub() {
         </div>
       </header>
 
+      {/* Episode Hero - shows metadata from Stage 0 content brief */}
+      <EpisodeHero
+        episode={episode}
+        contentBrief={getStage(0)?.output_data}
+        episodeSummary={getStage(1)?.output_data}
+      />
+
       {/* Tabs */}
       <div className={styles.tabs}>
         {TABS.map((tab) => (
@@ -1082,6 +1092,7 @@ function ReviewHub() {
         {activeTab === 'analysis' && (
           <AnalysisTab
             stage={getStage(1)}
+            contentBriefStage={getStage(0)}
             onUpdateAnalysis={handleUpdateAnalysis}
             savingState={savingStageContent}
           />
@@ -1242,220 +1253,194 @@ function ReviewHub() {
 // TAB COMPONENTS
 // ============================================================================
 
-function AnalysisTab({ stage, onUpdateAnalysis, savingState }) {
-  const [editingCrux, setEditingCrux] = useState(false);
-  const [editingThemeIndex, setEditingThemeIndex] = useState(null);
+function AnalysisTab({ stage, contentBriefStage, onUpdateAnalysis, savingState }) {
+  const [editingSummary, setEditingSummary] = useState(false);
+  const [expandedThemes, setExpandedThemes] = useState({});
   const [editValue, setEditValue] = useState('');
-  const [editThemeValue, setEditThemeValue] = useState({ theme: '', description: '' });
 
-  console.log('[AnalysisTab] Stage 1 data:', {
-    hasStage: !!stage,
-    stageStatus: stage?.status,
-    hasOutputData: !!stage?.output_data,
+  console.log('[AnalysisTab] Stage data:', {
+    hasStage1: !!stage,
+    stage1Status: stage?.status,
+    hasStage0: !!contentBriefStage,
+    stage0Status: contentBriefStage?.status,
   });
 
-  if (!stage) {
-    return <EmptyState message="No analysis data" details="Stage 1 (Transcript Analysis) not found." />;
+  // Stage 1 data (summary, episode_crux)
+  const summaryData = stage?.output_data || {};
+
+  // Stage 0 data (themes, tags, seo_overview)
+  const briefData = contentBriefStage?.output_data || {};
+
+  if (!stage && !contentBriefStage) {
+    return <EmptyState message="No analysis data" details="Analysis stages not found." />;
   }
 
-  if (stage.status !== 'completed') {
-    return <EmptyState message="Analysis not complete" details={`Stage 1 status: ${stage.status}`} />;
+  if (stage?.status !== 'completed' && contentBriefStage?.status !== 'completed') {
+    return <EmptyState message="Analysis not complete" details="Analysis stages are still processing." />;
   }
 
-  if (!stage.output_data) {
-    return <EmptyState message="No analysis data" details="Stage 1 completed but has no output data." />;
-  }
-
-  const data = stage.output_data;
-
-  // Start editing episode crux
-  const handleStartEditCrux = () => {
-    console.log('[AnalysisTab] Starting edit for episode crux');
-    setEditingCrux(true);
-    setEditValue(data.episode_crux || '');
+  // Toggle theme expansion
+  const toggleTheme = (index) => {
+    setExpandedThemes(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
   };
 
-  // Save edited episode crux
-  const handleSaveCrux = async () => {
-    if (!editValue.trim()) {
-      console.warn('[AnalysisTab] Cannot save empty episode crux');
-      return;
-    }
+  // Start editing summary
+  const handleStartEditSummary = () => {
+    setEditingSummary(true);
+    setEditValue(summaryData.summary || '');
+  };
+
+  // Save edited summary
+  const handleSaveSummary = async () => {
+    if (!editValue.trim()) return;
     try {
-      await onUpdateAnalysis(stage, 'episode_crux', editValue.trim());
-      setEditingCrux(false);
+      await onUpdateAnalysis(stage, 'summary', editValue.trim());
+      setEditingSummary(false);
       setEditValue('');
     } catch (err) {
-      console.error('[AnalysisTab] Failed to save episode crux:', err);
+      console.error('[AnalysisTab] Failed to save summary:', err);
     }
   };
 
-  // Start editing a theme
-  const handleStartEditTheme = (index) => {
-    console.log('[AnalysisTab] Starting edit for theme', index);
-    setEditingThemeIndex(index);
-    setEditThemeValue({
-      theme: data.key_themes[index]?.theme || '',
-      description: data.key_themes[index]?.description || '',
-    });
-  };
-
-  // Save edited theme
-  const handleSaveTheme = async (index) => {
-    if (!editThemeValue.theme.trim() || !editThemeValue.description.trim()) {
-      console.warn('[AnalysisTab] Cannot save theme with empty fields');
-      return;
-    }
-    try {
-      const updatedThemes = [...data.key_themes];
-      updatedThemes[index] = {
-        theme: editThemeValue.theme.trim(),
-        description: editThemeValue.description.trim(),
-      };
-      await onUpdateAnalysis(stage, 'key_themes', updatedThemes);
-      setEditingThemeIndex(null);
-      setEditThemeValue({ theme: '', description: '' });
-    } catch (err) {
-      console.error('[AnalysisTab] Failed to save theme:', err);
-    }
-  };
-
-  // Cancel any editing
+  // Cancel editing
   const handleCancelEdit = () => {
-    setEditingCrux(false);
-    setEditingThemeIndex(null);
+    setEditingSummary(false);
     setEditValue('');
-    setEditThemeValue({ theme: '', description: '' });
   };
+
+  // Get themes from Stage 0 (preferred) or fall back to Stage 1
+  const themes = briefData.themes || summaryData.key_themes || [];
+  const tags = briefData.tags || [];
+  const seoOverview = briefData.seo_overview;
 
   return (
     <div className={styles.tabContent}>
-      <Card
-        title="Episode Crux"
-        subtitle="The core insight of this episode"
-        headerAction={
-          editingCrux ? (
-            <div className={styles.cardActions}>
-              <Button
-                variant="primary"
-                size="sm"
-                leftIcon={Save}
-                onClick={handleSaveCrux}
-                loading={savingState?.['analysis-episode_crux']}
-                disabled={!editValue.trim()}
-              >
-                Save
-              </Button>
+      {/* SEO Overview - if available from Stage 0 */}
+      {seoOverview && (
+        <Card title="SEO Overview" subtitle="Search-optimized episode description" padding="lg">
+          <p className={styles.seoOverview}>{seoOverview}</p>
+        </Card>
+      )}
+
+      {/* Full Summary - from Stage 1 */}
+      {summaryData.summary && (
+        <Card
+          title="Episode Summary"
+          subtitle="In-depth narrative summary"
+          headerAction={
+            editingSummary ? (
+              <div className={styles.cardActions}>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  leftIcon={Save}
+                  onClick={handleSaveSummary}
+                  loading={savingState?.['analysis-summary']}
+                  disabled={!editValue.trim()}
+                >
+                  Save
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={X}
+                  onClick={handleCancelEdit}
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : (
               <Button
                 variant="ghost"
                 size="sm"
-                leftIcon={X}
-                onClick={handleCancelEdit}
+                leftIcon={Edit3}
+                onClick={handleStartEditSummary}
               >
-                Cancel
+                Edit
               </Button>
-            </div>
+            )
+          }
+          padding="lg"
+        >
+          {editingSummary ? (
+            <textarea
+              className={styles.blogTextarea}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              placeholder="Enter the episode summary..."
+              disabled={savingState?.['analysis-summary']}
+              style={{ minHeight: '200px' }}
+            />
           ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              leftIcon={Edit3}
-              onClick={handleStartEditCrux}
-            >
-              Edit
-            </Button>
-          )
-        }
-        padding="lg"
-      >
-        {editingCrux ? (
-          <textarea
-            className={styles.blogTextarea}
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            placeholder="Enter the episode's core insight..."
-            disabled={savingState?.['analysis-episode_crux']}
-            style={{ minHeight: '100px' }}
-          />
-        ) : (
-          <p className={styles.crux}>{data.episode_crux}</p>
-        )}
-      </Card>
+            <p className={styles.summaryText}>{summaryData.summary}</p>
+          )}
+        </Card>
+      )}
 
-      <Card title="Key Themes" padding="lg">
-        <div className={styles.themesList}>
-          {data.key_themes?.map((theme, i) => (
-            <div key={i} className={styles.theme}>
-              {editingThemeIndex === i ? (
-                <div className={styles.editForm}>
-                  <div className={styles.fieldGroup}>
-                    <label className={styles.fieldLabel}>Theme</label>
-                    <input
-                      type="text"
-                      value={editThemeValue.theme}
-                      onChange={(e) => setEditThemeValue({ ...editThemeValue, theme: e.target.value })}
-                      className={styles.titleInput}
-                      placeholder="Theme name"
-                      autoFocus
-                    />
-                  </div>
-                  <div className={styles.fieldGroup}>
-                    <label className={styles.fieldLabel}>Description</label>
-                    <textarea
-                      value={editThemeValue.description}
-                      onChange={(e) => setEditThemeValue({ ...editThemeValue, description: e.target.value })}
-                      className={styles.blogTextarea}
-                      placeholder="Theme description"
-                      style={{ minHeight: '60px' }}
-                    />
-                  </div>
-                  <div className={styles.cardActions}>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      leftIcon={Check}
-                      onClick={() => handleSaveTheme(i)}
-                      loading={savingState?.['analysis-key_themes']}
-                      disabled={!editThemeValue.theme.trim() || !editThemeValue.description.trim()}
-                    >
-                      Save
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      leftIcon={X}
-                      onClick={handleCancelEdit}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <h4>{theme.theme}</h4>
-                  <p>{theme.description}</p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    leftIcon={Edit3}
-                    onClick={() => handleStartEditTheme(i)}
+      {/* Key Themes - from Stage 0 with expandable cards */}
+      {themes.length > 0 && (
+        <Card title="Key Themes" subtitle={`${themes.length} themes identified`} padding="lg">
+          <div className={styles.themesGrid}>
+            {themes.map((theme, i) => {
+              // Handle both Stage 0 format (name, what_was_discussed, practical_value)
+              // and Stage 1 format (theme, description)
+              const themeName = theme.name || theme.theme || `Theme ${i + 1}`;
+              const whatDiscussed = theme.what_was_discussed || theme.description || '';
+              const practicalValue = theme.practical_value || '';
+              const isExpanded = expandedThemes[i];
+
+              return (
+                <div key={i} className={styles.themeCard}>
+                  <button
+                    className={styles.themeHeader}
+                    onClick={() => toggleTheme(i)}
                   >
-                    Edit
-                  </Button>
-                </>
-              )}
-            </div>
-          ))}
-        </div>
-      </Card>
+                    <span className={styles.themeNumber}>{i + 1}</span>
+                    <span className={styles.themeName}>{themeName}</span>
+                    {(whatDiscussed || practicalValue) && (
+                      isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />
+                    )}
+                  </button>
 
-      {data.target_audiences && (
-        <Card title="Target Audiences" padding="lg">
-          <ul className={styles.list}>
-            {data.target_audiences.map((audience, i) => (
-              <li key={i}>{audience}</li>
+                  {isExpanded && (whatDiscussed || practicalValue) && (
+                    <div className={styles.themeBody}>
+                      {whatDiscussed && (
+                        <div className={styles.themeSection}>
+                          <span className={styles.themeSectionLabel}>What was discussed</span>
+                          <p className={styles.themeSectionText}>{whatDiscussed}</p>
+                        </div>
+                      )}
+                      {practicalValue && (
+                        <div className={styles.themeSection}>
+                          <span className={styles.themeSectionLabel}>
+                            <Lightbulb size={14} />
+                            Practical value
+                          </span>
+                          <p className={styles.themeSectionText}>{practicalValue}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* Tags - from Stage 0 */}
+      {tags.length > 0 && (
+        <Card title="Topic Tags" subtitle="Keywords for categorization and SEO" padding="lg">
+          <div className={styles.tagsList}>
+            {tags.map((tag, i) => (
+              <Badge key={i} variant="default" className={styles.topicTag}>
+                {tag}
+              </Badge>
             ))}
-          </ul>
+          </div>
         </Card>
       )}
     </div>
@@ -1463,16 +1448,23 @@ function AnalysisTab({ stage, onUpdateAnalysis, savingState }) {
 }
 
 /**
- * QuotesTab - Displays extracted quotes from Stage 2 with edit/delete capability
+ * QuotesTab - Displays extracted quotes AND actionable tips from Stage 2
  *
  * Quote structure (from Stage 2):
  * - text: The verbatim quote (required)
  * - speaker: Who said it (required)
  * - context: Why it's significant (optional)
  * - usage: Suggested use - headline/pullquote/social/key_point (optional)
+ *
+ * Tip structure (from Stage 2):
+ * - tip: The actionable advice (required)
+ * - context: When/why to use it (required)
+ * - category: mindset/communication/practice/boundary/self-care/relationship/professional
  */
 function QuotesTab({ stage, onCopy, copied, onUpdateQuote, onDeleteQuote, savingState }) {
+  const [activeSection, setActiveSection] = useState('quotes');
   const [editingIndex, setEditingIndex] = useState(null);
+  const [usageFilter, setUsageFilter] = useState('all');
 
   console.log('[QuotesTab] Stage 2 data:', {
     hasStage: !!stage,
@@ -1480,6 +1472,8 @@ function QuotesTab({ stage, onCopy, copied, onUpdateQuote, onDeleteQuote, saving
     hasOutputData: !!stage?.output_data,
     hasQuotes: !!stage?.output_data?.quotes,
     quoteCount: stage?.output_data?.quotes?.length,
+    hasTips: !!stage?.output_data?.tips,
+    tipCount: stage?.output_data?.tips?.length,
   });
 
   if (!stage) {
@@ -1494,7 +1488,8 @@ function QuotesTab({ stage, onCopy, copied, onUpdateQuote, onDeleteQuote, saving
     return <EmptyState message="No quotes extracted" details="Stage 2 completed but has no quotes data." />;
   }
 
-  const quotes = stage.output_data.quotes;
+  const quotes = stage.output_data.quotes || [];
+  const tips = stage.output_data.tips || [];
 
   // Field definitions for quote editing
   const quoteFields = [
@@ -1504,70 +1499,195 @@ function QuotesTab({ stage, onCopy, copied, onUpdateQuote, onDeleteQuote, saving
     { key: 'usage', label: 'Suggested Use', required: false, placeholder: 'headline, pullquote, social, or key_point' },
   ];
 
+  // Get unique usage types for filter
+  const usageTypes = [...new Set(quotes.map(q => q.usage).filter(Boolean))];
+
+  // Filter quotes by usage
+  const filteredQuotes = usageFilter === 'all'
+    ? quotes
+    : quotes.filter(q => q.usage === usageFilter);
+
+  // Category badge colors
+  const categoryColors = {
+    mindset: 'primary',
+    communication: 'info',
+    practice: 'success',
+    boundary: 'warning',
+    'self-care': 'secondary',
+    relationship: 'default',
+    professional: 'default',
+  };
+
+  // Category icons/emojis
+  const categoryIcons = {
+    mindset: '🧠',
+    communication: '💬',
+    practice: '🎯',
+    boundary: '🛡️',
+    'self-care': '💚',
+    relationship: '👥',
+    professional: '💼',
+  };
+
   return (
     <div className={styles.tabContent}>
-      {quotes.map((quote, i) => (
-        <Card key={i} padding="lg" className={styles.quoteCard}>
-          {editingIndex === i ? (
-            <EditableCard
-              item={quote}
-              fields={quoteFields}
-              onSave={async (updatedQuote) => {
-                await onUpdateQuote(stage, i, updatedQuote);
-                setEditingIndex(null);
-              }}
-              onDelete={async () => {
-                await onDeleteQuote(stage, i);
-              }}
-              canDelete={quotes.length > 1}
-              itemId={`quote-${i}`}
-              deleteConfirmText="Are you sure you want to delete this quote?"
-            />
-          ) : (
-            <>
-              <blockquote className={styles.quote}>
-                "{quote.text}"
-              </blockquote>
-              <p className={styles.quoteSpeaker}>— {quote.speaker}</p>
-              {quote.context && <p className={styles.quoteContext}>{quote.context}</p>}
-              {quote.usage && (
-                <Badge variant="secondary" className={styles.quoteUsage}>
-                  {quote.usage}
-                </Badge>
-              )}
-              <div className={styles.postActions}>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  leftIcon={Edit3}
-                  onClick={() => setEditingIndex(i)}
+      {/* Section toggle - Quotes vs Tips */}
+      <div className={styles.pillNav}>
+        <button
+          className={`${styles.pill} ${activeSection === 'quotes' ? styles.pillActive : ''}`}
+          onClick={() => setActiveSection('quotes')}
+        >
+          <Quote size={14} />
+          <span>Quotes</span>
+          <span className={styles.pillCount}>{quotes.length}</span>
+        </button>
+        {tips.length > 0 && (
+          <button
+            className={`${styles.pill} ${activeSection === 'tips' ? styles.pillActive : ''}`}
+            onClick={() => setActiveSection('tips')}
+          >
+            <Lightbulb size={14} />
+            <span>Actionable Tips</span>
+            <span className={styles.pillCount}>{tips.length}</span>
+          </button>
+        )}
+      </div>
+
+      {/* QUOTES SECTION */}
+      {activeSection === 'quotes' && (
+        <>
+          {/* Usage filter */}
+          {usageTypes.length > 1 && (
+            <div className={styles.filterBar}>
+              <span className={styles.filterLabel}>Filter by usage:</span>
+              <div className={styles.filterPills}>
+                <button
+                  className={`${styles.filterPill} ${usageFilter === 'all' ? styles.filterPillActive : ''}`}
+                  onClick={() => setUsageFilter('all')}
                 >
-                  Edit
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  leftIcon={copied === `quote-${i}` ? Check : Copy}
-                  onClick={() => onCopy(quote.text, `quote-${i}`)}
-                >
-                  {copied === `quote-${i}` ? 'Copied!' : 'Copy'}
-                </Button>
-                {quotes.length > 1 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    leftIcon={Trash2}
-                    onClick={() => onDeleteQuote(stage, i)}
-                    loading={savingState?.[`quote-delete-${i}`]}
+                  All ({quotes.length})
+                </button>
+                {usageTypes.map(usage => (
+                  <button
+                    key={usage}
+                    className={`${styles.filterPill} ${usageFilter === usage ? styles.filterPillActive : ''}`}
+                    onClick={() => setUsageFilter(usage)}
                   >
-                    Delete
-                  </Button>
-                )}
+                    {usage} ({quotes.filter(q => q.usage === usage).length})
+                  </button>
+                ))}
               </div>
-            </>
+            </div>
           )}
-        </Card>
-      ))}
+
+          {filteredQuotes.map((quote, i) => {
+            const originalIndex = quotes.indexOf(quote);
+            return (
+              <Card key={originalIndex} padding="lg" className={styles.quoteCard}>
+                {editingIndex === originalIndex ? (
+                  <EditableCard
+                    item={quote}
+                    fields={quoteFields}
+                    onSave={async (updatedQuote) => {
+                      await onUpdateQuote(stage, originalIndex, updatedQuote);
+                      setEditingIndex(null);
+                    }}
+                    onDelete={async () => {
+                      await onDeleteQuote(stage, originalIndex);
+                    }}
+                    canDelete={quotes.length > 1}
+                    itemId={`quote-${originalIndex}`}
+                    deleteConfirmText="Are you sure you want to delete this quote?"
+                  />
+                ) : (
+                  <>
+                    <div className={styles.quoteHeader}>
+                      {quote.usage && (
+                        <Badge
+                          variant={quote.usage === 'headline' ? 'primary' : quote.usage === 'social' ? 'info' : 'secondary'}
+                          className={styles.quoteUsageBadge}
+                        >
+                          {quote.usage}
+                        </Badge>
+                      )}
+                    </div>
+                    <blockquote className={styles.quote}>
+                      "{quote.text}"
+                    </blockquote>
+                    <p className={styles.quoteSpeaker}>— {quote.speaker}</p>
+                    {quote.context && (
+                      <div className={styles.quoteContextBox}>
+                        <span className={styles.quoteContextLabel}>Why this matters</span>
+                        <p className={styles.quoteContextText}>{quote.context}</p>
+                      </div>
+                    )}
+                    <div className={styles.postActions}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={Edit3}
+                        onClick={() => setEditingIndex(originalIndex)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        leftIcon={copied === `quote-${originalIndex}` ? Check : Copy}
+                        onClick={() => onCopy(quote.text, `quote-${originalIndex}`)}
+                      >
+                        {copied === `quote-${originalIndex}` ? 'Copied!' : 'Copy'}
+                      </Button>
+                      {quotes.length > 1 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          leftIcon={Trash2}
+                          onClick={() => onDeleteQuote(stage, originalIndex)}
+                          loading={savingState?.[`quote-delete-${originalIndex}`]}
+                        >
+                          Delete
+                        </Button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </Card>
+            );
+          })}
+        </>
+      )}
+
+      {/* TIPS SECTION */}
+      {activeSection === 'tips' && tips.length > 0 && (
+        <div className={styles.tipsGrid}>
+          {tips.map((tip, i) => (
+            <Card key={i} padding="md" className={styles.tipCard}>
+              <div className={styles.tipHeader}>
+                <span className={styles.tipIcon}>{categoryIcons[tip.category] || '💡'}</span>
+                <Badge variant={categoryColors[tip.category] || 'default'} className={styles.tipCategory}>
+                  {tip.category}
+                </Badge>
+              </div>
+              <p className={styles.tipText}>{tip.tip}</p>
+              {tip.context && (
+                <p className={styles.tipContext}>
+                  <strong>When to use:</strong> {tip.context}
+                </p>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                leftIcon={copied === `tip-${i}` ? Check : Copy}
+                onClick={() => onCopy(tip.tip, `tip-${i}`)}
+                className={styles.tipCopyBtn}
+              >
+                {copied === `tip-${i}` ? 'Copied!' : 'Copy'}
+              </Button>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1717,6 +1837,7 @@ function TitlesTab({ stage, onCopy, copied, onUpdateTitleItem, onDeleteTitleItem
                     className={styles.titleInput}
                     autoFocus
                   />
+                  <span className={styles.charCount}>{editValue.length} chars</span>
                   <Button
                     variant="primary"
                     size="sm"
@@ -1738,7 +1859,10 @@ function TitlesTab({ stage, onCopy, copied, onUpdateTitleItem, onDeleteTitleItem
                 </div>
               ) : (
                 <>
-                  <span className={styles.titleText}>{item}</span>
+                  <div className={styles.titleTextWrapper}>
+                    <span className={styles.titleText}>{item}</span>
+                    <span className={styles.charCountSmall}>{item.length} chars</span>
+                  </div>
                   <div className={styles.cardActions}>
                     <Button
                       variant="ghost"

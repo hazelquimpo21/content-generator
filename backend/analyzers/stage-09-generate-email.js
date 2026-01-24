@@ -68,8 +68,12 @@ export async function generateEmail(context) {
     throw new ValidationError('previousStages.7', 'Missing refined post for email');
   }
 
+  // Get target audience for better email personalization
+  const targetAudience = evergreen?.podcast_info?.target_audience || 'listeners interested in mental health and personal growth';
+
   const systemPrompt = `You are an email marketing expert specializing in therapy and mental health newsletters.
 Write emails that feel like they're from a friend who happens to be a therapist.
+Tailor your tone and content to resonate with the target audience.
 Output ONLY valid JSON with no additional text or code blocks.`;
 
   const userPrompt = `
@@ -78,6 +82,7 @@ Create email newsletter content to promote this blog post.
 PODCAST: ${evergreen?.podcast_info?.name || 'The Podcast'}
 HOST: ${evergreen?.therapist_profile?.name || 'The Host'}
 CREDENTIALS: ${evergreen?.therapist_profile?.credentials || ''}
+TARGET AUDIENCE: ${targetAudience}
 EPISODE: ${episodeTitle}
 
 BLOG POST:
@@ -115,7 +120,8 @@ REQUIREMENTS:
 - Sound like a friend, not a corporation
 - One clear call-to-action
 - No "Hope this finds you well"
-- No excessive exclamation marks`;
+- No excessive exclamation marks
+- IMPORTANT: Write as if speaking directly to the target audience (${targetAudience}). Use their language and address their specific interests and pain points.`;
 
   const response = await callClaude(userPrompt, {
     system: systemPrompt,

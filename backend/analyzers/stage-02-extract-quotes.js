@@ -243,26 +243,50 @@ function validateOutput(data) {
  * @param {string} context.transcript - ORIGINAL transcript (always used, not summary)
  * @param {Object} context.evergreen - Evergreen content settings
  * @param {Object} context.previousStages - Previous stage outputs (uses Stage 0 for context)
+ * @param {Object} context.speakerData - Speaker diarization data (if available)
+ * @param {string} context.transcriptFormat - 'plain' or 'speaker_labeled'
  * @returns {Promise<Object>} Result with output_data containing quotes and tips arrays
  */
 export async function extractQuotesAndTips(context) {
-  const { episodeId, transcript, evergreen, previousStages = {} } = context;
+  const { episodeId, transcript, evergreen, previousStages = {}, speakerData, transcriptFormat } = context;
 
   logger.stageStart(2, 'Quotes & Tips Extraction', episodeId);
 
   // Always use ORIGINAL transcript for accurate extraction
   const originalTranscript = transcript;
 
+  // Check if we have speaker diarization data
+  const hasSpeakerData = speakerData?.hasSpeakerDiarization && speakerData?.speakers?.length > 0;
+
   logger.debug('Using ORIGINAL transcript for extraction', {
     episodeId,
     transcriptLength: originalTranscript?.length,
     wordCount: originalTranscript?.split(/\s+/).length || 0,
+    hasSpeakerDiarization: hasSpeakerData,
+    speakerCount: speakerData?.speakers?.length || 0,
+    transcriptFormat: transcriptFormat || 'plain',
   });
 
   // Get context from Stage 0 content brief (themes guide extraction)
   const stage0Output = previousStages[0] || {};
   const themes = stage0Output.themes || [];
   const episodeName = stage0Output.episode_name || '';
+  const hostName = stage0Output.host_name || evergreen?.therapist_profile?.name || 'Host';
+  const guestName = stage0Output.guest_name || null;
+
+  // Build speaker context if diarization data is available
+  let speakerContext = '';
+  if (hasSpeakerData) {
+    const speakerList = speakerData.speakers.map(s => {
+      const label = s.label || s.speaker_id || `Speaker ${s.id}`;
+      const role = s.role ? ` (${s.role})` : '';
+      return `- ${label}${role}`;
+    }).join('\n');
+    speakerContext = `\n\n## Known Speakers
+${speakerList}
+
+IMPORTANT: Use these exact speaker names when attributing quotes. The transcript includes speaker labels - use them for accurate attribution.`;
+  }
 
   // Build the system prompt
   const systemPrompt = `You are an expert content curator specializing in extracting two things from podcast transcripts:
@@ -275,6 +299,7 @@ CRITICAL REQUIREMENTS FOR QUOTES:
 - Do NOT paraphrase, clean up grammar, or modify quotes
 - Include quotes from different parts of the conversation
 - Mix of insightful, practical, and emotionally resonant quotes
+${hasSpeakerData ? '- Use the provided speaker labels for accurate attribution' : '- Identify speakers based on context clues in the transcript'}
 
 CRITICAL REQUIREMENTS FOR TIPS:
 - Tips must be SPECIFIC and ACTIONABLE (not vague platitudes)
@@ -285,11 +310,12 @@ CRITICAL REQUIREMENTS FOR TIPS:
   const userPrompt = `## Episode Context
 
 **Podcast:** ${evergreen?.podcast_info?.name || 'Podcast'}
-**Host:** ${evergreen?.therapist_profile?.name || 'Host'}
+**Host:** ${hostName}
+${guestName ? `**Guest:** ${guestName}` : ''}
 ${episodeName ? `**Episode:** ${episodeName}` : ''}
 
 ${themes.length > 0 ? `**Key Themes:**
-${themes.map(t => `- ${t.name}: ${t.what_was_discussed}`).join('\n')}` : ''}
+${themes.map(t => `- ${t.name}: ${t.what_was_discussed}`).join('\n')}` : ''}${speakerContext}
 
 ## Instructions
 
@@ -300,6 +326,7 @@ Focus on:
 3. **Emotional resonance** - Moments that will connect with readers
 4. **Expert insights** - Credible, authoritative statements
 5. **Unique perspectives** - Fresh takes not commonly heard
+${hasSpeakerData ? '\nUse the exact speaker names from the speaker list above for quote attribution.' : ''}
 
 ### Extract ${TARGET_TIPS} Tips
 Focus on:

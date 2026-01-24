@@ -212,6 +212,11 @@ async function loadContext(episodeId) {
     episodeId,
     transcript: episode.transcript,
     episodeContext: episode.episode_context || {},
+    // Speaker diarization data (if available from AssemblyAI)
+    speakerData: episode.speaker_data || null,
+    transcriptFormat: episode.transcript_format || 'plain',
+    // Audio metadata (duration, source, etc.)
+    audioMetadata: episode.audio_metadata || null,
     evergreen,
     previousStages: {},  // Populated during processing or from DB for resume
     // Preprocessing metadata

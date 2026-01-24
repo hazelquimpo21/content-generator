@@ -76,8 +76,12 @@ export async function generateSocial(context) {
     throw new ValidationError('previousStages.7', 'Missing refined post for social content');
   }
 
+  // Get target audience for better content targeting
+  const targetAudience = evergreen?.podcast_info?.target_audience || 'listeners interested in mental health and personal growth';
+
   const systemPrompt = `You are a social media content expert specializing in therapy and mental health content.
 Create authentic, engaging content that avoids engagement bait and sounds human.
+Tailor your content to resonate with the target audience.
 Output ONLY valid JSON with no additional text or code blocks.`;
 
   const userPrompt = `
@@ -85,6 +89,7 @@ Create social media content to promote this blog post.
 
 PODCAST: ${evergreen?.podcast_info?.name || 'The Podcast'}
 HOST: ${evergreen?.therapist_profile?.name || 'The Host'}
+TARGET AUDIENCE: ${targetAudience}
 
 BLOG POST:
 ${refinedPost}
@@ -133,7 +138,8 @@ REQUIREMENTS:
 - Facebook: 2 posts (300-600 chars each)
 - Max 5 hashtags per Instagram post, none for other platforms
 - No engagement bait ("Who relates?!")
-- Sound human, not like a brand`;
+- Sound human, not like a brand
+- IMPORTANT: Write content that speaks directly to the target audience (${targetAudience}). Use language and references they'll relate to.`;
 
   const response = await callClaude(userPrompt, {
     system: systemPrompt,

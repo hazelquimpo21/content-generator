@@ -490,7 +490,36 @@ const blogIdeas = stage2Output?.blog_ideas || [];
 
 The dual-article refactor required updates to several downstream systems that expected the old single-article format.
 
-### Stage 7: Dual Article Refinement
+### Stage 3: Parallel Outline Generation
+
+**File:** `backend/analyzers/stage-03-outline-high-level.js`
+
+**Architecture:** Blog selection → parallel outline generation
+
+**Flow:**
+1. **Step 1 (Sequential):** Select best blog idea from 6 options
+2. **Step 2 (Parallel):** Generate both outlines simultaneously:
+   - Episode Recap outline
+   - Topic Article outline (uses selected idea)
+
+```javascript
+// Step 1: Select blog idea (must complete first)
+const selectionResult = await selectBlogIdea(context);
+const selectedIdea = selectionResult.data.selected_blog_idea;
+
+// Step 2: Generate BOTH outlines in PARALLEL
+const [recapResult, topicResult] = await Promise.all([
+  createEpisodeRecapOutline(context),
+  createTopicArticleOutline(context, selectedIdea),
+]);
+```
+
+**Benefits:**
+- Each outline gets a focused, dedicated prompt
+- Parallel execution cuts outline generation time in half
+- Better separation of concerns
+
+### Stage 7: Dual Article Refinement (Parallel)
 
 **File:** `backend/analyzers/stage-07-refine-with-claude.js`
 
@@ -498,17 +527,18 @@ The dual-article refactor required updates to several downstream systems that ex
 
 **Solution:**
 - Added `isDualArticleFormat()` detection helper
-- Refines BOTH articles separately when dual format detected
+- Refines BOTH articles **in parallel** using `Promise.all`
 - Returns `output_text` as object: `{ episode_recap, topic_article }`
 - Maintains backward compatibility for legacy single-article episodes
 
 ```javascript
-// Detection helper
-const isDual = output && typeof output === 'object' &&
-  (output.episode_recap || output.topic_article);
+// Build refinement tasks for parallel execution
+const refinementTasks = [];
+if (episode_recap) refinementTasks.push(refineEpisodeRecap());
+if (topic_article) refinementTasks.push(refineTopicArticle());
 
-// Returns object for new episodes, string for legacy
-output_text: isDual ? { episode_recap, topic_article } : singleArticle
+// Execute both refinements in parallel
+const results = await Promise.all(refinementTasks);
 ```
 
 ### Stage 8: Social Content with Dual Articles

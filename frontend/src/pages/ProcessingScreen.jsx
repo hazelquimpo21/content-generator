@@ -64,7 +64,7 @@ const PHASES = [
     emoji: '📝',
     description: 'Planning two articles: Episode Recap + Topic Article',
     stages: [
-      { number: 3, name: 'Dual Article Planning', description: 'Selecting blog idea and creating outlines' },
+      { number: 3, name: 'Dual Article Planning', description: 'Select idea → outlines in parallel', parallel: true },
       { number: 4, name: 'Paragraph Details', description: 'Planning paragraph content' },
       { number: 5, name: 'Headlines & Copy', description: 'Generating title options' },
     ],
@@ -76,7 +76,7 @@ const PHASES = [
     description: 'Drafting and refining both blog articles',
     stages: [
       { number: 6, name: 'Dual Article Draft', description: 'Writing Episode Recap + Topic Article' },
-      { number: 7, name: 'Article Refinement', description: 'Polishing both articles' },
+      { number: 7, name: 'Article Refinement', description: 'Polishing both articles in parallel', parallel: true },
     ],
   },
   {
@@ -421,6 +421,9 @@ function ProcessingScreen() {
                         <div className={styles.stageContent}>
                           <div className={styles.stageHeader}>
                             <span className={styles.stageName}>{stage.name}</span>
+                            {stage.parallel && stageStatus !== 'pending' && (
+                              <span className={styles.stageParallelBadge}>parallel</span>
+                            )}
                             {stageStatus === 'completed' && stageData?.duration_seconds && (
                               <span className={styles.stageDuration}>
                                 {stageData.duration_seconds.toFixed(1)}s

@@ -1,12 +1,14 @@
 /**
  * ============================================================================
- * STAGE 3: BLOG OUTLINE - HIGH LEVEL
+ * STAGE 3: BLOG SELECTION & DUAL ARTICLE PLANNING
  * ============================================================================
- * Creates a high-level structure for a 750-word blog post based on
- * the episode analysis and extracted quotes.
+ * Selects the best blog idea from Stage 2 and creates outlines for
+ * TWO articles:
+ *   1. Episode Recap (promotes the podcast episode)
+ *   2. Topic Article (standalone piece based on selected blog idea)
  *
- * Input: Stage 1-2 outputs + evergreen content
- * Output: Blog structure with sections (JSON)
+ * Input: Stage 0-2 outputs + evergreen content
+ * Output: Selected blog idea + outlines for both articles
  * Model: GPT-5 mini (OpenAI)
  * ============================================================================
  */
@@ -20,27 +22,110 @@ import { ValidationError } from '../lib/errors.js';
 // FUNCTION SCHEMA
 // ============================================================================
 
-const BLOG_OUTLINE_SCHEMA = {
-  name: 'blog_outline_high_level',
-  description: 'High-level structure for a 750-word blog post',
+const DUAL_ARTICLE_PLANNING_SCHEMA = {
+  name: 'dual_article_planning',
+  description: 'Select best blog idea and create outlines for two articles',
   parameters: {
     type: 'object',
     properties: {
-      // NOTE: We intentionally do NOT include a narrative_summary here.
-      // Stage 1's episode_crux already captures the "big picture" message.
-      // Duplicating it here would be redundant and waste tokens.
-      // The blog-content-compiler uses episode_crux from Stage 1 directly.
-      post_structure: {
+      selected_blog_idea: {
         type: 'object',
+        description: 'The blog idea chosen from Stage 2',
         properties: {
-          hook: {
+          title: {
             type: 'string',
-            description: 'Opening approach/strategy (not the full text)',
+            description: 'The title of the chosen blog idea',
           },
-          hook_type: {
+          reasoning: {
             type: 'string',
-            enum: ['anecdote', 'bold_statement', 'named_problem', 'scenario', 'statistic'],
-            description: 'Type of hook being used',
+            description: 'Why this idea was selected over the others',
+          },
+          original_index: {
+            type: 'number',
+            description: 'Index of the idea in the Stage 2 blog_ideas array (0-5)',
+          },
+        },
+        required: ['title', 'reasoning'],
+      },
+      episode_recap_outline: {
+        type: 'object',
+        description: 'Outline for Article 1: Episode Recap (promotes the episode)',
+        properties: {
+          working_title: {
+            type: 'string',
+            description: 'Compelling title that promotes the episode',
+          },
+          hook: {
+            type: 'object',
+            properties: {
+              approach: {
+                type: 'string',
+                description: 'What tension, insight, or moment to lead with',
+              },
+              hook_type: {
+                type: 'string',
+                enum: ['tension', 'insight', 'story', 'question_answered', 'bold_claim'],
+              },
+            },
+            required: ['approach', 'hook_type'],
+          },
+          what_episode_covers: {
+            type: 'string',
+            description: 'Narrative overview of key themes to highlight',
+          },
+          key_insights: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                insight: { type: 'string' },
+                quote_to_use: { type: 'string', description: 'Quote from Stage 2 to integrate' },
+              },
+              required: ['insight'],
+            },
+            minItems: 2,
+            maxItems: 3,
+          },
+          why_listen: {
+            type: 'string',
+            description: 'What makes this episode worth the time',
+          },
+          cta_approach: {
+            type: 'string',
+            description: 'How to direct them to the episode',
+          },
+          estimated_word_count: {
+            type: 'number',
+            description: 'Target word count (aim for 750)',
+          },
+        },
+        required: ['working_title', 'hook', 'what_episode_covers', 'key_insights', 'why_listen', 'cta_approach'],
+      },
+      topic_article_outline: {
+        type: 'object',
+        description: 'Outline for Article 2: Topic Article (standalone piece)',
+        properties: {
+          working_title: {
+            type: 'string',
+            description: 'Compelling standalone title',
+          },
+          hook: {
+            type: 'object',
+            properties: {
+              approach: {
+                type: 'string',
+                description: 'Specific moment, problem, or insight to lead with',
+              },
+              hook_type: {
+                type: 'string',
+                enum: ['problem', 'counterintuitive', 'moment', 'statistic', 'bold_statement'],
+              },
+            },
+            required: ['approach', 'hook_type'],
+          },
+          context: {
+            type: 'string',
+            description: 'What to establish - stakes, misconceptions',
           },
           sections: {
             type: 'array',
@@ -49,20 +134,20 @@ const BLOG_OUTLINE_SCHEMA = {
               properties: {
                 section_title: {
                   type: 'string',
-                  description: 'Section heading',
+                  description: 'Specific, descriptive section heading',
                 },
                 purpose: {
                   type: 'string',
                   description: 'What this section accomplishes',
                 },
-                key_points: {
-                  type: 'array',
-                  items: { type: 'string' },
-                  description: '2-3 key points this section should cover',
-                },
                 word_count_target: {
                   type: 'number',
-                  description: 'Target word count for this section',
+                  description: 'Target words for this section',
+                },
+                quotes_or_tips_to_use: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'References to Stage 2 quotes/tips to integrate',
                 },
               },
               required: ['section_title', 'purpose', 'word_count_target'],
@@ -70,19 +155,19 @@ const BLOG_OUTLINE_SCHEMA = {
             minItems: 3,
             maxItems: 4,
           },
-          cta: {
+          takeaway: {
             type: 'string',
-            description: 'Closing/takeaway approach',
+            description: 'What to leave them with - specific action or thought',
+          },
+          estimated_word_count: {
+            type: 'number',
+            description: 'Target word count (aim for 750)',
           },
         },
-        required: ['hook', 'hook_type', 'sections', 'cta'],
-      },
-      estimated_total_words: {
-        type: 'number',
-        description: 'Sum of word count targets (should be ~750)',
+        required: ['working_title', 'hook', 'context', 'sections', 'takeaway'],
       },
     },
-    required: ['post_structure', 'estimated_total_words'],
+    required: ['selected_blog_idea', 'episode_recap_outline', 'topic_article_outline'],
   },
 };
 
@@ -91,64 +176,83 @@ const BLOG_OUTLINE_SCHEMA = {
 // ============================================================================
 
 function validateOutput(data, episodeId) {
-  logger.debug('🔍 Validating Stage 3 outline output', { episodeId });
+  logger.debug('Validating Stage 3 dual article planning output', { episodeId });
 
-  // NOTE: We no longer require narrative_summary here.
-  // Stage 1's episode_crux serves as the canonical "big picture" summary.
-  // This avoids duplicate summarization across stages.
-
-  if (!data.post_structure) {
-    logger.error('❌ Missing post_structure', { episodeId });
-    throw new ValidationError('post_structure', 'Missing post structure');
+  // Validate selected blog idea
+  if (!data.selected_blog_idea) {
+    throw new ValidationError('selected_blog_idea', 'Missing selected blog idea');
   }
 
-  const { post_structure, estimated_total_words } = data;
-
-  // Check hook
-  if (!post_structure.hook || post_structure.hook.length < 20) {
-    throw new ValidationError('hook', 'Hook description is too short');
+  if (!data.selected_blog_idea.title) {
+    throw new ValidationError('selected_blog_idea.title', 'Selected idea must have a title');
   }
 
-  // Check sections
-  const sections = post_structure.sections;
-  if (!sections || sections.length < 3 || sections.length > 4) {
-    throw new ValidationError('sections', 'Must have 3-4 sections');
+  if (!data.selected_blog_idea.reasoning) {
+    throw new ValidationError('selected_blog_idea.reasoning', 'Must explain why this idea was chosen');
   }
 
-  // Validate each section
+  // Validate episode recap outline
+  if (!data.episode_recap_outline) {
+    throw new ValidationError('episode_recap_outline', 'Missing episode recap outline');
+  }
+
+  const recapOutline = data.episode_recap_outline;
+  if (!recapOutline.working_title) {
+    throw new ValidationError('episode_recap_outline.working_title', 'Episode recap needs a title');
+  }
+
+  if (!recapOutline.hook?.approach) {
+    throw new ValidationError('episode_recap_outline.hook', 'Episode recap needs a hook');
+  }
+
+  if (!recapOutline.key_insights || recapOutline.key_insights.length < 2) {
+    throw new ValidationError('episode_recap_outline.key_insights', 'Need at least 2 key insights');
+  }
+
+  // Validate topic article outline
+  if (!data.topic_article_outline) {
+    throw new ValidationError('topic_article_outline', 'Missing topic article outline');
+  }
+
+  const topicOutline = data.topic_article_outline;
+  if (!topicOutline.working_title) {
+    throw new ValidationError('topic_article_outline.working_title', 'Topic article needs a title');
+  }
+
+  if (!topicOutline.hook?.approach) {
+    throw new ValidationError('topic_article_outline.hook', 'Topic article needs a hook');
+  }
+
+  if (!topicOutline.sections || topicOutline.sections.length < 3) {
+    throw new ValidationError('topic_article_outline.sections', 'Need at least 3 sections');
+  }
+
+  // Validate each section in topic article
   let totalWords = 0;
-  for (let i = 0; i < sections.length; i++) {
-    const s = sections[i];
+  for (let i = 0; i < topicOutline.sections.length; i++) {
+    const s = topicOutline.sections[i];
     if (!s.section_title) {
-      throw new ValidationError(`sections[${i}].section_title`, 'Title is required');
+      throw new ValidationError(`topic_article_outline.sections[${i}].section_title`, 'Section title required');
     }
     if (!s.purpose) {
-      throw new ValidationError(`sections[${i}].purpose`, 'Purpose is required');
+      throw new ValidationError(`topic_article_outline.sections[${i}].purpose`, 'Section purpose required');
     }
     if (!s.word_count_target || s.word_count_target < 50) {
-      throw new ValidationError(`sections[${i}].word_count_target`, 'Invalid word count');
+      throw new ValidationError(`topic_article_outline.sections[${i}].word_count_target`, 'Invalid word count');
     }
     totalWords += s.word_count_target;
   }
 
-  // Check total word count is reasonable
-  if (estimated_total_words < 600 || estimated_total_words > 900) {
-    logger.warn('⚠️ Word count estimate outside expected range', {
-      episodeId,
-      estimated: estimated_total_words,
-      calculated: totalWords,
-    });
+  if (!topicOutline.takeaway) {
+    throw new ValidationError('topic_article_outline.takeaway', 'Topic article needs a takeaway');
   }
 
-  // Check CTA
-  if (!post_structure.cta || post_structure.cta.length < 10) {
-    throw new ValidationError('cta', 'CTA description is too short');
-  }
-
-  logger.info('✅ Stage 3 outline validation passed', {
+  logger.info('Stage 3 dual article planning validation passed', {
     episodeId,
-    sectionCount: sections.length,
-    estimatedWords: estimated_total_words,
+    selectedIdeaTitle: data.selected_blog_idea.title,
+    recapTitle: recapOutline.working_title,
+    topicTitle: topicOutline.working_title,
+    topicSectionCount: topicOutline.sections.length,
   });
 
   return true;
@@ -158,10 +262,35 @@ function validateOutput(data, episodeId) {
 // MAIN ANALYZER FUNCTION
 // ============================================================================
 
-export async function outlineHighLevel(context) {
+/**
+ * Selects the best blog idea from Stage 2 and creates outlines for two articles:
+ *   1. Episode Recap - promotes the podcast episode
+ *   2. Topic Article - standalone piece based on selected idea
+ *
+ * @param {Object} context - Processing context
+ * @param {string} context.episodeId - Episode UUID
+ * @param {string} context.transcript - Transcript text
+ * @param {Object} context.evergreen - Evergreen content settings
+ * @param {Object} context.previousStages - Previous stage outputs (0-2)
+ * @returns {Promise<Object>} Result with dual article outlines
+ */
+export async function planDualArticles(context) {
   const { episodeId, transcript, evergreen, previousStages } = context;
 
-  logger.stageStart(3, 'Blog Outline - High Level', episodeId);
+  logger.stageStart(3, 'Blog Selection & Dual Article Planning', episodeId);
+
+  // Validate we have Stage 2 output with blog ideas
+  const stage2Output = previousStages[2];
+  if (!stage2Output?.blog_ideas || stage2Output.blog_ideas.length < 6) {
+    throw new ValidationError('previousStages[2]', 'Stage 2 must provide 6 blog ideas');
+  }
+
+  logger.info('Planning dual articles', {
+    episodeId,
+    blogIdeasCount: stage2Output.blog_ideas.length,
+    quotesCount: stage2Output.quotes?.length || 0,
+    tipsCount: stage2Output.tips?.length || 0,
+  });
 
   const prompt = await loadStagePrompt('stage-03-blog-outline', {
     transcript,
@@ -171,11 +300,11 @@ export async function outlineHighLevel(context) {
 
   const response = await callOpenAIWithFunctions(
     prompt,
-    [BLOG_OUTLINE_SCHEMA],
+    [DUAL_ARTICLE_PLANNING_SCHEMA],
     {
       episodeId,
       stageNumber: 3,
-      functionCall: 'blog_outline_high_level',
+      functionCall: 'dual_article_planning',
       temperature: 0.7,
     }
   );
@@ -188,7 +317,14 @@ export async function outlineHighLevel(context) {
 
   validateOutput(outputData, episodeId);
 
-  logger.stageComplete(3, 'Blog Outline - High Level', episodeId, response.durationMs, response.cost);
+  logger.stageComplete(3, 'Blog Selection & Dual Article Planning', episodeId, response.durationMs, response.cost);
+
+  logger.info('Dual article planning complete', {
+    episodeId,
+    selectedIdea: outputData.selected_blog_idea.title,
+    recapTitle: outputData.episode_recap_outline.working_title,
+    topicTitle: outputData.topic_article_outline.working_title,
+  });
 
   return {
     output_data: outputData,
@@ -199,4 +335,6 @@ export async function outlineHighLevel(context) {
   };
 }
 
-export default outlineHighLevel;
+// Export aliases for compatibility
+export { planDualArticles as outlineHighLevel };
+export default planDualArticles;

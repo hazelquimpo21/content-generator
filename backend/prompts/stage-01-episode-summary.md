@@ -20,8 +20,8 @@ Using the themes identified in Stage 0, create two distinct pieces:
 
 Write a comprehensive summary that:
 
-- Opens with the core tension or question the episode addresses
-- Weaves together the 4 themes from Stage 0 into a coherent narrative
+- Has a 6 point outline of key portions of the transcript
+Opens with the core tension or question the episode addresses
 - Includes specific examples, stories, or insights mentioned in the conversation
 - Captures the emotional beats and turning points
 - Explains not just WHAT was discussed but WHY it matters

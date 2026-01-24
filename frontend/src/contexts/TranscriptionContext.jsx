@@ -155,7 +155,17 @@ export function TranscriptionProvider({ children }) {
         // Update step based on progress
         const durationSeconds = activeTranscription?.durationSeconds || DEFAULT_EPISODE_DURATION_SECONDS;
         const estimatedTotal = Math.ceil((durationSeconds / 60) * 4) + 30;
-        updateStepBasedOnProgress(elapsed, estimatedTotal);
+
+        // Step transitions based on % of estimated time
+        // 0-15%: Downloading, 15-85%: Transcribing, 85-100%: Creating
+        const progressPercent = (elapsed / estimatedTotal) * 100;
+        if (progressPercent < 15) {
+          setCurrentStep(TRANSCRIPTION_STEP.DOWNLOADING);
+        } else if (progressPercent < 85) {
+          setCurrentStep(TRANSCRIPTION_STEP.TRANSCRIBING);
+        } else {
+          setCurrentStep(TRANSCRIPTION_STEP.CREATING);
+        }
       }, 1000);
 
       return () => {
@@ -164,7 +174,7 @@ export function TranscriptionProvider({ children }) {
         }
       };
     }
-  }, [state, activeTranscription, updateStepBasedOnProgress]);
+  }, [state, activeTranscription]);
 
   /**
    * Estimate total transcription time based on episode duration
@@ -209,26 +219,6 @@ export function TranscriptionProvider({ children }) {
     }
     return 'Almost done...';
   }, [elapsedSeconds, getEstimatedTotalSeconds]);
-
-  /**
-   * Simulate step progression for better UX feedback
-   * Steps progress naturally based on elapsed time and estimated duration
-   */
-  const updateStepBasedOnProgress = useCallback((elapsed, estimatedTotal) => {
-    // Step transitions based on % of estimated time
-    // 0-15%: Downloading
-    // 15-85%: Transcribing
-    // 85-100%: Creating episode
-    const progressPercent = (elapsed / estimatedTotal) * 100;
-
-    if (progressPercent < 15) {
-      setCurrentStep(TRANSCRIPTION_STEP.DOWNLOADING);
-    } else if (progressPercent < 85) {
-      setCurrentStep(TRANSCRIPTION_STEP.TRANSCRIBING);
-    } else {
-      setCurrentStep(TRANSCRIPTION_STEP.CREATING);
-    }
-  }, []);
 
   /**
    * Start a transcription job

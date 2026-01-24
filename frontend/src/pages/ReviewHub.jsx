@@ -1101,6 +1101,7 @@ function ReviewHub() {
         {activeTab === 'quotes' && (
           <QuotesTab
             stage={getStage(2)}
+            outlineStage={getStage(3)}
             onCopy={copyToClipboard}
             copied={copied}
             onUpdateQuote={handleUpdateQuote}
@@ -1475,11 +1476,14 @@ function AnalysisTab({ stage, contentBriefStage, onUpdateAnalysis, savingState }
  *    - why_it_resonates: Why this resonates with the audience
  *    - searchability: high/medium/low (optional)
  */
-function QuotesTab({ stage, onCopy, copied, onUpdateQuote, onDeleteQuote, savingState }) {
+function QuotesTab({ stage, outlineStage, onCopy, copied, onUpdateQuote, onDeleteQuote, savingState }) {
   const [activeSection, setActiveSection] = useState('quotes');
   const [editingIndex, setEditingIndex] = useState(null);
   const [usageFilter, setUsageFilter] = useState('all');
   const [expandedQA, setExpandedQA] = useState(null); // Track which Q&A is expanded
+
+  // Get selected blog idea from Stage 3 (to highlight in Blog Ideas section)
+  const selectedBlogIdea = outlineStage?.output_data?.selected_blog_idea;
 
   // ============================================================================
   // LOGGING - Stage 2 data structure (helps debug data flow issues)
@@ -1816,36 +1820,68 @@ function QuotesTab({ stage, onCopy, copied, onUpdateQuote, onDeleteQuote, saving
           <p className={styles.sectionDescription}>
             Potential blog post topics from this episode. One will be selected for the standalone Topic Article.
           </p>
+
+          {/* Selection reasoning - show why this idea was chosen */}
+          {selectedBlogIdea?.reasoning && (
+            <div className={styles.selectionReasoningBox}>
+              <div className={styles.selectionReasoningHeader}>
+                <CheckCircle size={16} />
+                <span>Selection Reasoning</span>
+              </div>
+              <p className={styles.selectionReasoningText}>{selectedBlogIdea.reasoning}</p>
+            </div>
+          )}
+
           <div className={styles.blogIdeasGrid}>
-            {blogIdeas.map((idea, i) => (
-              <Card key={i} padding="md" className={styles.blogIdeaCard}>
-                <div className={styles.blogIdeaHeader}>
-                  <span className={styles.blogIdeaNumber}>#{i + 1}</span>
-                  {idea.searchability && (
-                    <Badge
-                      variant={idea.searchability === 'high' ? 'success' : idea.searchability === 'medium' ? 'warning' : 'secondary'}
-                      className={styles.searchabilityBadge}
-                    >
-                      {idea.searchability} searchability
-                    </Badge>
-                  )}
-                </div>
-                <h4 className={styles.blogIdeaTitle}>{idea.title}</h4>
-                <p className={styles.blogIdeaAngle}>{idea.angle}</p>
-                <p className={styles.blogIdeaResonance}>
-                  <strong>Why it resonates:</strong> {idea.why_it_resonates}
-                </p>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  leftIcon={copied === `idea-${i}` ? Check : Copy}
-                  onClick={() => onCopy(`${idea.title}\n\n${idea.angle}`, `idea-${i}`)}
-                  className={styles.blogIdeaCopyBtn}
+            {blogIdeas.map((idea, i) => {
+              // Check if this idea was selected (match by title or index)
+              const isSelected = selectedBlogIdea && (
+                selectedBlogIdea.original_index === i ||
+                selectedBlogIdea.title === idea.title
+              );
+
+              return (
+                <Card
+                  key={i}
+                  padding="md"
+                  className={`${styles.blogIdeaCard} ${isSelected ? styles.blogIdeaCardSelected : ''}`}
                 >
-                  {copied === `idea-${i}` ? 'Copied!' : 'Copy'}
-                </Button>
-              </Card>
-            ))}
+                  {/* Selected badge */}
+                  {isSelected && (
+                    <div className={styles.selectedBadge}>
+                      <CheckCircle size={12} />
+                      <span>Selected for Topic Article</span>
+                    </div>
+                  )}
+
+                  <div className={styles.blogIdeaHeader}>
+                    <span className={styles.blogIdeaNumber}>#{i + 1}</span>
+                    {idea.searchability && (
+                      <Badge
+                        variant={idea.searchability === 'high' ? 'success' : idea.searchability === 'medium' ? 'warning' : 'secondary'}
+                        className={styles.searchabilityBadge}
+                      >
+                        {idea.searchability} searchability
+                      </Badge>
+                    )}
+                  </div>
+                  <h4 className={styles.blogIdeaTitle}>{idea.title}</h4>
+                  <p className={styles.blogIdeaAngle}>{idea.angle}</p>
+                  <p className={styles.blogIdeaResonance}>
+                    <strong>Why it resonates:</strong> {idea.why_it_resonates}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    leftIcon={copied === `idea-${i}` ? Check : Copy}
+                    onClick={() => onCopy(`${idea.title}\n\n${idea.angle}`, `idea-${i}`)}
+                    className={styles.blogIdeaCopyBtn}
+                  >
+                    {copied === `idea-${i}` ? 'Copied!' : 'Copy'}
+                  </Button>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}
@@ -2377,6 +2413,22 @@ function BlogTab({
                   >
                     Copy
                   </Button>
+                  {/* Copy Both Articles - only show for dual article format with both articles */}
+                  {isDualArticleFormat && episodeRecap && topicArticle && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={copied === 'blog-both' ? Check : Copy}
+                      onClick={() => onCopy(
+                        `EPISODE RECAP\n${'='.repeat(40)}\n\n${episodeRecap}\n\n\n` +
+                        `TOPIC ARTICLE\n${'='.repeat(40)}\n\n${topicArticle}`,
+                        'blog-both'
+                      )}
+                      title="Copy both articles to clipboard"
+                    >
+                      {copied === 'blog-both' ? 'Copied!' : 'Copy Both'}
+                    </Button>
+                  )}
                   <Button
                     variant={libraryItem ? 'secondary' : 'ghost'}
                     size="sm"

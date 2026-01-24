@@ -376,19 +376,10 @@ function Dashboard() {
           isComplete={hasReadyDraft}
           draftEpisode={draftEpisode}
           draftFeedEpisode={draftFeedEpisode}
-          onStartProcessing={async () => {
+          onStartProcessing={() => {
             if (draftEpisode) {
-              try {
-                await api.episodes.process(draftEpisode.id);
-                clearDraft();
-                navigate(`/episodes/${draftEpisode.id}/processing`);
-              } catch (err) {
-                showToast({
-                  message: 'Failed to start processing',
-                  description: err.message,
-                  variant: 'error',
-                });
-              }
+              // Navigate to submit form to fill out details before processing
+              navigate(`/episodes/${draftEpisode.id}/submit`);
             }
           }}
           onViewEpisode={() => {
@@ -513,19 +504,10 @@ function Dashboard() {
               isComplete={hasReadyDraft}
               draftEpisode={draftEpisode}
               draftFeedEpisode={draftFeedEpisode}
-              onStartProcessing={async () => {
+              onStartProcessing={() => {
                 if (draftEpisode) {
-                  try {
-                    await api.episodes.process(draftEpisode.id);
-                    clearDraft();
-                    navigate(`/episodes/${draftEpisode.id}/processing`);
-                  } catch (err) {
-                    showToast({
-                      message: 'Failed to start processing',
-                      description: err.message,
-                      variant: 'error',
-                    });
-                  }
+                  // Navigate to submit form to fill out details before processing
+                  navigate(`/episodes/${draftEpisode.id}/submit`);
                 }
               }}
               onDismiss={() => {
@@ -1087,7 +1069,7 @@ function FeedTranscriptionCard({
             Transcription complete
           </p>
           <p className={styles.draftHint}>
-            Ready to generate blog post, social content & more
+            Add details and generate content
           </p>
         </div>
 
@@ -1099,7 +1081,7 @@ function FeedTranscriptionCard({
             onClick={handleStartProcessing}
             disabled={isStarting}
           >
-            {isStarting ? 'Starting...' : 'Start Processing'}
+            {isStarting ? 'Loading...' : 'Continue'}
           </Button>
         </div>
       </Card>
@@ -1318,7 +1300,7 @@ function FeedTranscriptionBanner({
             <h3 className={styles.bannerTitle}>Episode Ready</h3>
             <p className={styles.bannerDescription}>
               <strong>{draftFeedEpisode?.title || draftEpisode.title}</strong> has been transcribed.
-              Start processing to generate content.
+              Add details and generate content.
             </p>
           </div>
           <div className={styles.bannerActions}>
@@ -1329,7 +1311,7 @@ function FeedTranscriptionBanner({
               onClick={handleStartProcessing}
               disabled={isStarting}
             >
-              {isStarting ? 'Starting...' : 'Start Processing'}
+              {isStarting ? 'Loading...' : 'Continue'}
             </Button>
             <button
               className={styles.bannerDismiss}

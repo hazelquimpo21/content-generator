@@ -194,22 +194,13 @@ function FeedEpisodesList({ feed, onBack, onEpisodeProcessed }) {
 
     showToast({
       message: 'Transcription complete!',
-      description: `"${episode.title}" is ready. Click to start generating content.`,
+      description: `"${episode.title}" is ready. Click to set up and generate content.`,
       variant: 'success',
-      action: async () => {
-        // Start processing and navigate
-        try {
-          await api.episodes.process(result.episode.id);
-          navigate(`/episodes/${result.episode.id}/processing`);
-        } catch (err) {
-          showToast({
-            message: 'Failed to start processing',
-            description: err.message,
-            variant: 'error',
-          });
-        }
+      action: () => {
+        // Navigate to submit form to fill out details before processing
+        navigate(`/episodes/${result.episode.id}/submit`);
       },
-      actionLabel: 'Start Processing',
+      actionLabel: 'Continue',
       duration: 15000, // Give user time to click
     });
 

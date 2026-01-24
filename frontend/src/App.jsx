@@ -39,6 +39,7 @@ import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import NewEpisode from './pages/NewEpisode';
 import ProcessingScreen from './pages/ProcessingScreen';
+import EpisodeSubmit from './pages/EpisodeSubmit';
 import ReviewHub from './pages/ReviewHub';
 import ContentLibrary from './pages/ContentLibrary';
 import ContentCalendar from './pages/ContentCalendar';
@@ -103,6 +104,9 @@ function App() {
 
                     {/* New Episode - upload and configure new episode */}
                     <Route path="episodes/new" element={<NewEpisode />} />
+
+                    {/* Episode Submit - set up episode before processing */}
+                    <Route path="episodes/:id/submit" element={<EpisodeSubmit />} />
 
                     {/* Processing - watch episode being processed */}
                     <Route path="episodes/:id/processing" element={<ProcessingScreen />} />

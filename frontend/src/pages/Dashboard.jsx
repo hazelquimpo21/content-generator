@@ -83,6 +83,8 @@ function Dashboard() {
     startTranscription,
     progress: feedTranscriptionProgress,
     timeRemaining: feedTimeRemaining,
+    currentStep,
+    stepInfo,
     hasReadyDraft,
     draftEpisode,
     draftFeedEpisode,
@@ -369,6 +371,8 @@ function Dashboard() {
           activeTranscription={activeTranscription}
           progress={feedTranscriptionProgress}
           timeRemaining={feedTimeRemaining}
+          currentStep={currentStep}
+          stepInfo={stepInfo}
           isComplete={hasReadyDraft}
           draftEpisode={draftEpisode}
           draftFeedEpisode={draftFeedEpisode}
@@ -497,6 +501,44 @@ function Dashboard() {
         </Card>
       ) : (
         <div className={styles.grid}>
+          {/* Feed transcription in progress or draft ready - shows at top */}
+          {(hasActiveTranscription || hasReadyDraft) && (
+            <FeedTranscriptionCard
+              isTranscribing={hasActiveTranscription}
+              activeTranscription={activeTranscription}
+              progress={feedTranscriptionProgress}
+              timeRemaining={feedTimeRemaining}
+              currentStep={currentStep}
+              stepInfo={stepInfo}
+              isComplete={hasReadyDraft}
+              draftEpisode={draftEpisode}
+              draftFeedEpisode={draftFeedEpisode}
+              onStartProcessing={async () => {
+                if (draftEpisode) {
+                  try {
+                    await api.episodes.process(draftEpisode.id);
+                    clearDraft();
+                    navigate(`/episodes/${draftEpisode.id}/processing`);
+                  } catch (err) {
+                    showToast({
+                      message: 'Failed to start processing',
+                      description: err.message,
+                      variant: 'error',
+                    });
+                  }
+                }
+              }}
+              onDismiss={() => {
+                clearDraft();
+                showToast({
+                  message: 'Draft dismissed',
+                  description: 'You can transcribe another episode when ready.',
+                  variant: 'info',
+                  duration: 4000,
+                });
+              }}
+            />
+          )}
           {/* Upload in progress or draft card - shows at top */}
           {(upload.isProcessing || upload.hasReadyTranscript) && (
             <UploadProgressCard
@@ -939,6 +981,194 @@ function UploadProgressCard({ state, file, progress, isComplete, transcriptionPr
 }
 
 /**
+ * Feed Transcription Card component
+ * Shows when transcribing from RSS feed - appears in the episodes grid.
+ * Displays step-by-step progress: Downloading → Transcribing → Ready
+ *
+ * @param {boolean} isTranscribing - Whether transcription is in progress
+ * @param {Object} activeTranscription - Active transcription data
+ * @param {number} progress - Transcription progress percentage
+ * @param {string} timeRemaining - Estimated time remaining
+ * @param {string} currentStep - Current transcription step
+ * @param {Object} stepInfo - Step metadata (label, description)
+ * @param {boolean} isComplete - Whether transcription is complete
+ * @param {Object} draftEpisode - The created draft episode
+ * @param {Object} draftFeedEpisode - The feed episode being transcribed
+ * @param {Function} onStartProcessing - Handler to start processing
+ * @param {Function} onDismiss - Handler to dismiss the card
+ */
+function FeedTranscriptionCard({
+  isTranscribing,
+  activeTranscription,
+  progress,
+  timeRemaining,
+  currentStep,
+  stepInfo,
+  isComplete,
+  draftEpisode,
+  draftFeedEpisode,
+  onStartProcessing,
+  onDismiss,
+}) {
+  const navigate = useNavigate();
+  const [isStarting, setIsStarting] = useState(false);
+
+  const handleStartProcessing = async (e) => {
+    e.stopPropagation();
+    setIsStarting(true);
+    try {
+      await onStartProcessing();
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  const handleDismiss = (e) => {
+    e.stopPropagation();
+    onDismiss?.();
+  };
+
+  const title = isComplete
+    ? (draftFeedEpisode?.title || draftEpisode?.title || 'Transcribed Episode')
+    : (activeTranscription?.title || 'Transcribing Episode');
+
+  // Render steps indicator
+  const steps = [
+    { key: 'downloading', label: 'Download' },
+    { key: 'transcribing', label: 'Transcribe' },
+    { key: 'creating', label: 'Create' },
+  ];
+
+  const getStepStatus = (stepKey) => {
+    if (isComplete) return 'complete';
+    if (!currentStep) return 'pending';
+
+    const stepOrder = ['downloading', 'transcribing', 'creating'];
+    const currentIndex = stepOrder.indexOf(currentStep);
+    const stepIndex = stepOrder.indexOf(stepKey);
+
+    if (stepIndex < currentIndex) return 'complete';
+    if (stepIndex === currentIndex) return 'active';
+    return 'pending';
+  };
+
+  if (isComplete && draftEpisode) {
+    return (
+      <Card
+        className={`${styles.episodeCard} ${styles.feedDraftCard}`}
+        hoverable
+        onClick={() => navigate(`/episodes/${draftEpisode.id}/review`)}
+        padding="md"
+      >
+        <div className={styles.cardHeader}>
+          <div className={styles.cardBadges}>
+            <Badge status="pending" dot>
+              Ready to Process
+            </Badge>
+            <span className={styles.sourceIndicator} title="From RSS feed">
+              <Rss size={12} />
+            </span>
+          </div>
+          <button
+            className={styles.dismissButton}
+            onClick={handleDismiss}
+            title="Dismiss draft"
+            aria-label="Dismiss draft"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <h3 className={styles.cardTitle}>{title}</h3>
+
+        <div className={styles.processingStatus}>
+          <p className={styles.draftMessage}>
+            <CheckCircle2 className={styles.statusIconSuccess} size={14} />
+            Transcription complete
+          </p>
+          <p className={styles.draftHint}>
+            Ready to generate blog post, social content & more
+          </p>
+        </div>
+
+        <div className={styles.cardFooter}>
+          <Button
+            variant="primary"
+            size="sm"
+            rightIcon={isStarting ? Loader2 : ArrowRight}
+            onClick={handleStartProcessing}
+            disabled={isStarting}
+          >
+            {isStarting ? 'Starting...' : 'Start Processing'}
+          </Button>
+        </div>
+      </Card>
+    );
+  }
+
+  // Transcribing state
+  return (
+    <Card
+      className={`${styles.episodeCard} ${styles.feedTranscribingCard}`}
+      padding="md"
+    >
+      <div className={styles.cardHeader}>
+        <div className={styles.cardBadges}>
+          <Badge status="processing" dot>
+            Transcribing
+          </Badge>
+          <span className={styles.sourceIndicator} title="From RSS feed">
+            <Rss size={12} />
+          </span>
+        </div>
+      </div>
+
+      <h3 className={styles.cardTitle}>{title}</h3>
+
+      {/* Step indicators */}
+      <div className={styles.stepsContainer}>
+        {steps.map((step, index) => {
+          const status = getStepStatus(step.key);
+          return (
+            <div key={step.key} className={styles.stepItem} data-status={status}>
+              <div className={styles.stepIndicator}>
+                {status === 'complete' ? (
+                  <CheckCircle2 size={16} />
+                ) : status === 'active' ? (
+                  <Loader2 size={16} className={styles.spinning} />
+                ) : (
+                  <Circle size={16} />
+                )}
+              </div>
+              <span className={styles.stepLabel}>{step.label}</span>
+              {index < steps.length - 1 && (
+                <div className={styles.stepConnector} data-status={status === 'complete' ? 'complete' : 'pending'} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className={styles.processingStatus}>
+        <div className={styles.progressWrapper}>
+          <div className={styles.progressBar}>
+            <div
+              className={styles.progressFill}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <span className={styles.progressText}>{progress}%</span>
+        </div>
+        <p className={styles.timeEstimate}>
+          <Loader2 className={styles.miniSpinner} size={12} />
+          {stepInfo?.description || timeRemaining || 'Processing...'}
+        </p>
+      </div>
+    </Card>
+  );
+}
+
+/**
  * PodcastQuickImport component
  * Shows recent episodes from connected podcast feed.
  * Allows quick transcription or viewing processed episodes.
@@ -1044,12 +1274,15 @@ function PodcastQuickImport({
 /**
  * FeedTranscriptionBanner component
  * Shows progress when transcribing from RSS feed, or draft state when complete.
+ * Now includes step-by-step progress info for better UX.
  */
 function FeedTranscriptionBanner({
   isTranscribing,
   activeTranscription,
   progress,
   timeRemaining,
+  currentStep,
+  stepInfo,
   isComplete,
   draftEpisode,
   draftFeedEpisode,
@@ -1057,9 +1290,20 @@ function FeedTranscriptionBanner({
   onViewEpisode,
   onDismiss,
 }) {
+  const [isStarting, setIsStarting] = useState(false);
+
   const handleDismiss = (e) => {
     e.stopPropagation();
     onDismiss?.();
+  };
+
+  const handleStartProcessing = async () => {
+    setIsStarting(true);
+    try {
+      await onStartProcessing();
+    } finally {
+      setIsStarting(false);
+    }
   };
 
   // Show "ready" state when transcription is complete
@@ -1081,10 +1325,11 @@ function FeedTranscriptionBanner({
             <Button
               variant="primary"
               size="sm"
-              rightIcon={ArrowRight}
-              onClick={onStartProcessing}
+              rightIcon={isStarting ? Loader2 : ArrowRight}
+              onClick={handleStartProcessing}
+              disabled={isStarting}
             >
-              Start Processing
+              {isStarting ? 'Starting...' : 'Start Processing'}
             </Button>
             <button
               className={styles.bannerDismiss}
@@ -1102,6 +1347,10 @@ function FeedTranscriptionBanner({
 
   // Show progress state when transcribing
   if (isTranscribing && activeTranscription) {
+    // Use step info for more descriptive labels
+    const stepLabel = stepInfo?.label || 'Transcribing';
+    const stepDescription = stepInfo?.description || timeRemaining || 'Processing...';
+
     return (
       <div className={styles.transcriptionBanner} data-status="processing">
         <div className={styles.bannerContent}>
@@ -1109,7 +1358,7 @@ function FeedTranscriptionBanner({
             <Rss size={24} />
           </div>
           <div className={styles.bannerInfo}>
-            <h3 className={styles.bannerTitle}>Transcribing from Feed</h3>
+            <h3 className={styles.bannerTitle}>{stepLabel}</h3>
             <p className={styles.bannerDescription}>
               {activeTranscription.title}
             </p>

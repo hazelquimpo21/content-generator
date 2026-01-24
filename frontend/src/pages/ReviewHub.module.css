@@ -1006,6 +1006,190 @@
 }
 
 /* ============================================================================
+ * Q&A SECTION - "They Ask, You Answer"
+ * ============================================================================ */
+
+.qaSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.sectionDescription {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+  margin: 0 0 var(--space-2) 0;
+  line-height: var(--leading-relaxed);
+}
+
+.qaCard {
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.qaCard:hover {
+  border-color: var(--color-primary);
+}
+
+.qaQuestion {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+.qaIcon {
+  font-weight: var(--font-bold);
+  color: var(--color-primary);
+  font-size: var(--text-lg);
+  flex-shrink: 0;
+  width: 24px;
+}
+
+.qaQuestionText {
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  color: var(--color-text-primary);
+  line-height: var(--leading-relaxed);
+  flex: 1;
+}
+
+.qaAnswer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  margin-top: var(--space-3);
+  background-color: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--color-primary);
+}
+
+.qaAnswerText {
+  font-size: var(--text-base);
+  color: var(--color-text-primary);
+  line-height: var(--leading-relaxed);
+  margin: 0;
+  padding-left: calc(24px + var(--space-3));
+}
+
+.qaActions {
+  display: flex;
+  gap: var(--space-2);
+  padding-left: calc(24px + var(--space-3));
+  flex-wrap: wrap;
+}
+
+/* ============================================================================
+ * BLOG IDEAS SECTION
+ * ============================================================================ */
+
+.blogIdeasSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.blogIdeasGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-4);
+}
+
+.blogIdeaCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  transition: all var(--transition-fast);
+}
+
+.blogIdeaCard:hover {
+  border-color: var(--color-primary);
+}
+
+.blogIdeaHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.blogIdeaNumber {
+  font-size: var(--text-sm);
+  font-weight: var(--font-bold);
+  color: var(--color-primary);
+}
+
+.searchabilityBadge {
+  font-size: var(--text-xs);
+  text-transform: capitalize;
+}
+
+.blogIdeaTitle {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+  line-height: var(--leading-snug);
+  margin: 0;
+}
+
+.blogIdeaAngle {
+  font-size: var(--text-base);
+  color: var(--color-text-secondary);
+  line-height: var(--leading-relaxed);
+  margin: 0;
+  font-style: italic;
+}
+
+.blogIdeaResonance {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  line-height: var(--leading-relaxed);
+  margin: 0;
+}
+
+.blogIdeaResonance strong {
+  color: var(--color-text-primary);
+}
+
+.blogIdeaCopyBtn {
+  margin-top: auto;
+  align-self: flex-start;
+}
+
+/* ============================================================================
+ * DUAL ARTICLE TOGGLE
+ * ============================================================================ */
+
+.articleToggle {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.selectedIdeaBox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-bg-secondary);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-bg-accent);
+}
+
+.selectedIdeaLabel {
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+}
+
+.selectedIdeaTitle {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--color-primary);
+}
+
+/* ============================================================================
  * RESPONSIVE UPDATES
  * ============================================================================ */
 
@@ -1019,7 +1203,20 @@
     grid-template-columns: 1fr;
   }
 
+  .blogIdeasGrid {
+    grid-template-columns: 1fr;
+  }
+
   .themeBody {
     padding-left: var(--space-4);
+  }
+
+  .qaActions {
+    flex-direction: column;
+  }
+
+  .selectedIdeaBox {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }

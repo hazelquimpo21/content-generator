@@ -425,15 +425,37 @@ const blogIdeas = stage2Output?.blog_ideas || [];
 
 ## Testing Checklist
 
+### Backend Pipeline
 - [ ] Stage 2 returns qa_pairs (exactly 5) and blog_ideas (exactly 6)
-- [ ] Stage 3 selects a blog idea and creates both outlines
-- [ ] Stage 6 generates two separate articles
-- [ ] Frontend displays both articles with tab/toggle navigation
-- [ ] Frontend displays Q&A section
-- [ ] Frontend displays blog ideas with selected indicator
-- [ ] Copy buttons work for both articles
-- [ ] Old episodes still display correctly (backward compatible)
-- [ ] Word counts accurate for both articles
+- [ ] Stage 2 quotes and tips still work as expected
+- [ ] Stage 3 selects a blog idea from the 6 options
+- [ ] Stage 3 creates episode_recap_outline with working_title, hook, key_insights
+- [ ] Stage 3 creates topic_article_outline with working_title, hook, sections
+- [ ] Stage 6 generates two separate articles (episode_recap and topic_article)
+- [ ] Stage 6 output_text is an object, not a string
+- [ ] Word counts accurate for both articles (~750 each)
+
+### Frontend Display
+- [ ] QuotesTab shows all 4 pills: Quotes, Tips, Q&A, Blog Ideas
+- [ ] Q&A section shows expandable question/answer pairs
+- [ ] Q&A copy buttons work (copy question, answer, or both)
+- [ ] Blog Ideas show searchability badges (high/medium/low)
+- [ ] BlogTab shows article toggle for dual-article format
+- [ ] Article toggle shows word counts
+- [ ] Episode Recap article displays correctly
+- [ ] Topic Article displays with "Based on:" context
+- [ ] Copy/Save/Schedule buttons work for active article
+
+### Backward Compatibility
+- [ ] Old episodes with string output_text display as single blog post
+- [ ] Old episodes without qa_pairs don't break QuotesTab
+- [ ] Old episodes without blog_ideas don't break QuotesTab
+- [ ] Old episodes with legacy outline format still display
+
+### Error Handling
+- [ ] Missing stage data shows helpful EmptyState message
+- [ ] Console logs help debug data flow issues
+- [ ] No crashes when switching between old and new episodes
 
 ---
 
@@ -450,8 +472,14 @@ const blogIdeas = stage2Output?.blog_ideas || [];
 - `backend/analyzers/stage-03-outline-high-level.js` - Blog selection and dual outlines
 - `backend/analyzers/stage-06-draft-blog-post.js` - Generates two articles
 
-### Frontend (TODO)
-- `frontend/src/pages/ReviewHub.jsx` - Add tabs for new content
-- `frontend/src/components/BlogTab.jsx` - Dual article display
-- `frontend/src/components/QASection.jsx` - New component
-- `frontend/src/components/BlogIdeasSection.jsx` - New component
+### Frontend (IMPLEMENTED)
+- `frontend/src/pages/ReviewHub.jsx` - Updated with:
+  - QuotesTab now displays Q&A pairs and Blog Ideas via pill navigation
+  - BlogTab now supports dual article toggle (Episode Recap / Topic Article)
+  - Backward compatibility for legacy single-article episodes
+  - Proper error handling and logging throughout
+- `frontend/src/pages/ReviewHub.module.css` - New styles for:
+  - Q&A section with expandable answers
+  - Blog Ideas grid with searchability badges
+  - Article toggle for dual blog display
+  - Responsive layouts for mobile

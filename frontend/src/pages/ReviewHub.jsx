@@ -1448,32 +1448,56 @@ function AnalysisTab({ stage, contentBriefStage, onUpdateAnalysis, savingState }
 }
 
 /**
- * QuotesTab - Displays extracted quotes AND actionable tips from Stage 2
+ * ============================================================================
+ * QuotesTab - Displays content building blocks from Stage 2
+ * ============================================================================
  *
- * Quote structure (from Stage 2):
- * - text: The verbatim quote (required)
- * - speaker: Who said it (required)
- * - context: Why it's significant (optional)
- * - usage: Suggested use - headline/pullquote/social/key_point (optional)
+ * Stage 2 now extracts FOUR types of content:
  *
- * Tip structure (from Stage 2):
- * - tip: The actionable advice (required)
- * - context: When/why to use it (required)
- * - category: mindset/communication/practice/boundary/self-care/relationship/professional
+ * 1. Quotes (8-12):
+ *    - text: The verbatim quote (required)
+ *    - speaker: Who said it (required)
+ *    - context: Why it's significant (optional)
+ *    - usage: Suggested use - headline/pullquote/social/key_point (optional)
+ *
+ * 2. Tips (3-5):
+ *    - tip: The actionable advice (required)
+ *    - context: When/why to use it (required)
+ *    - category: mindset/communication/practice/boundary/self-care/relationship/professional
+ *
+ * 3. Q&A Pairs (5) - NEW:
+ *    - question: A question the audience might ask
+ *    - answer: Thorough answer based on episode content (3-5 sentences)
+ *
+ * 4. Blog Ideas (6) - NEW:
+ *    - title: Working title for the blog post
+ *    - angle: One sentence explaining the hook
+ *    - why_it_resonates: Why this resonates with the audience
+ *    - searchability: high/medium/low (optional)
  */
 function QuotesTab({ stage, onCopy, copied, onUpdateQuote, onDeleteQuote, savingState }) {
   const [activeSection, setActiveSection] = useState('quotes');
   const [editingIndex, setEditingIndex] = useState(null);
   const [usageFilter, setUsageFilter] = useState('all');
+  const [expandedQA, setExpandedQA] = useState(null); // Track which Q&A is expanded
 
+  // ============================================================================
+  // LOGGING - Stage 2 data structure (helps debug data flow issues)
+  // ============================================================================
   console.log('[QuotesTab] Stage 2 data:', {
     hasStage: !!stage,
     stageStatus: stage?.status,
     hasOutputData: !!stage?.output_data,
+    // Existing fields
     hasQuotes: !!stage?.output_data?.quotes,
-    quoteCount: stage?.output_data?.quotes?.length,
+    quoteCount: stage?.output_data?.quotes?.length || 0,
     hasTips: !!stage?.output_data?.tips,
-    tipCount: stage?.output_data?.tips?.length,
+    tipCount: stage?.output_data?.tips?.length || 0,
+    // NEW fields (may not exist in older episodes)
+    hasQAPairs: !!stage?.output_data?.qa_pairs,
+    qaCount: stage?.output_data?.qa_pairs?.length || 0,
+    hasBlogIdeas: !!stage?.output_data?.blog_ideas,
+    blogIdeasCount: stage?.output_data?.blog_ideas?.length || 0,
   });
 
   if (!stage) {
@@ -1488,8 +1512,14 @@ function QuotesTab({ stage, onCopy, copied, onUpdateQuote, onDeleteQuote, saving
     return <EmptyState message="No quotes extracted" details="Stage 2 completed but has no quotes data." />;
   }
 
+  // ============================================================================
+  // Extract all content building blocks from Stage 2
+  // Note: qa_pairs and blog_ideas may not exist in older episodes (backward compatible)
+  // ============================================================================
   const quotes = stage.output_data.quotes || [];
   const tips = stage.output_data.tips || [];
+  const qaPairs = stage.output_data.qa_pairs || [];
+  const blogIdeas = stage.output_data.blog_ideas || [];
 
   // Field definitions for quote editing
   const quoteFields = [
@@ -1531,8 +1561,11 @@ function QuotesTab({ stage, onCopy, copied, onUpdateQuote, onDeleteQuote, saving
 
   return (
     <div className={styles.tabContent}>
-      {/* Section toggle - Quotes vs Tips */}
+      {/* ========================================================================
+       * SECTION TOGGLE - Pill navigation for Quotes, Tips, Q&A, Blog Ideas
+       * ======================================================================== */}
       <div className={styles.pillNav}>
+        {/* Quotes pill */}
         <button
           className={`${styles.pill} ${activeSection === 'quotes' ? styles.pillActive : ''}`}
           onClick={() => setActiveSection('quotes')}
@@ -1541,6 +1574,8 @@ function QuotesTab({ stage, onCopy, copied, onUpdateQuote, onDeleteQuote, saving
           <span>Quotes</span>
           <span className={styles.pillCount}>{quotes.length}</span>
         </button>
+
+        {/* Tips pill - only show if tips exist */}
         {tips.length > 0 && (
           <button
             className={`${styles.pill} ${activeSection === 'tips' ? styles.pillActive : ''}`}
@@ -1549,6 +1584,30 @@ function QuotesTab({ stage, onCopy, copied, onUpdateQuote, onDeleteQuote, saving
             <Lightbulb size={14} />
             <span>Actionable Tips</span>
             <span className={styles.pillCount}>{tips.length}</span>
+          </button>
+        )}
+
+        {/* Q&A pill - NEW (only show if qa_pairs exist - backward compatible) */}
+        {qaPairs.length > 0 && (
+          <button
+            className={`${styles.pill} ${activeSection === 'qa' ? styles.pillActive : ''}`}
+            onClick={() => setActiveSection('qa')}
+          >
+            <AlertCircle size={14} />
+            <span>They Ask, You Answer</span>
+            <span className={styles.pillCount}>{qaPairs.length}</span>
+          </button>
+        )}
+
+        {/* Blog Ideas pill - NEW (only show if blog_ideas exist - backward compatible) */}
+        {blogIdeas.length > 0 && (
+          <button
+            className={`${styles.pill} ${activeSection === 'blogIdeas' ? styles.pillActive : ''}`}
+            onClick={() => setActiveSection('blogIdeas')}
+          >
+            <FileText size={14} />
+            <span>Blog Ideas</span>
+            <span className={styles.pillCount}>{blogIdeas.length}</span>
           </button>
         )}
       </div>
@@ -1686,6 +1745,108 @@ function QuotesTab({ stage, onCopy, copied, onUpdateQuote, onDeleteQuote, saving
               </Button>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* ========================================================================
+       * Q&A SECTION - "They Ask, You Answer" pairs
+       * Questions the audience is already asking, with answers from the episode
+       * ======================================================================== */}
+      {activeSection === 'qa' && qaPairs.length > 0 && (
+        <div className={styles.qaSection}>
+          <p className={styles.sectionDescription}>
+            Common questions your audience is asking. Use these for FAQ pages, social content, or blog topics.
+          </p>
+          {qaPairs.map((qa, i) => (
+            <Card key={i} padding="md" className={styles.qaCard}>
+              <div
+                className={styles.qaQuestion}
+                onClick={() => setExpandedQA(expandedQA === i ? null : i)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && setExpandedQA(expandedQA === i ? null : i)}
+              >
+                <span className={styles.qaIcon}>Q:</span>
+                <span className={styles.qaQuestionText}>{qa.question}</span>
+                {expandedQA === i ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+              </div>
+              {expandedQA === i && (
+                <div className={styles.qaAnswer}>
+                  <span className={styles.qaIcon}>A:</span>
+                  <p className={styles.qaAnswerText}>{qa.answer}</p>
+                  <div className={styles.qaActions}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={copied === `qa-q-${i}` ? Check : Copy}
+                      onClick={() => onCopy(qa.question, `qa-q-${i}`)}
+                    >
+                      {copied === `qa-q-${i}` ? 'Copied!' : 'Copy Question'}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={copied === `qa-a-${i}` ? Check : Copy}
+                      onClick={() => onCopy(qa.answer, `qa-a-${i}`)}
+                    >
+                      {copied === `qa-a-${i}` ? 'Copied!' : 'Copy Answer'}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      leftIcon={copied === `qa-both-${i}` ? Check : Copy}
+                      onClick={() => onCopy(`Q: ${qa.question}\n\nA: ${qa.answer}`, `qa-both-${i}`)}
+                    >
+                      {copied === `qa-both-${i}` ? 'Copied!' : 'Copy Both'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* ========================================================================
+       * BLOG IDEAS SECTION - Potential article topics from the episode
+       * One of these will be selected for the Topic Article in Stage 3
+       * ======================================================================== */}
+      {activeSection === 'blogIdeas' && blogIdeas.length > 0 && (
+        <div className={styles.blogIdeasSection}>
+          <p className={styles.sectionDescription}>
+            Potential blog post topics from this episode. One will be selected for the standalone Topic Article.
+          </p>
+          <div className={styles.blogIdeasGrid}>
+            {blogIdeas.map((idea, i) => (
+              <Card key={i} padding="md" className={styles.blogIdeaCard}>
+                <div className={styles.blogIdeaHeader}>
+                  <span className={styles.blogIdeaNumber}>#{i + 1}</span>
+                  {idea.searchability && (
+                    <Badge
+                      variant={idea.searchability === 'high' ? 'success' : idea.searchability === 'medium' ? 'warning' : 'secondary'}
+                      className={styles.searchabilityBadge}
+                    >
+                      {idea.searchability} searchability
+                    </Badge>
+                  )}
+                </div>
+                <h4 className={styles.blogIdeaTitle}>{idea.title}</h4>
+                <p className={styles.blogIdeaAngle}>{idea.angle}</p>
+                <p className={styles.blogIdeaResonance}>
+                  <strong>Why it resonates:</strong> {idea.why_it_resonates}
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={copied === `idea-${i}` ? Check : Copy}
+                  onClick={() => onCopy(`${idea.title}\n\n${idea.angle}`, `idea-${i}`)}
+                  className={styles.blogIdeaCopyBtn}
+                >
+                  {copied === `idea-${i}` ? 'Copied!' : 'Copy'}
+                </Button>
+              </Card>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -1903,14 +2064,29 @@ function TitlesTab({ stage, onCopy, copied, onUpdateTitleItem, onDeleteTitleItem
 }
 
 /**
- * BlogTab component with inline editing support
- * Allows viewing, copying, and editing the blog post content
+ * ============================================================================
+ * BlogTab - Displays blog content with support for DUAL articles
+ * ============================================================================
+ *
+ * NEW: Stage 6 now produces TWO blog posts:
+ *   1. Episode Recap - promotes the podcast episode
+ *   2. Topic Article - standalone piece based on selected blog idea
+ *
+ * Stage 6 output_text structure (NEW):
+ *   {
+ *     episode_recap: "# Full markdown...",
+ *     topic_article: "# Full markdown..."
+ *   }
+ *
+ * BACKWARD COMPATIBILITY:
+ *   Old episodes have output_text as a plain string (single article).
+ *   We detect this and show the legacy single-article view.
  *
  * Stage Data Used:
- * - outlineStage (Stage 3): High-level blog outline with sections
- * - paragraphsStage (Stage 4): Detailed paragraph-level content
- * - draftStage (Stage 6): Initial blog post draft
- * - editedStage (Stage 7): Refined final blog post
+ * - outlineStage (Stage 3): Now includes dual article outlines + selected blog idea
+ * - paragraphsStage (Stage 4): Detailed paragraph-level content (may be deprecated)
+ * - draftStage (Stage 6): Dual blog post drafts (or single string for legacy)
+ * - editedStage (Stage 7): Refined final blog posts
  */
 function BlogTab({
   outlineStage,
@@ -1938,33 +2114,195 @@ function BlogTab({
   getLibraryStatus,
   getCalendarStatus,
 }) {
-  const blogPost = editedStage?.output_text || draftStage?.output_text;
-  // Use editedStage if available, otherwise fall back to draftStage for saving
+  // Track which article is active (for dual-article view)
+  const [activeArticle, setActiveArticle] = useState('episode_recap');
+
+  // ============================================================================
+  // DETECT OUTPUT FORMAT (dual articles vs legacy single article)
+  // ============================================================================
+  const rawOutputText = editedStage?.output_text || draftStage?.output_text;
+
+  // Check if this is the new dual-article format (object) or legacy (string)
+  const isDualArticleFormat = rawOutputText && typeof rawOutputText === 'object';
+
+  // Extract articles based on format
+  let episodeRecap = null;
+  let topicArticle = null;
+  let legacyBlogPost = null;
+
+  if (isDualArticleFormat) {
+    episodeRecap = rawOutputText.episode_recap || null;
+    topicArticle = rawOutputText.topic_article || null;
+    console.log('[BlogTab] Dual article format detected:', {
+      hasEpisodeRecap: !!episodeRecap,
+      hasTopicArticle: !!topicArticle,
+      episodeRecapLength: episodeRecap?.length || 0,
+      topicArticleLength: topicArticle?.length || 0,
+    });
+  } else if (typeof rawOutputText === 'string') {
+    legacyBlogPost = rawOutputText;
+    console.log('[BlogTab] Legacy single article format detected:', {
+      blogPostLength: legacyBlogPost?.length || 0,
+    });
+  }
+
+  // Get the currently active blog post content
+  const getCurrentBlogPost = () => {
+    if (isDualArticleFormat) {
+      return activeArticle === 'episode_recap' ? episodeRecap : topicArticle;
+    }
+    return legacyBlogPost;
+  };
+
+  const blogPost = getCurrentBlogPost();
   const stageToUpdate = editedStage || draftStage;
 
-  // Check library and calendar status for the blog post
+  // Get selected blog idea from Stage 3 (for context display)
+  const selectedBlogIdea = outlineStage?.output_data?.selected_blog_idea;
+
+  // Check library and calendar status for the current blog post
   const libraryItem = blogPost ? getLibraryStatus('blog', null, blogPost) : null;
   const calendarItem = blogPost ? getCalendarStatus('blog', null, blogPost) : null;
 
   // Prepare data for save/schedule
   const blogData = blogPost ? {
-    title: episodeTitle,
+    title: episodeTitle + (isDualArticleFormat && activeArticle === 'topic_article' ? ' - Topic' : ''),
     content_type: 'blog',
-    platform: null,
+    platform: isDualArticleFormat ? activeArticle : null,
     content: blogPost,
     source_stage: 7,
   } : null;
 
   // Format scheduled date for display
   const formatScheduledDate = (dateStr) => {
-    const date = new Date(dateStr + 'T00:00:00');
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    try {
+      const date = new Date(dateStr + 'T00:00:00');
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    } catch (err) {
+      console.error('[BlogTab] Error formatting date:', err);
+      return dateStr;
+    }
   };
+
+  // ============================================================================
+  // ERROR HANDLING - Check for missing or invalid stage data
+  // ============================================================================
+  if (!draftStage && !editedStage) {
+    console.log('[BlogTab] No blog draft or edited stage available');
+    return (
+      <EmptyState
+        message="No blog content generated"
+        details="Stage 6 (Blog Draft) has not completed yet. Check the processing status."
+      />
+    );
+  }
+
+  if (!rawOutputText) {
+    console.warn('[BlogTab] Stage exists but has no output_text', {
+      draftStageStatus: draftStage?.status,
+      editedStageStatus: editedStage?.status,
+    });
+    return (
+      <EmptyState
+        message="Blog content is empty"
+        details="The blog generation stage completed but produced no content."
+      />
+    );
+  }
 
   return (
     <div className={styles.tabContent}>
-      {/* Blog outline section - from Stage 3 */}
-      {outlineStage?.output_data?.outline && (
+      {/* ========================================================================
+       * DUAL ARTICLE TOGGLE - Only show for new dual-article format
+       * ======================================================================== */}
+      {isDualArticleFormat && (episodeRecap || topicArticle) && (
+        <div className={styles.articleToggle}>
+          <div className={styles.pillNav}>
+            <button
+              className={`${styles.pill} ${activeArticle === 'episode_recap' ? styles.pillActive : ''}`}
+              onClick={() => setActiveArticle('episode_recap')}
+              disabled={!episodeRecap}
+            >
+              <AlignLeft size={14} />
+              <span>Episode Recap</span>
+              {episodeRecap && (
+                <span className={styles.pillCount}>
+                  {Math.round(episodeRecap.split(/\s+/).length)} words
+                </span>
+              )}
+            </button>
+            <button
+              className={`${styles.pill} ${activeArticle === 'topic_article' ? styles.pillActive : ''}`}
+              onClick={() => setActiveArticle('topic_article')}
+              disabled={!topicArticle}
+            >
+              <FileText size={14} />
+              <span>Topic Article</span>
+              {topicArticle && (
+                <span className={styles.pillCount}>
+                  {Math.round(topicArticle.split(/\s+/).length)} words
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* Selected blog idea context (for Topic Article) */}
+          {activeArticle === 'topic_article' && selectedBlogIdea && (
+            <div className={styles.selectedIdeaBox}>
+              <span className={styles.selectedIdeaLabel}>Based on selected idea:</span>
+              <span className={styles.selectedIdeaTitle}>{selectedBlogIdea.title}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================================
+       * BLOG OUTLINE - From Stage 3
+       * Shows dual outlines for new format, or legacy outline for old format
+       * ======================================================================== */}
+      {/* NEW: Dual article outlines */}
+      {isDualArticleFormat && outlineStage?.output_data?.episode_recap_outline && activeArticle === 'episode_recap' && (
+        <Card title="Episode Recap Outline" subtitle="Structure for the episode recap article" padding="lg">
+          <div className={styles.outline}>
+            <p><strong>Working Title:</strong> {outlineStage.output_data.episode_recap_outline.working_title}</p>
+            <p><strong>Hook:</strong> {outlineStage.output_data.episode_recap_outline.hook?.approach}</p>
+            {outlineStage.output_data.episode_recap_outline.key_insights && (
+              <div className={styles.outlineSection}>
+                <h4>Key Insights</h4>
+                <ul>
+                  {outlineStage.output_data.episode_recap_outline.key_insights.map((insight, i) => (
+                    <li key={i}>{insight.insight}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {isDualArticleFormat && outlineStage?.output_data?.topic_article_outline && activeArticle === 'topic_article' && (
+        <Card title="Topic Article Outline" subtitle="Structure for the standalone topic article" padding="lg">
+          <div className={styles.outline}>
+            <p><strong>Working Title:</strong> {outlineStage.output_data.topic_article_outline.working_title}</p>
+            <p><strong>Hook:</strong> {outlineStage.output_data.topic_article_outline.hook?.approach}</p>
+            {outlineStage.output_data.topic_article_outline.sections && (
+              <div className={styles.outlineSection}>
+                <h4>Sections</h4>
+                <ul>
+                  {outlineStage.output_data.topic_article_outline.sections.map((section, i) => (
+                    <li key={i}>
+                      <strong>{section.section_title}</strong>: {section.purpose}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* LEGACY: Single outline for old format */}
+      {!isDualArticleFormat && outlineStage?.output_data?.outline && (
         <Card title="Outline" subtitle="High-level blog structure (Stage 3)" padding="lg">
           <div className={styles.outline}>
             {outlineStage.output_data.outline.map((section, i) => (
@@ -1981,10 +2319,20 @@ function BlogTab({
         </Card>
       )}
 
-      {/* Blog post section with editing capability */}
+      {/* ========================================================================
+       * BLOG POST CONTENT - Main article display with editing
+       * Shows current article based on activeArticle toggle
+       * ======================================================================== */}
       {blogPost && (
         <Card
-          title="Blog Post"
+          title={isDualArticleFormat
+            ? (activeArticle === 'episode_recap' ? 'Episode Recap Article' : 'Topic Article')
+            : 'Blog Post'
+          }
+          subtitle={isDualArticleFormat && activeArticle === 'topic_article' && selectedBlogIdea
+            ? `Based on: ${selectedBlogIdea.title}`
+            : undefined
+          }
           headerAction={
             <div className={styles.cardActions}>
               {isEditing ? (

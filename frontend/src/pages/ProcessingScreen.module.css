@@ -314,6 +314,16 @@
   color: var(--color-text-tertiary);
 }
 
+.stageParallelBadge {
+  font-size: 10px;
+  font-weight: var(--font-medium);
+  padding: 1px 5px;
+  background-color: var(--color-info-light);
+  color: var(--color-info);
+  border-radius: var(--radius-full);
+  margin-left: var(--space-1);
+}
+
 .stageDescription {
   font-size: var(--text-xs);
   color: var(--color-text-secondary);

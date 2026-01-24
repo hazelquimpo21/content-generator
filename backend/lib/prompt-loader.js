@@ -173,6 +173,67 @@ export async function loadQualityFrameworks() {
 }
 
 // ============================================================================
+// DUAL ARTICLE HELPERS
+// ============================================================================
+
+/**
+ * Formats blog output for prompt substitution.
+ * Handles dual-article format (object) and legacy format (string).
+ *
+ * @param {Object|string|null} output - Stage 6/7 output_text
+ * @returns {string} Formatted output for prompt
+ */
+function formatBlogOutput(output) {
+  if (!output) return '';
+
+  // Legacy format: string
+  if (typeof output === 'string') {
+    return output;
+  }
+
+  // Dual-article format: object with episode_recap and/or topic_article
+  if (typeof output === 'object') {
+    const parts = [];
+
+    if (output.episode_recap) {
+      parts.push(`## EPISODE RECAP\n\n${output.episode_recap}`);
+    }
+
+    if (output.topic_article) {
+      parts.push(`## TOPIC ARTICLE\n\n${output.topic_article}`);
+    }
+
+    return parts.join('\n\n---\n\n');
+  }
+
+  return '';
+}
+
+/**
+ * Extracts a specific article from dual-article format.
+ * Returns empty string for legacy format or missing articles.
+ *
+ * @param {Object|string|null} output - Stage 6/7 output_text
+ * @param {'episode_recap'|'topic_article'} articleType - Which article to get
+ * @returns {string} Article content or empty string
+ */
+function getArticleContent(output, articleType) {
+  if (!output) return '';
+
+  // Legacy format: return full content only if requesting episode_recap (primary)
+  if (typeof output === 'string') {
+    return articleType === 'episode_recap' ? output : '';
+  }
+
+  // Dual-article format
+  if (typeof output === 'object') {
+    return output[articleType] || '';
+  }
+
+  return '';
+}
+
+// ============================================================================
 // MAIN PROMPT LOADING
 // ============================================================================
 
@@ -354,11 +415,28 @@ export async function loadStagePrompt(stageName, context) {
     // Stage 2 quotes in standardized format: { text, speaker, context, usage }
     // This is the CANONICAL source of quotes for all downstream stages
     STAGE_2_QUOTES: JSON.stringify(previousStages[2]?.quotes || [], null, 2),
+
+    // Stage 2 Q&A pairs (new): { question, answer }
+    STAGE_2_QA_PAIRS: JSON.stringify(previousStages[2]?.qa_pairs || [], null, 2),
+
+    // Stage 2 blog ideas (new): { title, angle, why_it_resonates, searchability }
+    STAGE_2_BLOG_IDEAS: JSON.stringify(previousStages[2]?.blog_ideas || [], null, 2),
+
     STAGE_3_OUTPUT: JSON.stringify(previousStages[3] || {}, null, 2),
     STAGE_4_OUTPUT: JSON.stringify(previousStages[4] || {}, null, 2),
     STAGE_5_OUTPUT: JSON.stringify(previousStages[5] || {}, null, 2),
-    STAGE_6_OUTPUT: previousStages[6]?.output_text || '',
-    STAGE_7_OUTPUT: previousStages[7]?.output_text || '',
+
+    // Stage 6 output: dual-article format { episode_recap, topic_article } or legacy string
+    // STAGE_6_OUTPUT provides the full content (serialized if object)
+    STAGE_6_OUTPUT: formatBlogOutput(previousStages[6]?.output_text),
+    // Individual article access for dual-article format
+    STAGE_6_EPISODE_RECAP: getArticleContent(previousStages[6]?.output_text, 'episode_recap'),
+    STAGE_6_TOPIC_ARTICLE: getArticleContent(previousStages[6]?.output_text, 'topic_article'),
+
+    // Stage 7 output: dual-article format { episode_recap, topic_article } or legacy string
+    STAGE_7_OUTPUT: formatBlogOutput(previousStages[7]?.output_text),
+    STAGE_7_EPISODE_RECAP: getArticleContent(previousStages[7]?.output_text, 'episode_recap'),
+    STAGE_7_TOPIC_ARTICLE: getArticleContent(previousStages[7]?.output_text, 'topic_article'),
 
     // Episode crux (from stage 1, or stage 0 if available)
     EPISODE_CRUX: previousStages[1]?.episode_crux || stage0Output?.episode_metadata?.core_message || '',

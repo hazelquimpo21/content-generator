@@ -1,10 +1,11 @@
 /**
  * ============================================================================
- * STAGE 2: QUOTES AND TIPS EXTRACTION
+ * STAGE 2: CONTENT BUILDING BLOCKS EXTRACTION
  * ============================================================================
- * Extracts key verbatim quotes AND actionable tips from the podcast transcript.
+ * Extracts quotes, tips, "They Ask You Answer" Q&As, and blog post ideas
+ * from the podcast transcript.
  *
- * This is the SOLE source of quotes and tips for the entire pipeline.
+ * This is the SOLE source of these building blocks for the entire pipeline.
  * All downstream stages (blog, social, email) reference these.
  *
  * Architecture Notes:
@@ -14,30 +15,22 @@
  * - This ensures quotes are verbatim and accurate
  * - Uses tool_use for guaranteed structured JSON output
  *
- * Quote Structure:
- * ----------------
+ * Output Structure:
+ * -----------------
  * {
- *   text: "The actual quote...",           // Verbatim quote (required)
- *   speaker: "Dr. Jane Smith",             // Who said it (required)
- *   context: "Why this matters...",        // Significance (optional)
- *   usage: "headline|pullquote|social|key_point"  // Suggested use (optional)
- * }
- *
- * Tip Structure:
- * --------------
- * {
- *   tip: "Specific actionable advice",     // The tip itself (required)
- *   context: "When/why to use this",       // Context (required)
- *   category: "mindset|communication|..."  // Category (required)
+ *   quotes: [...],        // 8-12 verbatim quotes
+ *   tips: [...],          // 3-5 actionable tips
+ *   qa_pairs: [...],      // 5 "They Ask, You Answer" Q&As
+ *   blog_ideas: [...]     // 6 blog post topic ideas
  * }
  *
  * Input: Original transcript + Stage 0 themes for context
- * Output: Array of 8-12 quotes + 3-5 tips
  * Model: Claude Haiku (fast, accurate extraction)
  * ============================================================================
  */
 
 import { callClaudeStructured } from '../lib/api-client-anthropic.js';
+import { loadStagePrompt } from '../lib/prompt-loader.js';
 import logger from '../lib/logger.js';
 import { ValidationError } from '../lib/errors.js';
 
@@ -57,13 +50,16 @@ const MIN_TIPS = 3;
 const MAX_TIPS = 7;
 const TARGET_TIPS = 5;
 
+const REQUIRED_QA_COUNT = 5;
+const REQUIRED_BLOG_IDEAS = 6;
+
 // ============================================================================
 // JSON SCHEMA FOR TOOL_USE
 // ============================================================================
 
-const QUOTES_AND_TIPS_SCHEMA = {
+const CONTENT_BUILDING_BLOCKS_SCHEMA = {
   type: 'object',
-  description: 'Extracted quotes and tips from the podcast transcript',
+  description: 'Extracted content building blocks from the podcast transcript',
   properties: {
     quotes: {
       type: 'array',
@@ -86,7 +82,7 @@ const QUOTES_AND_TIPS_SCHEMA = {
           usage: {
             type: 'string',
             enum: ['headline', 'pullquote', 'social', 'key_point'],
-            description: 'Best suggested use for this quote: headline (attention-grabbing), pullquote (article highlight), social (social media post), key_point (illustrates main argument)',
+            description: 'Best suggested use for this quote',
           },
         },
         required: ['text', 'speaker'],
@@ -111,7 +107,7 @@ const QUOTES_AND_TIPS_SCHEMA = {
           category: {
             type: 'string',
             enum: ['mindset', 'communication', 'practice', 'boundary', 'self-care', 'relationship', 'professional'],
-            description: 'Category of tip: mindset (thinking shifts), communication (what to say), practice (habits/routines), boundary (limits/rules), self-care (wellness), relationship (interpersonal), professional (work/career)',
+            description: 'Category of tip',
           },
         },
         required: ['tip', 'context', 'category'],
@@ -119,12 +115,61 @@ const QUOTES_AND_TIPS_SCHEMA = {
       minItems: MIN_TIPS,
       maxItems: MAX_TIPS,
     },
+    qa_pairs: {
+      type: 'array',
+      description: 'Exactly 5 "They Ask, You Answer" question and answer pairs',
+      items: {
+        type: 'object',
+        properties: {
+          question: {
+            type: 'string',
+            description: 'A question the target audience might ask before they know the host exists. Written naturally.',
+          },
+          answer: {
+            type: 'string',
+            description: 'A thorough answer (3-5 sentences) based on what was discussed in the episode.',
+          },
+        },
+        required: ['question', 'answer'],
+      },
+      minItems: REQUIRED_QA_COUNT,
+      maxItems: REQUIRED_QA_COUNT,
+    },
+    blog_ideas: {
+      type: 'array',
+      description: 'Exactly 6 blog post topic ideas pulled from the episode content',
+      items: {
+        type: 'object',
+        properties: {
+          title: {
+            type: 'string',
+            description: 'A compelling working title for the blog post',
+          },
+          angle: {
+            type: 'string',
+            description: 'One sentence explaining the hook or angle',
+          },
+          why_it_resonates: {
+            type: 'string',
+            description: 'Why this topic would resonate with the target audience',
+          },
+          searchability: {
+            type: 'string',
+            enum: ['high', 'medium', 'low'],
+            description: 'How likely someone is to Google this topic',
+          },
+        },
+        required: ['title', 'angle', 'why_it_resonates'],
+      },
+      minItems: REQUIRED_BLOG_IDEAS,
+      maxItems: REQUIRED_BLOG_IDEAS,
+    },
     extraction_notes: {
       type: 'string',
-      description: 'Brief notes about the extraction (e.g., "Found strong quotes on attachment theory, fewer practical tips on communication")',
+      description: 'Brief notes about the extraction process',
     },
   },
-  required: ['quotes', 'tips'],
+  required: ['quotes', 'tips', 'qa_pairs', 'blog_ideas'],
 };
 
 // ============================================================================
@@ -132,17 +177,21 @@ const QUOTES_AND_TIPS_SCHEMA = {
 // ============================================================================
 
 /**
- * Validates the extracted quotes and tips output.
+ * Validates the extracted content building blocks output.
  * @param {Object} data - The extracted data from Claude
  * @throws {ValidationError} If validation fails
  * @returns {boolean} True if validation passes
  */
 function validateOutput(data) {
-  logger.debug('Validating quotes and tips extraction output', {
+  logger.debug('Validating content building blocks output', {
     hasQuotes: !!data.quotes,
     quoteCount: data.quotes?.length || 0,
     hasTips: !!data.tips,
     tipCount: data.tips?.length || 0,
+    hasQAPairs: !!data.qa_pairs,
+    qaCount: data.qa_pairs?.length || 0,
+    hasBlogIdeas: !!data.blog_ideas,
+    blogIdeasCount: data.blog_ideas?.length || 0,
   });
 
   // Validate quotes array
@@ -200,10 +249,57 @@ function validateOutput(data) {
     if (!tip.category) {
       throw new ValidationError(`tips[${i}].category`, 'Tip category is required');
     }
+  }
 
-    // Check tip specificity (should be actionable, not vague)
-    if (tip.tip.length < 20) {
-      logger.warn('Tip may be too vague', { tipIndex: i, tip: tip.tip });
+  // Validate Q&A pairs
+  if (!data.qa_pairs || !Array.isArray(data.qa_pairs)) {
+    throw new ValidationError('qa_pairs', 'Missing or invalid qa_pairs array');
+  }
+
+  if (data.qa_pairs.length !== REQUIRED_QA_COUNT) {
+    throw new ValidationError('qa_pairs', `Need exactly ${REQUIRED_QA_COUNT} Q&A pairs, got ${data.qa_pairs.length}`);
+  }
+
+  for (let i = 0; i < data.qa_pairs.length; i++) {
+    const qa = data.qa_pairs[i];
+
+    if (!qa.question || typeof qa.question !== 'string') {
+      throw new ValidationError(`qa_pairs[${i}].question`, 'Question is required');
+    }
+
+    if (!qa.answer || typeof qa.answer !== 'string') {
+      throw new ValidationError(`qa_pairs[${i}].answer`, 'Answer is required');
+    }
+
+    // Check answer length (should be 3-5 sentences, roughly 50-150 words)
+    const answerWords = qa.answer.split(/\s+/).length;
+    if (answerWords < 30) {
+      logger.warn('Q&A answer may be too short', { qaIndex: i, answerWords });
+    }
+  }
+
+  // Validate blog ideas
+  if (!data.blog_ideas || !Array.isArray(data.blog_ideas)) {
+    throw new ValidationError('blog_ideas', 'Missing or invalid blog_ideas array');
+  }
+
+  if (data.blog_ideas.length !== REQUIRED_BLOG_IDEAS) {
+    throw new ValidationError('blog_ideas', `Need exactly ${REQUIRED_BLOG_IDEAS} blog ideas, got ${data.blog_ideas.length}`);
+  }
+
+  for (let i = 0; i < data.blog_ideas.length; i++) {
+    const idea = data.blog_ideas[i];
+
+    if (!idea.title || typeof idea.title !== 'string') {
+      throw new ValidationError(`blog_ideas[${i}].title`, 'Blog idea title is required');
+    }
+
+    if (!idea.angle || typeof idea.angle !== 'string') {
+      throw new ValidationError(`blog_ideas[${i}].angle`, 'Blog idea angle is required');
+    }
+
+    if (!idea.why_it_resonates || typeof idea.why_it_resonates !== 'string') {
+      throw new ValidationError(`blog_ideas[${i}].why_it_resonates`, 'Blog idea resonance explanation is required');
     }
   }
 
@@ -218,11 +314,19 @@ function validateOutput(data) {
     return acc;
   }, {});
 
-  logger.info('Quotes and tips extraction validation passed', {
+  const searchabilityCounts = data.blog_ideas.reduce((acc, b) => {
+    if (b.searchability) acc[b.searchability] = (acc[b.searchability] || 0) + 1;
+    return acc;
+  }, {});
+
+  logger.info('Content building blocks validation passed', {
     totalQuotes: data.quotes.length,
     totalTips: data.tips.length,
+    totalQAPairs: data.qa_pairs.length,
+    totalBlogIdeas: data.blog_ideas.length,
     quoteUsageDistribution: quoteUsageCounts,
     tipCategoryDistribution: tipCategoryCounts,
+    blogIdeaSearchability: searchabilityCounts,
   });
 
   return true;
@@ -233,9 +337,13 @@ function validateOutput(data) {
 // ============================================================================
 
 /**
- * Extracts key verbatim quotes and actionable tips from the podcast transcript.
+ * Extracts content building blocks from the podcast transcript:
+ * - Verbatim quotes
+ * - Actionable tips
+ * - "They Ask, You Answer" Q&A pairs
+ * - Blog post ideas
  *
- * This function is the CANONICAL source of quotes and tips for the entire pipeline.
+ * This function is the CANONICAL source of these elements for the entire pipeline.
  * Downstream stages (blog, social, email) all reference these.
  *
  * @param {Object} context - Processing context
@@ -245,12 +353,12 @@ function validateOutput(data) {
  * @param {Object} context.previousStages - Previous stage outputs (uses Stage 0 for context)
  * @param {Object} context.speakerData - Speaker diarization data (if available)
  * @param {string} context.transcriptFormat - 'plain' or 'speaker_labeled'
- * @returns {Promise<Object>} Result with output_data containing quotes and tips arrays
+ * @returns {Promise<Object>} Result with output_data containing all building blocks
  */
-export async function extractQuotesAndTips(context) {
+export async function extractContentBuildingBlocks(context) {
   const { episodeId, transcript, evergreen, previousStages = {}, speakerData, transcriptFormat } = context;
 
-  logger.stageStart(2, 'Quotes & Tips Extraction', episodeId);
+  logger.stageStart(2, 'Content Building Blocks Extraction', episodeId);
 
   // Always use ORIGINAL transcript for accurate extraction
   const originalTranscript = transcript;
@@ -267,12 +375,13 @@ export async function extractQuotesAndTips(context) {
     transcriptFormat: transcriptFormat || 'plain',
   });
 
-  // Get context from Stage 0 content brief (themes guide extraction)
+  // Get context from Stage 0 content brief
   const stage0Output = previousStages[0] || {};
   const themes = stage0Output.themes || [];
   const episodeName = stage0Output.episode_name || '';
   const hostName = stage0Output.host_name || evergreen?.therapist_profile?.name || 'Host';
   const guestName = stage0Output.guest_name || null;
+  const targetAudience = evergreen?.podcast_info?.target_audience || 'general audience';
 
   // Build speaker context if diarization data is available
   let speakerContext = '';
@@ -285,27 +394,23 @@ export async function extractQuotesAndTips(context) {
     speakerContext = `\n\n## Known Speakers
 ${speakerList}
 
-IMPORTANT: Use these exact speaker names when attributing quotes. The transcript includes speaker labels - use them for accurate attribution.`;
+IMPORTANT: Use these exact speaker names when attributing quotes.`;
   }
 
-  // Build the system prompt
-  const systemPrompt = `You are an expert content curator specializing in extracting two things from podcast transcripts:
+  // Build the system prompt (conversational, human tone)
+  const systemPrompt = `You're a content strategist who knows how to mine a conversation for gold. You pull out the moments worth quoting, the advice worth sharing, the questions the audience is secretly asking, and the article ideas hiding in the conversation.
 
-1. **Powerful verbatim quotes** - word-for-word statements that could be headlines, pull quotes, or social posts
-2. **Actionable tips** - specific, practical advice listeners can immediately apply
+You're extracting four types of content:
 
-CRITICAL REQUIREMENTS FOR QUOTES:
-- Quotes MUST be EXACT verbatim text from the transcript
-- Do NOT paraphrase, clean up grammar, or modify quotes
-- Include quotes from different parts of the conversation
-- Mix of insightful, practical, and emotionally resonant quotes
-${hasSpeakerData ? '- Use the provided speaker labels for accurate attribution' : '- Identify speakers based on context clues in the transcript'}
+1. QUOTES (8-12): Verbatim, word-for-word moments someone would screenshot and share. Must be exact quotes from the transcript.
 
-CRITICAL REQUIREMENTS FOR TIPS:
-- Tips must be SPECIFIC and ACTIONABLE (not vague platitudes)
-- Good: "When you notice yourself spiraling, name five things you can see"
-- Bad: "Practice mindfulness" (too vague)
-- Tips should be things someone can do TODAY`;
+2. TIPS (3-5): Specific, actionable advice people can use TODAY. Not vague platitudes like "practice self-care" but real actions.
+
+3. "THEY ASK, YOU ANSWER" Q&As (exactly 5): Questions the target audience is already asking before they know this host exists. Things they'd type into Google or ask a friend. Each answer should be thorough (3-5 sentences) based on episode content.
+
+4. BLOG POST IDEAS (exactly 6): Standalone article topics from this episode's content. Mix of specific/narrow topics and broader explorations. At least 2 should be highly searchable.
+
+Write like a human. Be specific. Avoid AI clichés.`;
 
   const userPrompt = `## Episode Context
 
@@ -313,27 +418,14 @@ CRITICAL REQUIREMENTS FOR TIPS:
 **Host:** ${hostName}
 ${guestName ? `**Guest:** ${guestName}` : ''}
 ${episodeName ? `**Episode:** ${episodeName}` : ''}
+**Target Audience:** ${targetAudience}
 
 ${themes.length > 0 ? `**Key Themes:**
 ${themes.map(t => `- ${t.name}: ${t.what_was_discussed}`).join('\n')}` : ''}${speakerContext}
 
 ## Instructions
 
-### Extract ${TARGET_QUOTES} Quotes
-Focus on:
-1. **Headline-worthy statements** - Bold, attention-grabbing insights
-2. **Practical wisdom** - Actionable advice listeners can apply
-3. **Emotional resonance** - Moments that will connect with readers
-4. **Expert insights** - Credible, authoritative statements
-5. **Unique perspectives** - Fresh takes not commonly heard
-${hasSpeakerData ? '\nUse the exact speaker names from the speaker list above for quote attribution.' : ''}
-
-### Extract ${TARGET_TIPS} Tips
-Focus on:
-1. **Immediate applicability** - Can do this today
-2. **Specificity** - Exact action, not vague advice
-3. **Memorability** - Easy to recall and share
-4. **Variety** - Different categories (mindset, communication, practice, etc.)
+Extract the four types of content described above. For quotes, they must be EXACT verbatim text. For Q&As, write questions as people would naturally ask them. For blog ideas, think about what would actually get clicks and help people.
 
 ## Full Transcript
 
@@ -343,13 +435,13 @@ ${originalTranscript}`;
   const response = await callClaudeStructured(userPrompt, {
     model: EXTRACTION_MODEL,
     system: systemPrompt,
-    toolName: 'extract_quotes_and_tips',
-    toolDescription: 'Extract verbatim quotes and actionable tips from the podcast transcript',
-    inputSchema: QUOTES_AND_TIPS_SCHEMA,
+    toolName: 'extract_content_building_blocks',
+    toolDescription: 'Extract quotes, tips, Q&As, and blog ideas from the podcast transcript',
+    inputSchema: CONTENT_BUILDING_BLOCKS_SCHEMA,
     episodeId,
     stageNumber: 2,
-    temperature: 0.3, // Low temperature for accurate extraction
-    maxTokens: 6000,
+    temperature: 0.4, // Slightly higher for creative ideation
+    maxTokens: 8000,
   });
 
   // Extract the structured output
@@ -359,18 +451,22 @@ ${originalTranscript}`;
     episodeId,
     quoteCount: outputData.quotes?.length || 0,
     tipCount: outputData.tips?.length || 0,
+    qaCount: outputData.qa_pairs?.length || 0,
+    blogIdeasCount: outputData.blog_ideas?.length || 0,
   });
 
   // Validate the output
   validateOutput(outputData);
 
   // Log success
-  logger.stageComplete(2, 'Quotes & Tips Extraction', episodeId, response.durationMs, response.cost);
+  logger.stageComplete(2, 'Content Building Blocks Extraction', episodeId, response.durationMs, response.cost);
 
-  logger.info('Quotes and tips extraction complete', {
+  logger.info('Content building blocks extraction complete', {
     episodeId,
     totalQuotes: outputData.quotes.length,
     totalTips: outputData.tips.length,
+    totalQAPairs: outputData.qa_pairs.length,
+    totalBlogIdeas: outputData.blog_ideas.length,
     model: EXTRACTION_MODEL,
     cost: response.cost,
   });
@@ -385,5 +481,6 @@ ${originalTranscript}`;
 }
 
 // Export with aliases for compatibility
-export { extractQuotesAndTips as extractQuotes };
-export default extractQuotesAndTips;
+export { extractContentBuildingBlocks as extractQuotesAndTips };
+export { extractContentBuildingBlocks as extractQuotes };
+export default extractContentBuildingBlocks;

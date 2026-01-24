@@ -2,13 +2,37 @@
 
 ## Prompt Engineering Principles
 
-All prompts in this system follow a consistent 6-section architecture:
+### Updated Architecture (January 2026)
+
+Prompts have been refactored to be **more human and conversational**. Key changes:
+
+1. **No JSON in prompts** - Prompts are written in natural language. Function calling schemas handle structured parsing in a second step.
+2. **Conversational tone** - Prompts read like instructions from a colleague, not a technical spec.
+3. **Dual Blog Output** - The pipeline now produces TWO blog articles per episode:
+   - **Episode Recap** - Promotes/summarizes the episode
+   - **Topic Article** - Standalone piece based on a selected topic
+
+### New Content Building Blocks (Stage 2)
+
+Stage 2 now extracts four types of content:
+- **Quotes** (8-12) - Verbatim quotes for headlines, pullquotes, social
+- **Tips** (3-5) - Actionable advice listeners can use immediately
+- **"They Ask, You Answer" Q&As** (5) - Questions the audience is already asking
+- **Blog Post Ideas** (6) - Potential standalone article topics
+
+### Stage 3: Blog Selection & Planning
+
+Stage 3 now:
+- Evaluates 6 blog ideas and selects the BEST one
+- Creates outlines for TWO articles (Episode Recap + Topic Article)
+
+### Original 6-Section Architecture (Still Valid for Reference)
 
 1. **Role & Context** - Who the AI is, what it's analyzing
 2. **Source Material** - What's being processed
 3. **Quality Framework** - What "good" looks like
 4. **Prohibited Content** - Never-use lists
-5. **Output Schema** - Exact JSON structure
+5. **Output Schema** - Now handled by function calling (not in prompts)
 6. **Self-Verification** - Checklist before returning
 
 ---

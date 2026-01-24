@@ -1,18 +1,13 @@
 /**
  * ============================================================================
- * STAGE 6: BLOG POST DRAFT GENERATION
+ * STAGE 6: DUAL BLOG POST DRAFT GENERATION
  * ============================================================================
- * Writes the complete ~750 word blog post based on all previous stage outputs.
+ * Writes TWO complete ~750 word blog posts based on the Stage 3 outlines:
+ *   1. Episode Recap - promotes the podcast episode
+ *   2. Topic Article - standalone piece based on selected blog idea
  *
- * Key Changes (fixing "blog post too short" error):
- * -------------------------------------------------
- * 1. Uses BlogContentCompiler to assemble rich context from previous stages
- * 2. Enhanced validation with detailed diagnostics
- * 3. Retry logic for short content
- * 4. Better error messages for debugging
- *
- * Input: All previous stage outputs (1-5)
- * Output: Complete blog post in Markdown (text)
+ * Input: All previous stage outputs (0-3)
+ * Output: Two complete blog posts in Markdown (text)
  * Model: GPT-5 mini (OpenAI)
  * ============================================================================
  */
@@ -27,7 +22,7 @@ import { ValidationError } from '../lib/errors.js';
 // CONFIGURATION
 // ============================================================================
 
-// Word count requirements
+// Word count requirements per article
 const MIN_WORD_COUNT = 600;
 const IDEAL_WORD_COUNT = 750;
 const MAX_WORD_COUNT = 1000;
@@ -49,7 +44,6 @@ const MAX_SHORT_CONTENT_RETRIES = 1;
  */
 function countWords(text) {
   if (!text) return 0;
-  // Split on whitespace and filter empty strings
   return text.trim().split(/\s+/).filter(word => word.length > 0).length;
 }
 
@@ -61,15 +55,11 @@ function countWords(text) {
 function analyzeStructure(content) {
   const lines = content.split('\n');
 
-  // Count headings
   const h1Count = lines.filter(l => l.match(/^# [^#]/)).length;
   const h2Count = lines.filter(l => l.match(/^## [^#]/)).length;
-
-  // Count blockquotes
   const blockquoteLines = lines.filter(l => l.trim().startsWith('>'));
   const blockquoteCount = blockquoteLines.length;
 
-  // Count paragraphs (non-empty, non-heading, non-blockquote lines)
   const paragraphCount = lines.filter(l => {
     const trimmed = l.trim();
     return trimmed.length > 0
@@ -124,126 +114,112 @@ function detectAIPatterns(content) {
   return detected;
 }
 
+/**
+ * Parses the AI response to extract both articles
+ * @param {string} fullResponse - Complete response with both articles
+ * @returns {Object} Object with episode_recap and topic_article
+ */
+function parseArticles(fullResponse) {
+  // Look for the article separators
+  const article1Marker = /^#\s*ARTICLE\s*1[:\s]*EPISODE\s*RECAP/im;
+  const article2Marker = /^#\s*ARTICLE\s*2[:\s]*TOPIC\s*ARTICLE/im;
+
+  let episodeRecap = '';
+  let topicArticle = '';
+
+  // Find positions
+  const match1 = fullResponse.match(article1Marker);
+  const match2 = fullResponse.match(article2Marker);
+
+  if (match1 && match2) {
+    const pos1 = fullResponse.indexOf(match1[0]);
+    const pos2 = fullResponse.indexOf(match2[0]);
+
+    // Extract articles
+    if (pos1 < pos2) {
+      episodeRecap = fullResponse.substring(pos1 + match1[0].length, pos2).trim();
+      topicArticle = fullResponse.substring(pos2 + match2[0].length).trim();
+    } else {
+      topicArticle = fullResponse.substring(pos2 + match2[0].length, pos1).trim();
+      episodeRecap = fullResponse.substring(pos1 + match1[0].length).trim();
+    }
+  } else {
+    // Fallback: try to split by horizontal rule or double newlines
+    const parts = fullResponse.split(/\n---+\n|\n\n#{1,2}\s*Article\s*2/i);
+    if (parts.length >= 2) {
+      episodeRecap = parts[0].trim();
+      topicArticle = parts.slice(1).join('\n').trim();
+    } else {
+      // Last resort: treat entire response as one article
+      logger.warn('Could not parse two articles from response, treating as single article');
+      episodeRecap = fullResponse.trim();
+      topicArticle = '';
+    }
+  }
+
+  // Clean up any remaining article markers from the content
+  episodeRecap = episodeRecap.replace(/^#\s*ARTICLE\s*1[:\s]*EPISODE\s*RECAP\s*/im, '').trim();
+  topicArticle = topicArticle.replace(/^#\s*ARTICLE\s*2[:\s]*TOPIC\s*ARTICLE\s*/im, '').trim();
+
+  return { episodeRecap, topicArticle };
+}
+
 // ============================================================================
-// MAIN VALIDATION FUNCTION
+// ARTICLE VALIDATION
 // ============================================================================
 
 /**
- * Validates the generated blog post with detailed diagnostics
- *
- * @param {string} content - Generated markdown content
+ * Validates a single article
+ * @param {string} content - Article content
+ * @param {string} articleType - 'episode_recap' or 'topic_article'
  * @param {string} episodeId - Episode ID for logging
- * @returns {Object} Validation result with details
- * @throws {ValidationError} If validation fails
+ * @returns {Object} Validation result
  */
-function validateOutput(content, episodeId) {
-  logger.debug('🔍 Validating blog post output', { episodeId });
-
-  // Basic content check
-  if (!content || content.trim().length === 0) {
-    logger.error('❌ Validation failed: Empty content', { episodeId });
-    throw new ValidationError('content', 'Blog post is empty');
-  }
-
+function validateArticle(content, articleType, episodeId) {
   const trimmedContent = content.trim();
   const charCount = trimmedContent.length;
   const wordCount = countWords(trimmedContent);
   const structure = analyzeStructure(trimmedContent);
   const aiPatterns = detectAIPatterns(trimmedContent);
 
-  // Log detailed diagnostics
-  logger.info('📊 Blog post validation diagnostics', {
+  logger.info(`Validating ${articleType}`, {
     episodeId,
     charCount,
     wordCount,
     targetWords: IDEAL_WORD_COUNT,
-    minWords: MIN_WORD_COUNT,
     structure: {
       h1Count: structure.h1Count,
       h2Count: structure.h2Count,
       blockquoteCount: structure.blockquoteCount,
-      paragraphCount: structure.paragraphCount,
     },
-    aiPatternsDetected: aiPatterns.length,
-    aiPatterns: aiPatterns.length > 0 ? aiPatterns : undefined,
   });
 
-  // Character length check (backup)
+  // Validation checks
+  const issues = [];
+
   if (charCount < MIN_CHAR_LENGTH) {
-    logger.error('❌ Validation failed: Content too short (char count)', {
-      episodeId,
-      charCount,
-      minRequired: MIN_CHAR_LENGTH,
-      contentPreview: trimmedContent.substring(0, 200),
-    });
-    throw new ValidationError(
-      'content',
-      `Blog post is too short (${charCount} characters, need at least ${MIN_CHAR_LENGTH})`
-    );
+    issues.push(`Too short: ${charCount} chars (need ${MIN_CHAR_LENGTH})`);
   }
 
-  // Word count check
   if (wordCount < MIN_WORD_COUNT) {
-    logger.error('❌ Validation failed: Content too short (word count)', {
-      episodeId,
-      wordCount,
-      minRequired: MIN_WORD_COUNT,
-      targetWords: IDEAL_WORD_COUNT,
-      shortBy: MIN_WORD_COUNT - wordCount,
-    });
-    throw new ValidationError(
-      'content',
-      `Blog post too short: ${wordCount} words (minimum ${MIN_WORD_COUNT}, target ${IDEAL_WORD_COUNT})`
-    );
+    issues.push(`Too short: ${wordCount} words (need ${MIN_WORD_COUNT})`);
   }
 
-  // Structure check
   if (!structure.hasTitle) {
-    logger.warn('⚠️ Blog post missing H1 title', { episodeId });
-    throw new ValidationError('content', 'Blog post is missing a title (H1 heading)');
+    issues.push('Missing H1 title');
   }
 
   if (!structure.hasSections) {
-    logger.warn('⚠️ Blog post has insufficient sections', {
-      episodeId,
-      h2Count: structure.h2Count,
-    });
-    throw new ValidationError('content', 'Blog post needs at least 2 section headings (H2)');
+    issues.push('Needs at least 2 H2 sections');
   }
 
-  // Warn about word count (not errors)
-  if (wordCount > MAX_WORD_COUNT) {
-    logger.warn('⚠️ Blog post exceeds target length', {
-      episodeId,
-      wordCount,
-      maxTarget: MAX_WORD_COUNT,
-    });
+  if (issues.length > 0) {
+    logger.warn(`${articleType} has issues`, { episodeId, issues });
   }
-
-  // Warn about AI patterns (not errors, just log)
-  if (aiPatterns.length > 0) {
-    logger.warn('⚠️ Blog post contains AI patterns (consider review)', {
-      episodeId,
-      patterns: aiPatterns,
-    });
-  }
-
-  // Warn about missing quotes
-  if (!structure.hasQuotes) {
-    logger.warn('⚠️ Blog post has few or no blockquotes', {
-      episodeId,
-      blockquoteCount: structure.blockquoteCount,
-    });
-  }
-
-  logger.info('✅ Blog post validation passed', {
-    episodeId,
-    wordCount,
-    structure: structure.isStructureValid ? 'valid' : 'needs review',
-  });
 
   return {
-    isValid: true,
+    isValid: issues.length === 0,
+    issues,
     wordCount,
     charCount,
     structure,
@@ -256,34 +232,43 @@ function validateOutput(content, episodeId) {
 // ============================================================================
 
 /**
- * Generates a complete blog post draft using the compiled context
+ * Generates two complete blog post drafts:
+ *   1. Episode Recap - promotes the podcast episode
+ *   2. Topic Article - standalone piece based on selected blog idea
  *
  * @param {Object} context - Processing context
  * @param {string} context.episodeId - Episode UUID
  * @param {string} context.transcript - Full transcript
  * @param {Object} context.evergreen - Evergreen settings
- * @param {Object} context.previousStages - Outputs from stages 1-5
- * @returns {Promise<Object>} Result with output_text and usage stats
+ * @param {Object} context.previousStages - Outputs from stages 0-3
+ * @returns {Promise<Object>} Result with both articles
  */
-export async function draftBlogPost(context) {
+export async function draftBlogPosts(context) {
   const { episodeId, transcript, evergreen, previousStages } = context;
 
-  logger.stageStart(6, 'Draft Generation', episodeId);
+  logger.stageStart(6, 'Dual Blog Draft Generation', episodeId);
 
   // ============================================================================
   // STEP 1: Compile context from previous stages
   // ============================================================================
-  logger.debug('📚 Compiling blog context from previous stages', { episodeId });
+  logger.debug('Compiling blog context from previous stages', { episodeId });
 
   const compiled = compileBlogContext(previousStages, evergreen, {
-    includeTranscript: false, // Don't include full transcript to save tokens
+    includeTranscript: false,
   });
 
-  logger.info('📚 Blog context compiled', {
+  // Get the Stage 3 outlines
+  const stage3Output = previousStages[3];
+  if (!stage3Output?.episode_recap_outline || !stage3Output?.topic_article_outline) {
+    throw new ValidationError('previousStages[3]', 'Stage 3 must provide both article outlines');
+  }
+
+  logger.info('Blog context compiled', {
     episodeId,
     contextLength: compiled.fullContext.length,
     quoteCount: compiled.quoteCount,
-    sectionCount: compiled.sectionCount,
+    hasRecapOutline: !!stage3Output.episode_recap_outline,
+    hasTopicOutline: !!stage3Output.topic_article_outline,
   });
 
   // ============================================================================
@@ -293,37 +278,39 @@ export async function draftBlogPost(context) {
     COMPILED_BLOG_CONTEXT: compiled.fullContext,
   });
 
-  logger.debug('📝 Prompt loaded', {
-    episodeId,
-    promptLength: prompt.length,
-  });
-
   // ============================================================================
   // STEP 3: Call OpenAI for text generation
   // ============================================================================
   const systemPrompt = `You are an expert blog writer specializing in therapy and mental health content.
 
-Your task is to write a COMPLETE blog post of approximately ${TARGET_TOTAL_WORDS} words.
+Your task is to write TWO complete blog posts, each approximately ${IDEAL_WORD_COUNT} words.
 
 CRITICAL REQUIREMENTS:
-1. The blog post MUST be at least ${MIN_WORD_COUNT} words
-2. Include a title (H1) and at least 3 section headings (H2)
-3. Integrate 2-3 quotes as blockquotes
+1. Each blog post MUST be at least ${MIN_WORD_COUNT} words
+2. Each must include a title (H1) and at least 3 section headings (H2)
+3. Integrate 2-3 quotes as blockquotes in each article
 4. Do NOT include meta-commentary or word counts
-5. Output ONLY the blog post in Markdown format
+5. Clearly separate the two articles with headers
 
-Write the complete blog post now.`;
+ARTICLE 1: EPISODE RECAP
+- Promotes the podcast episode
+- Summarizes key insights
+- Ends with CTA to listen
+
+ARTICLE 2: TOPIC ARTICLE
+- Standalone piece (doesn't mention the podcast)
+- Based on the selected blog idea from the outlines
+- Provides real value on its own
+
+Write both complete blog posts now.`;
 
   let response;
-  let validationResult;
   let retryCount = 0;
 
-  // Retry loop for handling short content
   while (retryCount <= MAX_SHORT_CONTENT_RETRIES) {
-    logger.info('🚀 Calling OpenAI for blog draft generation', {
+    logger.info('Calling OpenAI for dual blog draft generation', {
       episodeId,
       attempt: retryCount + 1,
-      maxAttempts: MAX_SHORT_CONTENT_RETRIES + 1,
     });
 
     response = await callOpenAI(
@@ -335,74 +322,114 @@ Write the complete blog post now.`;
         episodeId,
         stageNumber: 6,
         temperature: 0.7,
-        maxTokens: 3000, // Enough for ~750 words + markdown overhead
+        maxTokens: 6000, // Enough for ~1500 words total + markdown overhead
       }
     );
 
-    const outputText = response.content.trim();
-    const wordCount = countWords(outputText);
+    const fullOutput = response.content.trim();
 
-    logger.debug('📥 Received response from OpenAI', {
-      episodeId,
-      attempt: retryCount + 1,
-      wordCount,
-      charCount: outputText.length,
-    });
+    // Parse the two articles from the response
+    const { episodeRecap, topicArticle } = parseArticles(fullOutput);
 
-    // Try to validate
-    try {
-      validationResult = validateOutput(outputText, episodeId);
+    // Validate both articles
+    const recapValidation = validateArticle(episodeRecap, 'episode_recap', episodeId);
+    const topicValidation = validateArticle(topicArticle, 'topic_article', episodeId);
 
-      // If validation passed, we're done
-      logger.info('✅ Blog post generation successful', {
+    // Check if both are valid
+    const bothValid = recapValidation.isValid && topicValidation.isValid;
+
+    if (bothValid) {
+      logger.info('Both blog posts generated successfully', {
         episodeId,
-        wordCount: validationResult.wordCount,
+        recapWordCount: recapValidation.wordCount,
+        topicWordCount: topicValidation.wordCount,
         attempts: retryCount + 1,
       });
 
-      // Return successful result
-      logger.stageComplete(6, 'Draft Generation', episodeId, response.durationMs, response.cost);
+      logger.stageComplete(6, 'Dual Blog Draft Generation', episodeId, response.durationMs, response.cost);
 
       return {
         output_data: {
-          word_count: validationResult.wordCount,
-          char_count: validationResult.charCount,
-          structure: validationResult.structure,
-          ai_patterns_detected: validationResult.aiPatterns,
+          episode_recap: {
+            word_count: recapValidation.wordCount,
+            char_count: recapValidation.charCount,
+            structure: recapValidation.structure,
+            ai_patterns_detected: recapValidation.aiPatterns,
+          },
+          topic_article: {
+            word_count: topicValidation.wordCount,
+            char_count: topicValidation.charCount,
+            structure: topicValidation.structure,
+            ai_patterns_detected: topicValidation.aiPatterns,
+          },
+          selected_blog_idea: stage3Output.selected_blog_idea,
         },
-        output_text: outputText,
+        output_text: {
+          episode_recap: episodeRecap,
+          topic_article: topicArticle,
+        },
         input_tokens: response.inputTokens,
         output_tokens: response.outputTokens,
         cost_usd: response.cost,
       };
+    }
 
-    } catch (validationError) {
-      // If this was our last retry, throw the error
-      if (retryCount >= MAX_SHORT_CONTENT_RETRIES) {
-        logger.error('❌ Blog post generation failed after retries', {
-          episodeId,
-          totalAttempts: retryCount + 1,
-          lastWordCount: wordCount,
-          error: validationError.message,
-        });
-        throw validationError;
-      }
+    // Log validation issues
+    const allIssues = [
+      ...recapValidation.issues.map(i => `Recap: ${i}`),
+      ...topicValidation.issues.map(i => `Topic: ${i}`),
+    ];
 
-      // Log retry attempt
-      logger.warn('⚠️ Blog post too short, retrying with emphasis', {
+    if (retryCount >= MAX_SHORT_CONTENT_RETRIES) {
+      logger.error('Blog post generation failed after retries', {
         episodeId,
-        attempt: retryCount + 1,
-        wordCount,
-        minRequired: MIN_WORD_COUNT,
-        error: validationError.message,
+        totalAttempts: retryCount + 1,
+        issues: allIssues,
       });
 
-      retryCount++;
+      // Return what we have even if not perfect
+      logger.stageComplete(6, 'Dual Blog Draft Generation (with issues)', episodeId, response.durationMs, response.cost);
+
+      return {
+        output_data: {
+          episode_recap: {
+            word_count: recapValidation.wordCount,
+            char_count: recapValidation.charCount,
+            structure: recapValidation.structure,
+            ai_patterns_detected: recapValidation.aiPatterns,
+            validation_issues: recapValidation.issues,
+          },
+          topic_article: {
+            word_count: topicValidation.wordCount,
+            char_count: topicValidation.charCount,
+            structure: topicValidation.structure,
+            ai_patterns_detected: topicValidation.aiPatterns,
+            validation_issues: topicValidation.issues,
+          },
+          selected_blog_idea: stage3Output.selected_blog_idea,
+        },
+        output_text: {
+          episode_recap: episodeRecap,
+          topic_article: topicArticle,
+        },
+        input_tokens: response.inputTokens,
+        output_tokens: response.outputTokens,
+        cost_usd: response.cost,
+      };
     }
+
+    logger.warn('Blog posts have issues, retrying', {
+      episodeId,
+      attempt: retryCount + 1,
+      issues: allIssues,
+    });
+
+    retryCount++;
   }
 
-  // This shouldn't be reached, but just in case
   throw new ValidationError('content', 'Blog post generation failed after all retries');
 }
 
-export default draftBlogPost;
+// Export aliases for compatibility
+export { draftBlogPosts as draftBlogPost };
+export default draftBlogPosts;

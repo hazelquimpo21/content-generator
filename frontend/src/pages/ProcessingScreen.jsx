@@ -55,16 +55,16 @@ const PHASES = [
     parallel: true,
     stages: [
       { number: 1, name: 'Transcript Analysis', description: 'Extracting themes and metadata' },
-      { number: 2, name: 'Quote Extraction', description: 'Finding key quotes and insights' },
+      { number: 2, name: 'Content Building Blocks', description: 'Quotes, tips, Q&As, and blog ideas' },
     ],
   },
   {
     id: 'plan',
     name: 'Plan',
     emoji: '📝',
-    description: 'Creating blog structure and headlines',
+    description: 'Planning two articles: Episode Recap + Topic Article',
     stages: [
-      { number: 3, name: 'Blog Outline', description: 'Creating high-level structure' },
+      { number: 3, name: 'Dual Article Planning', description: 'Select idea → outlines in parallel', parallel: true },
       { number: 4, name: 'Paragraph Details', description: 'Planning paragraph content' },
       { number: 5, name: 'Headlines & Copy', description: 'Generating title options' },
     ],
@@ -73,10 +73,10 @@ const PHASES = [
     id: 'write',
     name: 'Write',
     emoji: '✍️',
-    description: 'Drafting and refining the blog post',
+    description: 'Drafting and refining both blog articles',
     stages: [
-      { number: 6, name: 'Blog Post Draft', description: 'Writing full blog post' },
-      { number: 7, name: 'Blog Refinement', description: 'Polishing and improving prose' },
+      { number: 6, name: 'Dual Article Draft', description: 'Writing Episode Recap + Topic Article' },
+      { number: 7, name: 'Article Refinement', description: 'Polishing both articles in parallel', parallel: true },
     ],
   },
   {
@@ -421,6 +421,9 @@ function ProcessingScreen() {
                         <div className={styles.stageContent}>
                           <div className={styles.stageHeader}>
                             <span className={styles.stageName}>{stage.name}</span>
+                            {stage.parallel && stageStatus !== 'pending' && (
+                              <span className={styles.stageParallelBadge}>parallel</span>
+                            )}
                             {stageStatus === 'completed' && stageData?.duration_seconds && (
                               <span className={styles.stageDuration}>
                                 {stageData.duration_seconds.toFixed(1)}s

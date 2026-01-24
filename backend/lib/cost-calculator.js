@@ -245,21 +245,29 @@ export function calculateCostDetailed(model, inputTokens, outputTokens) {
  *
  * Stages 1-2: Run in parallel after Stage 0
  * - Stage 1: Summary (uses transcript + Stage 0 themes)
- * - Stage 2: Quotes & Tips (uses original transcript)
+ * - Stage 2: Quotes, Tips, Q&As, Blog Ideas (uses original transcript)
+ *   NEW: Now also extracts 5 Q&A pairs + 6 blog ideas
  *
  * Stages 3-7: Use outputs from previous stages (smaller context)
+ * - Stage 3: Blog Selection & DUAL Article Planning (3 parallel calls):
+ *   - Step 1: Select blog idea from 6 options
+ *   - Step 2a: Episode Recap outline (parallel)
+ *   - Step 2b: Topic Article outline (parallel)
+ * - Stage 6: DUAL Blog Draft Generation (2 articles ~750 words each)
+ * - Stage 7: DUAL Article Refinement (refines both articles in parallel)
+ *
  * Stage 8: Now runs 4 parallel platform-specific analyzers (Instagram, Twitter, LinkedIn, Facebook)
  * Stage 9: Email campaign
  */
 const STAGE_TOKEN_ESTIMATES = {
   0: { input: 8000, output: 2000 },  // Content Brief (uses full transcript, outputs brief)
   1: { input: 4000, output: 800 },   // Episode Summary (uses transcript + themes)
-  2: { input: 3500, output: 800 },   // Quotes & Tips Extraction (uses transcript)
-  3: { input: 2000, output: 400 },   // Blog Outline High Level
+  2: { input: 3500, output: 1200 },  // Quotes, Tips, Q&As, Blog Ideas (increased output)
+  3: { input: 3500, output: 900 },   // Blog Selection + 2 Outlines (3 calls: selection + 2 parallel outlines)
   4: { input: 2500, output: 800 },   // Paragraph Outlines
   5: { input: 2000, output: 1200 },  // Headlines
-  6: { input: 4000, output: 1500 },  // Draft Generation
-  7: { input: 3000, output: 1200 },  // Refinement (Claude)
+  6: { input: 4000, output: 3000 },  // DUAL Draft Generation (~1500 words x 2 articles)
+  7: { input: 5000, output: 2400 },  // DUAL Refinement (refines both articles in parallel)
   9: { input: 2000, output: 1500 },  // Email Campaign (Claude)
 };
 

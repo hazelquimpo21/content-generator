@@ -226,20 +226,13 @@ Consider weaving these practical tips into your blog post where appropriate:
 // ============================================================================
 
 /**
- * Compiles the blog outline into a clear structure with word count targets
+ * Compiles a legacy single-article outline (backward compatibility)
  *
- * @param {Object} stage3Output - Stage 3 high-level outline
- * @param {Object} stage4Output - Stage 4 paragraph-level outlines
+ * @param {Object} postStructure - Legacy post_structure from Stage 3
+ * @param {Array} sectionDetails - Section details from Stage 4
  * @returns {string} Formatted outline section
  */
-function compileOutline(stage3Output, stage4Output) {
-  const postStructure = stage3Output?.post_structure;
-  const sectionDetails = stage4Output?.section_details || [];
-  // NOTE: We no longer use narrative_summary from Stage 3.
-  // Stage 1's episode_crux is the canonical "big picture" summary and is
-  // already included in the compileEpisodeContext() function above.
-  // This avoids duplicate summarization across stages.
-
+function compileLegacyOutline(postStructure, sectionDetails) {
   if (!postStructure) {
     logger.warn('📝 No blog outline available for compilation');
     return `
@@ -321,6 +314,160 @@ Write a closing that:
 `;
 
   return outlineSection;
+}
+
+/**
+ * Compiles the dual-article outlines (Episode Recap + Topic Article)
+ * NEW: Handles the refactored Stage 3 output structure
+ *
+ * @param {Object} stage3Output - Stage 3 dual article planning output
+ * @param {Array} sectionDetails - Section details from Stage 4 (if available)
+ * @returns {string} Formatted outline section for both articles
+ */
+function compileDualOutlines(stage3Output, sectionDetails) {
+  const selectedIdea = stage3Output?.selected_blog_idea;
+  const recapOutline = stage3Output?.episode_recap_outline;
+  const topicOutline = stage3Output?.topic_article_outline;
+
+  if (!recapOutline || !topicOutline) {
+    logger.warn('📝 Missing dual article outlines, falling back to default structure');
+    return `
+## DUAL ARTICLE STRUCTURE
+
+Create TWO blog posts, each ~${TARGET_TOTAL_WORDS} words:
+
+### ARTICLE 1: EPISODE RECAP
+Promotes the podcast episode. Include:
+- Hook that teases the episode's value
+- Key insights from the conversation
+- Why listeners should tune in
+- CTA to listen to the episode
+
+### ARTICLE 2: TOPIC ARTICLE
+Standalone piece on a topic from the episode. Include:
+- Compelling hook (problem or insight)
+- 3-4 substantive sections
+- Actionable takeaway
+- NO mention of the podcast
+`;
+  }
+
+  let outlineSection = `
+## DUAL ARTICLE STRUCTURE
+
+You are writing TWO complete blog posts. Follow these outlines EXACTLY.
+
+---
+
+## ARTICLE 1: EPISODE RECAP (~${TARGET_TOTAL_WORDS} WORDS)
+
+This article promotes the podcast episode. Readers should:
+- Understand what the episode covers
+- Get genuine value from the summary
+- Want to listen to the full episode
+
+**Working Title:** ${recapOutline.working_title}
+
+### HOOK
+**Type:** ${recapOutline.hook?.hook_type || 'engaging opening'}
+**Approach:** ${recapOutline.hook?.approach || 'Start with something compelling from the episode'}
+
+### WHAT THE EPISODE COVERS
+${recapOutline.what_episode_covers || 'Overview of the main topics and conversation'}
+
+### KEY INSIGHTS (with quotes)
+`;
+
+  // Add key insights
+  const keyInsights = recapOutline.key_insights || [];
+  keyInsights.forEach((insight, idx) => {
+    outlineSection += `${idx + 1}. ${insight.insight}\n`;
+    if (insight.quote_to_use) {
+      outlineSection += `   *Quote to use:* "${truncate(insight.quote_to_use, 100)}"\n`;
+    }
+  });
+
+  outlineSection += `
+### WHY LISTEN
+${recapOutline.why_listen || 'Explain what makes this episode worth their time'}
+
+### CLOSING CTA
+**Approach:** ${recapOutline.cta_approach || 'Invite them to listen to the full episode'}
+
+---
+
+## ARTICLE 2: TOPIC ARTICLE (~${TARGET_TOTAL_WORDS} WORDS)
+
+This is a STANDALONE piece. It does NOT mention the podcast.
+
+`;
+
+  // Selected blog idea context
+  if (selectedIdea) {
+    outlineSection += `**Based on Blog Idea:** ${selectedIdea.title}
+**Selection Reasoning:** ${selectedIdea.reasoning}
+
+`;
+  }
+
+  outlineSection += `**Working Title:** ${topicOutline.working_title}
+
+### HOOK
+**Type:** ${topicOutline.hook?.hook_type || 'problem'}
+**Approach:** ${topicOutline.hook?.approach || 'Lead with something that resonates'}
+
+### CONTEXT
+${topicOutline.context || 'Establish the stakes and any misconceptions'}
+
+### SECTIONS
+`;
+
+  // Add sections
+  const sections = topicOutline.sections || [];
+  sections.forEach((section, idx) => {
+    outlineSection += `
+**${idx + 1}. ${section.section_title}** (~${section.word_count_target || DEFAULT_SECTION_WORDS} words)
+*Purpose:* ${section.purpose}
+`;
+    if (section.quotes_or_tips_to_use?.length > 0) {
+      outlineSection += `*Include:* ${section.quotes_or_tips_to_use.join(', ')}\n`;
+    }
+  });
+
+  outlineSection += `
+### TAKEAWAY
+${topicOutline.takeaway || 'Leave them with something actionable or thought-provoking'}
+
+---
+**TOTAL PER ARTICLE:** ~${TARGET_TOTAL_WORDS} words (range: ${TARGET_TOTAL_WORDS - WORD_COUNT_TOLERANCE} to ${TARGET_TOTAL_WORDS + WORD_COUNT_TOLERANCE})
+**COMBINED TOTAL:** ~${TARGET_TOTAL_WORDS * 2} words
+
+`;
+
+  return outlineSection;
+}
+
+/**
+ * Compiles the blog outline into a clear structure with word count targets
+ * Handles both legacy single-article and new dual-article formats
+ *
+ * @param {Object} stage3Output - Stage 3 high-level outline
+ * @param {Object} stage4Output - Stage 4 paragraph-level outlines
+ * @returns {string} Formatted outline section
+ */
+function compileOutline(stage3Output, stage4Output) {
+  const sectionDetails = stage4Output?.section_details || [];
+
+  // Check for dual-article format (new)
+  if (stage3Output?.episode_recap_outline || stage3Output?.topic_article_outline) {
+    logger.debug('📝 Compiling dual-article outlines');
+    return compileDualOutlines(stage3Output, sectionDetails);
+  }
+
+  // Legacy single-article format
+  const postStructure = stage3Output?.post_structure;
+  logger.debug('📝 Compiling legacy single-article outline');
+  return compileLegacyOutline(postStructure, sectionDetails);
 }
 
 // ============================================================================

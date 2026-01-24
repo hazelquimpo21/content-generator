@@ -7,9 +7,14 @@
  * This analyzer is called once per platform (instagram, twitter, linkedin, facebook)
  * and runs in parallel with other platform analyzers for faster processing.
  *
- * Input: Stage 7 refined post + quotes + headlines + platform identifier
+ * Input: Stage 7 refined posts (dual or single) + quotes + headlines + platform
  * Output: 5 posts for the specified platform (JSON)
  * Model: Claude Sonnet 4 (Anthropic)
+ *
+ * Dual Article Support:
+ * - For dual-article episodes, uses Episode Recap as primary source (promotes episode)
+ * - Topic Article is included as additional context for content variety
+ * - Falls back to legacy single-article format for older episodes
  * ============================================================================
  */
 
@@ -133,13 +138,52 @@ export async function generateSocialForPlatform(context, platform) {
   });
 
   // Get required inputs from previous stages
-  const refinedPost = previousStages[7]?.output_text;
+  const stage7Output = previousStages[7]?.output_text;
   const quotes = previousStages[2]?.quotes;
+  const qaPairs = previousStages[2]?.qa_pairs || []; // New: Q&A pairs for content ideas
   const headlines = previousStages[5];
   const episodeAnalysis = previousStages[1];
 
-  if (!refinedPost) {
+  if (!stage7Output) {
     throw new ValidationError('previousStages.7', 'Missing refined post for social content');
+  }
+
+  // ============================================================================
+  // HANDLE DUAL ARTICLE FORMAT vs LEGACY
+  // ============================================================================
+  // Dual format: { episode_recap: "...", topic_article: "..." }
+  // Legacy format: "single article string..."
+  const isDualFormat = stage7Output && typeof stage7Output === 'object' &&
+    (stage7Output.episode_recap || stage7Output.topic_article);
+
+  let primaryContent;
+  let secondaryContent = null;
+
+  if (isDualFormat) {
+    // For social posts that promote the episode, Episode Recap is primary
+    primaryContent = stage7Output.episode_recap || stage7Output.topic_article || '';
+    secondaryContent = stage7Output.topic_article || null;
+
+    logger.info('Stage 8: Using dual-article format', {
+      episodeId,
+      platform,
+      hasEpisodeRecap: !!stage7Output.episode_recap,
+      hasTopicArticle: !!stage7Output.topic_article,
+    });
+  } else {
+    // Legacy single-article format
+    primaryContent = typeof stage7Output === 'string' ? stage7Output : '';
+    logger.info('Stage 8: Using legacy single-article format', {
+      episodeId,
+      platform,
+    });
+  }
+
+  // Build combined content string for prompt
+  // Primary (Episode Recap) is the main source, Topic Article adds variety
+  let combinedContent = primaryContent;
+  if (secondaryContent) {
+    combinedContent += `\n\n---\n\n## ADDITIONAL CONTEXT: Topic Article\n\n${secondaryContent}`;
   }
 
   // Build template variables for prompt
@@ -149,8 +193,9 @@ export async function generateSocialForPlatform(context, platform) {
     CREDENTIALS: evergreen?.therapist_profile?.credentials || '',
     EPISODE_TITLE: episodeAnalysis?.episode_basics?.title || 'This Episode',
     TARGET_AUDIENCE: evergreen?.podcast_info?.target_audience || 'listeners interested in mental health',
-    STAGE_7_OUTPUT: refinedPost,
+    STAGE_7_OUTPUT: combinedContent,
     STAGE_2_OUTPUT: JSON.stringify(quotes, null, 2),
+    STAGE_2_QA: JSON.stringify(qaPairs, null, 2), // New: Q&A pairs for social inspiration
     STAGE_5_OUTPUT: JSON.stringify(headlines, null, 2),
   };
 

@@ -483,3 +483,160 @@ const blogIdeas = stage2Output?.blog_ideas || [];
   - Blog Ideas grid with searchability badges
   - Article toggle for dual blog display
   - Responsive layouts for mobile
+
+---
+
+## Downstream Impact Fixes (Gotchas)
+
+The dual-article refactor required updates to several downstream systems that expected the old single-article format.
+
+### Stage 7: Dual Article Refinement
+
+**File:** `backend/analyzers/stage-07-refine-with-claude.js`
+
+**Problem:** Line 62 expected `previousStages[6]?.output_text` to be a string, but now receives an object.
+
+**Solution:**
+- Added `isDualArticleFormat()` detection helper
+- Refines BOTH articles separately when dual format detected
+- Returns `output_text` as object: `{ episode_recap, topic_article }`
+- Maintains backward compatibility for legacy single-article episodes
+
+```javascript
+// Detection helper
+const isDual = output && typeof output === 'object' &&
+  (output.episode_recap || output.topic_article);
+
+// Returns object for new episodes, string for legacy
+output_text: isDual ? { episode_recap, topic_article } : singleArticle
+```
+
+### Stage 8: Social Content with Dual Articles
+
+**File:** `backend/analyzers/stage-08-social-platform.js`
+
+**Problem:** Line 136 expected `previousStages[7]?.output_text` to be a string.
+
+**Solution:**
+- Detects dual-article format vs legacy
+- Uses Episode Recap as PRIMARY source (promotes the episode for social)
+- Includes Topic Article as additional context for content variety
+- Added Q&A pairs to template variables for social inspiration
+
+```javascript
+// For social posts that promote the episode, Episode Recap is primary
+primaryContent = stage7Output.episode_recap || stage7Output.topic_article || '';
+secondaryContent = stage7Output.topic_article || null;
+```
+
+### Prompt Loader Variable Substitution
+
+**File:** `backend/lib/prompt-loader.js`
+
+**Problem:** Lines 360-361 used `previousStages[6]?.output_text || ''` which returned `[object Object]` for dual articles.
+
+**Solution:**
+- Added `formatBlogOutput()` helper to serialize dual-article objects
+- Added `getArticleContent()` helper to extract individual articles
+- New template variables for specific article access:
+  - `STAGE_6_OUTPUT` - Full formatted output (both articles)
+  - `STAGE_6_EPISODE_RECAP` - Episode Recap only
+  - `STAGE_6_TOPIC_ARTICLE` - Topic Article only
+  - `STAGE_7_OUTPUT`, `STAGE_7_EPISODE_RECAP`, `STAGE_7_TOPIC_ARTICLE` - Same for Stage 7
+- Added `STAGE_2_QA_PAIRS` and `STAGE_2_BLOG_IDEAS` for new Stage 2 outputs
+
+### Cost Calculator Estimates
+
+**File:** `backend/lib/cost-calculator.js`
+
+**Updated token estimates for dual-article generation:**
+
+| Stage | Old Output Tokens | New Output Tokens | Change |
+|-------|-------------------|-------------------|--------|
+| 2     | 800               | 1200              | +50% (Q&As + blog ideas) |
+| 3     | 400               | 600               | +50% (dual outlines) |
+| 6     | 1500              | 3000              | +100% (two articles) |
+| 7     | 1200              | 2400              | +100% (refine both) |
+
+### Blog Content Compiler
+
+**File:** `backend/lib/blog-content-compiler.js`
+
+**Problem:** `compileOutline()` expected `stage3Output.post_structure` (legacy format).
+
+**Solution:**
+- Detects dual-article format vs legacy
+- Added `compileDualOutlines()` for new format
+- Renamed original logic to `compileLegacyOutline()`
+- Includes selected blog idea context in the prompt
+
+```javascript
+// Check for dual-article format (new)
+if (stage3Output?.episode_recap_outline || stage3Output?.topic_article_outline) {
+  return compileDualOutlines(stage3Output, sectionDetails);
+}
+// Legacy single-article format
+return compileLegacyOutline(postStructure, sectionDetails);
+```
+
+### ProcessingScreen Phase Labels
+
+**File:** `frontend/src/pages/ProcessingScreen.jsx`
+
+**Updated stage descriptions:**
+- Stage 2: "Content Building Blocks" → "Quotes, tips, Q&As, and blog ideas"
+- Stage 3: "Dual Article Planning" → "Selecting blog idea and creating outlines"
+- Stage 6: "Dual Article Draft" → "Writing Episode Recap + Topic Article"
+- Stage 7: "Article Refinement" → "Polishing both articles"
+- Phase 2 description: "Planning two articles: Episode Recap + Topic Article"
+- Phase 3 description: "Drafting and refining both blog articles"
+
+---
+
+## No Database Changes Required
+
+The current `stage_outputs` table uses JSONB columns for `output_data` and `output_text`, which handle the new nested object structures without schema changes.
+
+**Stage 6 `output_text` now stores:**
+```json
+{
+  "episode_recap": "# Full markdown article 1...",
+  "topic_article": "# Full markdown article 2..."
+}
+```
+
+**Stage 2 `output_data` now includes:**
+```json
+{
+  "quotes": [...],
+  "tips": [...],
+  "qa_pairs": [...],
+  "blog_ideas": [...]
+}
+```
+
+---
+
+## Key Backward Compatibility Patterns
+
+Always use these patterns when accessing dual-article data:
+
+```javascript
+// Detecting format
+const isDualFormat = output && typeof output === 'object' &&
+  (output.episode_recap || output.topic_article);
+
+// Getting content safely
+const content = isDualFormat
+  ? output.episode_recap
+  : (typeof output === 'string' ? output : '');
+
+// Handling new Stage 2 fields
+const qaPairs = stage2Output?.qa_pairs || [];
+const blogIdeas = stage2Output?.blog_ideas || [];
+
+// Handling new Stage 3 fields
+const recapOutline = stage3Output?.episode_recap_outline;
+const topicOutline = stage3Output?.topic_article_outline;
+const selectedIdea = stage3Output?.selected_blog_idea;
+```

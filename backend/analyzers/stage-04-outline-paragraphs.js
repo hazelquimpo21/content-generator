@@ -220,11 +220,14 @@ Keep paragraphs focused (2-4 sentences each). Target ~750 words total.
       subStage: 'episode_recap_paragraphs',
       functionCall: 'episode_recap_paragraphs',
       temperature: 0.6,
-      maxTokens: 4096,
+      maxTokens: 8192,
     }
   );
 
   const result = response.functionCall;
+  if (!result) {
+    throw new ValidationError('functionCall', 'Episode Recap paragraph generation returned no result (response may have been truncated)');
+  }
   validateSectionDetails(result, 'Episode Recap', episodeId);
 
   logger.info('  ✓ Episode Recap paragraph outlines created', {
@@ -298,11 +301,14 @@ Keep paragraphs focused (2-4 sentences each). Target ~1200 words total.
       subStage: 'topic_article_paragraphs',
       functionCall: 'topic_article_paragraphs',
       temperature: 0.6,
-      maxTokens: 4096,
+      maxTokens: 8192,
     }
   );
 
   const result = response.functionCall;
+  if (!result) {
+    throw new ValidationError('functionCall', 'Topic Article paragraph generation returned no result (response may have been truncated)');
+  }
   validateSectionDetails(result, 'Topic Article', episodeId);
 
   logger.info('  ✓ Topic Article paragraph outlines created', {

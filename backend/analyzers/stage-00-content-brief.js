@@ -255,11 +255,17 @@ function formatHumanReadableBrief(data) {
  * @param {string} context.episodeId - Episode UUID
  * @param {string} context.transcript - Full transcript text
  * @param {Object} context.evergreen - Evergreen content settings
- * @param {Object} context.episodeContext - Episode-specific context (optional)
+ * @param {Object} context.episodeContext - Episode-specific context (may include RSS description)
  * @returns {Promise<Object>} Content brief result with output_data and output_text
  */
 export async function createContentBrief(context) {
   const { episodeId, transcript, evergreen, episodeContext = {} } = context;
+
+  // Extract RSS metadata if available (from feed episode imports)
+  const rssDescription = episodeContext?.originalDescription || episodeContext?.description || null;
+  const rssTitle = episodeContext?.originalTitle || null;
+  const publishedAt = episodeContext?.publishedAt || null;
+  const contentPillars = evergreen?.podcast_info?.content_pillars || [];
 
   logger.stageStart(0, 'Content Brief', episodeId);
 
@@ -272,6 +278,10 @@ export async function createContentBrief(context) {
     transcriptWords,
     transcriptChars,
     model: CONTENT_BRIEF_MODEL,
+    hasRssDescription: !!rssDescription,
+    hasRssTitle: !!rssTitle,
+    hasPublishedAt: !!publishedAt,
+    contentPillarsCount: contentPillars.length,
   });
 
   // Validate transcript
@@ -291,6 +301,24 @@ export async function createContentBrief(context) {
     episodeContext,
   });
 
+  // Build content pillars guidance if available
+  const contentPillarsGuidance = contentPillars.length > 0
+    ? `\n\nCONTENT PILLARS (ensure themes align with these brand pillars):
+${contentPillars.map((p, i) => `${i + 1}. ${p}`).join('\n')}
+
+When extracting themes, prioritize topics that align with these content pillars. At least 2-3 of the 4 themes should relate to a content pillar.`
+    : '';
+
+  // Build RSS metadata context if available
+  const rssContext = rssDescription || rssTitle || publishedAt
+    ? `\n\nADDITIONAL EPISODE METADATA (from RSS feed):
+${rssTitle ? `- Original Title: ${rssTitle}` : ''}
+${rssDescription ? `- RSS Description: ${rssDescription}` : ''}
+${publishedAt ? `- Published: ${publishedAt}` : ''}
+
+Use this metadata to inform your analysis. The RSS description may contain additional context about the episode that isn't in the transcript.`
+    : '';
+
   // Build system prompt
   const systemPrompt = `You are an expert podcast content analyst creating a content brief for a writing team.
 
@@ -305,7 +333,7 @@ IMPORTANT RULES:
 - Do NOT invent facts not in the transcript
 - Avoid: delve, elevate, unleash, unlock, maze, demystify
 - Avoid rhetorical questions and semicolons
-- Never use "in a world..."
+- Never use "in a world..."${contentPillarsGuidance}${rssContext}
 
 Extract the structured content brief using the provided tool.`;
 
@@ -351,6 +379,32 @@ Extract the structured content brief using the provided tool.`;
 
   // Validate output
   validateOutput(outputData);
+
+  // Log content pillar alignment check
+  if (contentPillars.length > 0) {
+    const themeNames = outputData.themes.map(t => t.name.toLowerCase());
+    const pillarMatches = contentPillars.filter(pillar =>
+      themeNames.some(theme =>
+        theme.includes(pillar.toLowerCase()) || pillar.toLowerCase().includes(theme.split(' ')[0])
+      )
+    );
+    logger.info('Stage 0: Content pillar alignment check', {
+      episodeId,
+      contentPillars,
+      extractedThemes: outputData.themes.map(t => t.name),
+      possiblePillarMatches: pillarMatches,
+      alignmentRatio: `${pillarMatches.length}/${contentPillars.length}`,
+    });
+  }
+
+  // Add RSS metadata to output for downstream stages
+  if (rssDescription || rssTitle || publishedAt) {
+    outputData.rss_metadata = {
+      original_title: rssTitle,
+      original_description: rssDescription,
+      published_at: publishedAt,
+    };
+  }
 
   // Generate human-readable brief from structured data
   const outputText = formatHumanReadableBrief(outputData);

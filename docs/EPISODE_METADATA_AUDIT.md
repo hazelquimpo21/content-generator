@@ -157,14 +157,65 @@ Stage 0 extracts and stores:
 
 ## 5. Priority Recommendations
 
-| Priority | Issue | Action |
-|----------|-------|--------|
-| **HIGH** | Speaker diarization unused | Integrate into Stage 2 quote extraction |
-| **HIGH** | Theme validation missing | Validate against content_pillars in Stage 0 |
-| **MEDIUM** | Audience not propagated | Pass target_audience to Stages 8-9 |
-| **MEDIUM** | RSS description ignored | Include in Stage 0 analysis |
-| **LOW** | Duration unused | Scale analysis depth by episode length |
-| **LOW** | Published date unused | Enable seasonal/recency analysis |
+| Priority | Issue | Action | Status |
+|----------|-------|--------|--------|
+| **HIGH** | Speaker diarization unused | Integrate into Stage 2 quote extraction | ✅ FIXED |
+| **HIGH** | Theme validation missing | Validate against content_pillars in Stage 0 | ✅ FIXED |
+| **MEDIUM** | Audience not propagated | Pass target_audience to Stages 8-9 | ✅ FIXED |
+| **MEDIUM** | RSS description ignored | Include in Stage 0 analysis | ✅ FIXED |
+| **LOW** | Duration unused | Scale analysis depth by episode length | Deferred |
+| **LOW** | Published date unused | Enable seasonal/recency analysis | Deferred |
+
+---
+
+## 6. Fixes Applied (2026-01-24)
+
+### Fix 1: Speaker Diarization in Stage 2
+
+**File:** `backend/analyzers/stage-02-extract-quotes.js`
+
+Added support for speaker diarization data when available:
+- Context now includes `speakerData` and `transcriptFormat`
+- When speaker labels exist, they're passed to the prompt for accurate quote attribution
+- System prompt instructs the model to use speaker labels when available
+
+### Fix 2: Content Pillars Validation in Stage 0
+
+**File:** `backend/analyzers/stage-00-content-brief.js`
+
+Added content pillar awareness:
+- Content pillars are now passed to the system prompt
+- Guidance instructs AI to align 2-3 of 4 themes with brand pillars
+- Logging tracks pillar alignment ratio for monitoring
+
+### Fix 3: RSS Description in Stage 0
+
+**File:** `backend/analyzers/stage-00-content-brief.js`
+
+Added RSS metadata support:
+- RSS title, description, and published date now included in system prompt
+- Output data includes `rss_metadata` object for downstream stages
+- Helps provide better context for episodes imported from feeds
+
+### Fix 4: Target Audience in Stages 8-9
+
+**Files:**
+- `backend/analyzers/stage-08-generate-social.js`
+- `backend/analyzers/stage-09-generate-email.js`
+
+Added target audience context:
+- `target_audience` now passed to social and email generation prompts
+- Requirements emphasize writing for the specific audience
+- Prompts instruct AI to use audience-appropriate language
+
+### Fix 5: Episode Processor Context Enhancement
+
+**File:** `backend/orchestrator/episode-processor.js`
+
+Enhanced context loading to include:
+- `speakerData` from episode record
+- `transcriptFormat` ('plain' or 'speaker_labeled')
+- `audioMetadata` for potential future use
 
 ---
 

@@ -159,71 +159,102 @@ export async function refineWithClaude(context) {
   });
 
   // ============================================================================
-  // DUAL ARTICLE FORMAT (new)
+  // DUAL ARTICLE FORMAT (new) - Refine both articles IN PARALLEL
   // ============================================================================
   if (isDual) {
     const { episode_recap, topic_article } = stage6Output;
+
+    logger.info('Stage 7: Refining both articles in parallel...', { episodeId });
+
+    // Build refinement tasks for parallel execution
+    const refinementTasks = [];
+
+    // Task 1: Episode Recap refinement
+    if (episode_recap) {
+      const recapTask = async () => {
+        logger.info('  → Refining Episode Recap...', { episodeId });
+        const instructions = buildInstructions(evergreen?.voice_guidelines, 'episode_recap');
+
+        const response = await callClaudeEditor(episode_recap, instructions, {
+          episodeId,
+          stageNumber: 7,
+          subStage: 'episode_recap',
+        });
+
+        const content = response.content.trim();
+        const validation = validateArticle(content, 'episode_recap');
+
+        logger.info('  ✓ Episode Recap refined', {
+          episodeId,
+          wordCount: validation.wordCount,
+          isValid: validation.isValid,
+        });
+
+        return {
+          type: 'episode_recap',
+          content,
+          validation,
+          inputTokens: response.inputTokens || 0,
+          outputTokens: response.outputTokens || 0,
+          cost: response.cost || 0,
+          durationMs: response.durationMs || 0,
+        };
+      };
+      refinementTasks.push(recapTask());
+    }
+
+    // Task 2: Topic Article refinement
+    if (topic_article) {
+      const topicTask = async () => {
+        logger.info('  → Refining Topic Article...', { episodeId });
+        const instructions = buildInstructions(evergreen?.voice_guidelines, 'topic_article');
+
+        const response = await callClaudeEditor(topic_article, instructions, {
+          episodeId,
+          stageNumber: 7,
+          subStage: 'topic_article',
+        });
+
+        const content = response.content.trim();
+        const validation = validateArticle(content, 'topic_article');
+
+        logger.info('  ✓ Topic Article refined', {
+          episodeId,
+          wordCount: validation.wordCount,
+          isValid: validation.isValid,
+        });
+
+        return {
+          type: 'topic_article',
+          content,
+          validation,
+          inputTokens: response.inputTokens || 0,
+          outputTokens: response.outputTokens || 0,
+          cost: response.cost || 0,
+          durationMs: response.durationMs || 0,
+        };
+      };
+      refinementTasks.push(topicTask());
+    }
+
+    // Execute both refinements in parallel
+    const results = await Promise.all(refinementTasks);
+
+    // Aggregate results
+    const refinedArticles = { episode_recap: null, topic_article: null };
+    const validationResults = {};
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
     let totalCost = 0;
-    let totalDurationMs = 0;
+    let maxDurationMs = 0; // Use max since they run in parallel
 
-    const refinedArticles = {
-      episode_recap: null,
-      topic_article: null,
-    };
-    const validationResults = {};
-
-    // Refine Episode Recap
-    if (episode_recap) {
-      logger.info('Refining Episode Recap...', { episodeId });
-      const recapInstructions = buildInstructions(evergreen?.voice_guidelines, 'episode_recap');
-
-      const recapResponse = await callClaudeEditor(episode_recap, recapInstructions, {
-        episodeId,
-        stageNumber: 7,
-        subStage: 'episode_recap',
-      });
-
-      refinedArticles.episode_recap = recapResponse.content.trim();
-      validationResults.episode_recap = validateArticle(refinedArticles.episode_recap, 'episode_recap');
-
-      totalInputTokens += recapResponse.inputTokens || 0;
-      totalOutputTokens += recapResponse.outputTokens || 0;
-      totalCost += recapResponse.cost || 0;
-      totalDurationMs += recapResponse.durationMs || 0;
-
-      logger.info('Episode Recap refined', {
-        episodeId,
-        wordCount: validationResults.episode_recap.wordCount,
-        isValid: validationResults.episode_recap.isValid,
-      });
-    }
-
-    // Refine Topic Article
-    if (topic_article) {
-      logger.info('Refining Topic Article...', { episodeId });
-      const topicInstructions = buildInstructions(evergreen?.voice_guidelines, 'topic_article');
-
-      const topicResponse = await callClaudeEditor(topic_article, topicInstructions, {
-        episodeId,
-        stageNumber: 7,
-        subStage: 'topic_article',
-      });
-
-      refinedArticles.topic_article = topicResponse.content.trim();
-      validationResults.topic_article = validateArticle(refinedArticles.topic_article, 'topic_article');
-
-      totalInputTokens += topicResponse.inputTokens || 0;
-      totalOutputTokens += topicResponse.outputTokens || 0;
-      totalCost += topicResponse.cost || 0;
-      totalDurationMs += topicResponse.durationMs || 0;
-
-      logger.info('Topic Article refined', {
-        episodeId,
-        wordCount: validationResults.topic_article.wordCount,
-        isValid: validationResults.topic_article.isValid,
-      });
+    for (const result of results) {
+      refinedArticles[result.type] = result.content;
+      validationResults[result.type] = result.validation;
+      totalInputTokens += result.inputTokens;
+      totalOutputTokens += result.outputTokens;
+      totalCost += result.cost;
+      maxDurationMs = Math.max(maxDurationMs, result.durationMs);
     }
 
     // Log any validation issues (but don't fail - content is usable)
@@ -238,7 +269,7 @@ export async function refineWithClaude(context) {
       });
     }
 
-    logger.stageComplete(7, 'Dual Article Refinement Pass', episodeId, totalDurationMs, totalCost);
+    logger.stageComplete(7, 'Dual Article Refinement Pass (parallel)', episodeId, maxDurationMs, totalCost);
 
     return {
       output_data: {
@@ -250,6 +281,7 @@ export async function refineWithClaude(context) {
           word_count: validationResults.topic_article.wordCount,
           validation_issues: validationResults.topic_article.issues,
         } : null,
+        parallel_execution: true,
       },
       output_text: refinedArticles,
       input_tokens: totalInputTokens,

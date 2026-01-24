@@ -25,3 +25,4 @@ export { default as TagManager } from './TagManager';
 export { default as AudioUpload } from './AudioUpload';
 export { default as SpeakerLabeling } from './SpeakerLabeling';
 export { default as TranscriptPreview } from './TranscriptPreview';
+export { default as EpisodeHero } from './EpisodeHero';

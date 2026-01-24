@@ -197,7 +197,8 @@ function ReviewHub() {
   /**
    * Check if content is in library
    * @param {string} contentType - blog, social, email
-   * @param {string|null} platform - Platform for social content
+   * @param {string|null} platform - Platform for social content, or article type for blogs
+   *                                 (episode_recap, topic_article, or null for legacy)
    * @param {string} content - The content text to match
    * @returns {Object|null} Library item if found, null otherwise
    */
@@ -212,7 +213,8 @@ function ReviewHub() {
   /**
    * Check if content is scheduled
    * @param {string} contentType - blog, social, email
-   * @param {string|null} platform - Platform for social content
+   * @param {string|null} platform - Platform for social content, or article type for blogs
+   *                                 (episode_recap, topic_article, or null for legacy)
    * @param {string} content - The content text to match
    * @returns {Object|null} Calendar item if found, null otherwise
    */
@@ -394,9 +396,13 @@ function ReviewHub() {
 
   /**
    * Save the edited blog content
+   * For dual-article format, preserves the other article when saving one
+   *
    * @param {Object} stage - The stage to update (stage 7 for edited blog)
+   * @param {string|null} articleType - 'episode_recap', 'topic_article', or null for legacy
+   * @param {boolean} isDualFormat - Whether this is dual-article format
    */
-  async function handleSaveBlog(stage) {
+  async function handleSaveBlog(stage, articleType = null, isDualFormat = false) {
     if (!stage) {
       setError('Stage not found');
       return;
@@ -404,17 +410,38 @@ function ReviewHub() {
 
     try {
       setSavingBlog(true);
-      console.log('[ReviewHub] Saving blog content for stage:', stage.id);
+      console.log('[ReviewHub] Saving blog content for stage:', stage.id, {
+        articleType,
+        isDualFormat,
+      });
+
+      let newOutputText;
+
+      if (isDualFormat && articleType) {
+        // Dual-article format: merge edited content with existing structure
+        const existingOutput = stage.output_text || {};
+        newOutputText = {
+          ...existingOutput,
+          [articleType]: editedBlogContent,
+        };
+        console.log('[ReviewHub] Merging dual-article content:', {
+          editedArticle: articleType,
+          preservedArticle: articleType === 'episode_recap' ? 'topic_article' : 'episode_recap',
+        });
+      } else {
+        // Legacy single-article format: save as string
+        newOutputText = editedBlogContent;
+      }
 
       // Use the stage ID for the API call
       await api.stages.update(stage.id, {
-        output_text: editedBlogContent,
+        output_text: newOutputText,
       });
 
       // Update local state to reflect the change immediately
       setStages((prev) =>
         prev.map((s) =>
-          s.id === stage.id ? { ...s, output_text: editedBlogContent } : s
+          s.id === stage.id ? { ...s, output_text: newOutputText } : s
         )
       );
 
@@ -2196,15 +2223,22 @@ function BlogTab({
   // Get selected blog idea from Stage 3 (for context display)
   const selectedBlogIdea = outlineStage?.output_data?.selected_blog_idea;
 
+  // Determine platform for library/calendar tracking
+  // For dual-article format, each article type is tracked separately
+  const blogPlatform = isDualArticleFormat ? activeArticle : null;
+
   // Check library and calendar status for the current blog post
-  const libraryItem = blogPost ? getLibraryStatus('blog', null, blogPost) : null;
-  const calendarItem = blogPost ? getCalendarStatus('blog', null, blogPost) : null;
+  // Uses platform to distinguish between episode_recap and topic_article
+  const libraryItem = blogPost ? getLibraryStatus('blog', blogPlatform, blogPost) : null;
+  const calendarItem = blogPost ? getCalendarStatus('blog', blogPlatform, blogPost) : null;
 
   // Prepare data for save/schedule
   const blogData = blogPost ? {
-    title: episodeTitle + (isDualArticleFormat && activeArticle === 'topic_article' ? ' - Topic' : ''),
+    title: isDualArticleFormat
+      ? `${episodeTitle} - ${activeArticle === 'episode_recap' ? 'Episode Recap' : 'Topic Article'}`
+      : episodeTitle,
     content_type: 'blog',
-    platform: isDualArticleFormat ? activeArticle : null,
+    platform: blogPlatform,
     content: blogPost,
     source_stage: 7,
   } : null;
@@ -2378,7 +2412,11 @@ function BlogTab({
                     variant="primary"
                     size="sm"
                     leftIcon={Save}
-                    onClick={() => onSaveEdit(stageToUpdate)}
+                    onClick={() => onSaveEdit(
+                      stageToUpdate,
+                      isDualArticleFormat ? activeArticle : null,
+                      isDualArticleFormat
+                    )}
                     loading={savingEdit}
                     disabled={!editedContent.trim()}
                   >

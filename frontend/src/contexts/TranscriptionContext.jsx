@@ -35,6 +35,38 @@ export const TRANSCRIPTION_STATE = {
   ERROR: 'error',
 };
 
+// Transcription steps for more granular progress display
+export const TRANSCRIPTION_STEP = {
+  DOWNLOADING: 'downloading',
+  TRANSCRIBING: 'transcribing',
+  CREATING: 'creating',
+  READY: 'ready',
+};
+
+// Step metadata for UI display
+export const STEP_INFO = {
+  [TRANSCRIPTION_STEP.DOWNLOADING]: {
+    label: 'Downloading audio',
+    description: 'Fetching audio file from podcast feed...',
+    progress: 15,
+  },
+  [TRANSCRIPTION_STEP.TRANSCRIBING]: {
+    label: 'Transcribing',
+    description: 'Converting speech to text...',
+    progress: 50,
+  },
+  [TRANSCRIPTION_STEP.CREATING]: {
+    label: 'Creating episode',
+    description: 'Setting up your episode...',
+    progress: 90,
+  },
+  [TRANSCRIPTION_STEP.READY]: {
+    label: 'Ready',
+    description: 'Transcription complete!',
+    progress: 100,
+  },
+};
+
 // ============================================================================
 // CONTEXT
 // ============================================================================
@@ -50,6 +82,7 @@ export function TranscriptionProvider({ children }) {
   const [activeTranscription, setActiveTranscription] = useState(null);
   const [error, setError] = useState(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [currentStep, setCurrentStep] = useState(null);
 
   // Draft state - completed transcription ready for processing
   const [draftEpisode, setDraftEpisode] = useState(null);
@@ -58,6 +91,7 @@ export function TranscriptionProvider({ children }) {
   // Timer ref for elapsed time tracking
   const timerRef = useRef(null);
   const startTimeRef = useRef(null);
+  const stepTimerRef = useRef(null);
 
   /**
    * Load any active transcription or draft from localStorage on mount
@@ -110,13 +144,18 @@ export function TranscriptionProvider({ children }) {
   }, []);
 
   /**
-   * Track elapsed time during transcription
+   * Track elapsed time during transcription and update step
    */
   useEffect(() => {
     if (state === TRANSCRIPTION_STATE.TRANSCRIBING && startTimeRef.current) {
       timerRef.current = setInterval(() => {
         const elapsed = Math.floor((Date.now() - startTimeRef.current) / 1000);
         setElapsedSeconds(elapsed);
+
+        // Update step based on progress
+        const durationSeconds = activeTranscription?.durationSeconds || DEFAULT_EPISODE_DURATION_SECONDS;
+        const estimatedTotal = Math.ceil((durationSeconds / 60) * 4) + 30;
+        updateStepBasedOnProgress(elapsed, estimatedTotal);
       }, 1000);
 
       return () => {
@@ -125,7 +164,7 @@ export function TranscriptionProvider({ children }) {
         }
       };
     }
-  }, [state]);
+  }, [state, activeTranscription, updateStepBasedOnProgress]);
 
   /**
    * Estimate total transcription time based on episode duration
@@ -172,6 +211,26 @@ export function TranscriptionProvider({ children }) {
   }, [elapsedSeconds, getEstimatedTotalSeconds]);
 
   /**
+   * Simulate step progression for better UX feedback
+   * Steps progress naturally based on elapsed time and estimated duration
+   */
+  const updateStepBasedOnProgress = useCallback((elapsed, estimatedTotal) => {
+    // Step transitions based on % of estimated time
+    // 0-15%: Downloading
+    // 15-85%: Transcribing
+    // 85-100%: Creating episode
+    const progressPercent = (elapsed / estimatedTotal) * 100;
+
+    if (progressPercent < 15) {
+      setCurrentStep(TRANSCRIPTION_STEP.DOWNLOADING);
+    } else if (progressPercent < 85) {
+      setCurrentStep(TRANSCRIPTION_STEP.TRANSCRIBING);
+    } else {
+      setCurrentStep(TRANSCRIPTION_STEP.CREATING);
+    }
+  }, []);
+
+  /**
    * Start a transcription job
    * Returns false if a transcription is already running
    */
@@ -190,7 +249,7 @@ export function TranscriptionProvider({ children }) {
     setDraftFeedEpisode(null);
     localStorage.removeItem(DRAFT_STORAGE_KEY);
 
-    // Set active state
+    // Set active state with initial step
     const transcriptionData = {
       feedEpisodeId: feedEpisode.id,
       feedId: feedEpisode.feed_id,
@@ -204,10 +263,14 @@ export function TranscriptionProvider({ children }) {
 
     setActiveTranscription(transcriptionData);
     setState(TRANSCRIPTION_STATE.TRANSCRIBING);
+    setCurrentStep(TRANSCRIPTION_STEP.DOWNLOADING);
     setError(null);
     setElapsedSeconds(0);
     startTimeRef.current = Date.now();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(transcriptionData));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      ...transcriptionData,
+      step: TRANSCRIPTION_STEP.DOWNLOADING,
+    }));
 
     try {
       // Start the transcription
@@ -215,6 +278,7 @@ export function TranscriptionProvider({ children }) {
 
       // Success - transition to draft state
       setActiveTranscription(null);
+      setCurrentStep(TRANSCRIPTION_STEP.READY);
       localStorage.removeItem(STORAGE_KEY);
 
       // Store as draft
@@ -241,6 +305,7 @@ export function TranscriptionProvider({ children }) {
     } catch (err) {
       // Error - clear active state
       setActiveTranscription(null);
+      setCurrentStep(null);
       localStorage.removeItem(STORAGE_KEY);
       setState(TRANSCRIPTION_STATE.ERROR);
       setError(err.message || 'Transcription failed');
@@ -262,6 +327,7 @@ export function TranscriptionProvider({ children }) {
     }
     setActiveTranscription(null);
     setState(TRANSCRIPTION_STATE.IDLE);
+    setCurrentStep(null);
     setError(null);
     setElapsedSeconds(0);
     startTimeRef.current = null;
@@ -312,6 +378,7 @@ export function TranscriptionProvider({ children }) {
   const isProcessing = state === TRANSCRIPTION_STATE.TRANSCRIBING;
   const progress = getProgress();
   const timeRemaining = getTimeRemaining();
+  const stepInfo = currentStep ? STEP_INFO[currentStep] : null;
 
   return (
     <TranscriptionContext.Provider
@@ -323,6 +390,8 @@ export function TranscriptionProvider({ children }) {
         elapsedSeconds,
         progress,
         timeRemaining,
+        currentStep,
+        stepInfo,
 
         // Draft state
         draftEpisode,

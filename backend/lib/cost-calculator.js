@@ -264,7 +264,7 @@ const STAGE_TOKEN_ESTIMATES = {
   1: { input: 4000, output: 800 },   // Episode Summary (uses transcript + themes)
   2: { input: 3500, output: 1200 },  // Quotes, Tips, Q&As, Blog Ideas (increased output)
   3: { input: 3500, output: 900 },   // Blog Selection + 2 Outlines (3 calls: selection + 2 parallel outlines)
-  4: { input: 3000, output: 1600 },  // DUAL Paragraph Outlines (2 parallel calls for both articles)
+  4: { input: 3000, output: 4000 },  // DUAL Paragraph Outlines (2 parallel calls, detailed sections)
   5: { input: 2500, output: 1000 },  // DUAL Headlines (2 parallel calls for both articles)
   6: { input: 4000, output: 3000 },  // DUAL Draft Generation (~1500 words x 2 articles)
   7: { input: 5000, output: 2400 },  // DUAL Refinement (refines both articles in parallel)

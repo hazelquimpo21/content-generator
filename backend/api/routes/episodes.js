@@ -12,6 +12,7 @@
  * GET    /api/episodes/:id/stages   - Get all stages for episode (polling)
  * GET    /api/episodes/:id/status   - Get processing status
  * PUT    /api/episodes/:id          - Update episode (owner only)
+ * PATCH  /api/episodes/:id          - Partial update episode (owner only)
  * DELETE /api/episodes/:id          - Delete episode (owner or superadmin)
  * POST   /api/episodes/:id/process  - Start processing (owner only)
  * POST   /api/episodes/:id/pause    - Pause processing (owner only)
@@ -379,6 +380,41 @@ router.put('/:id', requireAuth, async (req, res, next) => {
     if (episode_context !== undefined) updates.episode_context = episode_context;
 
     logger.info('Updating episode', {
+      episodeId: id,
+      userId: req.user.id,
+      fields: Object.keys(updates),
+    });
+
+    const episode = await episodeRepo.update(id, updates);
+
+    res.json({ episode });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PATCH /api/episodes/:id
+ * Partial update for episode metadata (alias for PUT).
+ * User must own the episode to update it.
+ */
+router.patch('/:id', requireAuth, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { title, status, episode_context } = req.body;
+
+    // Fetch episode first to check ownership
+    const existingEpisode = await episodeRepo.findById(id);
+
+    // Check authorization (only owner can update)
+    checkEpisodeAccess(existingEpisode, req.user, 'update');
+
+    const updates = {};
+    if (title !== undefined) updates.title = title;
+    if (status !== undefined) updates.status = status;
+    if (episode_context !== undefined) updates.episode_context = episode_context;
+
+    logger.info('Updating episode (PATCH)', {
       episodeId: id,
       userId: req.user.id,
       fields: Object.keys(updates),

@@ -32,6 +32,7 @@ import {
   Zap,
   Rss,
   Circle,
+  Sparkles,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Button, Card, Badge, Spinner, ConfirmDialog, useToast, ActiveTaskBanner, TASK_TYPE, TASK_STATUS } from '@components/shared';
@@ -408,43 +409,6 @@ function Dashboard() {
         />
       )}
 
-      {/* Content Processing Banner - shows when episodes are generating content */}
-      {episodes.filter(ep => ep.status === 'processing').map((processingEpisode) => {
-        const title = processingEpisode.title || processingEpisode.episode_context?.title || 'Episode';
-        const currentPhase = processingEpisode.current_stage !== undefined
-          ? STAGE_TO_PHASE[processingEpisode.current_stage] || 1
-          : 0;
-        const progress = Math.round((currentPhase / TOTAL_PHASES) * 100);
-
-        // Calculate time estimate
-        const startTime = processingEpisode.processing_started_at
-          ? new Date(processingEpisode.processing_started_at)
-          : new Date(processingEpisode.updated_at);
-        const elapsed = Math.floor((Date.now() - startTime.getTime()) / 1000);
-        const remaining = Math.max(0, ESTIMATED_DURATION_SECONDS - elapsed);
-        const timeRemaining = remaining > 60
-          ? `~${Math.ceil(remaining / 60)}m remaining`
-          : remaining > 0
-            ? `~${remaining}s remaining`
-            : 'Finishing up...';
-
-        return (
-          <ActiveTaskBanner
-            key={processingEpisode.id}
-            taskType={TASK_TYPE.CONTENT_PROCESS}
-            status={TASK_STATUS.PROCESSING}
-            title="Generating Content"
-            description={title}
-            progress={progress}
-            timeRemaining={timeRemaining}
-            currentStep={`Phase ${currentPhase} of ${TOTAL_PHASES}`}
-            stepInfo={{ description: `Stage ${processingEpisode.current_stage || 0}` }}
-            onAction={() => navigate(`/episodes/${processingEpisode.id}/processing`)}
-            actionLabel="View Progress"
-          />
-        );
-      })}
-
       {/* From Your Podcast - Quick access to import feed episodes */}
       {!feedsLoading && podcastFeeds.length > 0 && recentFeedEpisodes.length > 0 && (
         <PodcastQuickImport
@@ -538,6 +502,15 @@ function Dashboard() {
         </Card>
       ) : (
         <div className={styles.grid}>
+          {/* Content Processing Cards - prominent cards for episodes generating content */}
+          {episodes.filter(ep => ep.status === 'processing').map((processingEpisode) => (
+            <ContentProcessingCard
+              key={`processing-${processingEpisode.id}`}
+              episode={processingEpisode}
+              onClick={() => navigate(`/episodes/${processingEpisode.id}/processing`)}
+            />
+          ))}
+
           {/* Feed transcription in progress or draft ready - shows at top */}
           {(hasActiveTranscription || hasReadyDraft) && (
             <FeedTranscriptionCard
@@ -598,20 +571,21 @@ function Dashboard() {
               }}
             />
           )}
-          {filteredEpisodes.map((episode) => (
-            <EpisodeCard
-              key={episode.id}
-              episode={episode}
-              onDelete={handleDeleteClick}
-              onClick={() => {
-                if (episode.status === 'processing') {
-                  navigate(`/episodes/${episode.id}/processing`);
-                } else if (episode.status === 'completed') {
-                  navigate(`/episodes/${episode.id}/review`);
-                }
-              }}
-            />
-          ))}
+          {/* Regular episode cards - exclude processing ones since they have dedicated cards above */}
+          {filteredEpisodes
+            .filter(episode => episode.status !== 'processing')
+            .map((episode) => (
+              <EpisodeCard
+                key={episode.id}
+                episode={episode}
+                onDelete={handleDeleteClick}
+                onClick={() => {
+                  if (episode.status === 'completed') {
+                    navigate(`/episodes/${episode.id}/review`);
+                  }
+                }}
+              />
+            ))}
         </div>
       )}
 
@@ -1040,6 +1014,122 @@ function FeedTranscriptionCard({
           <Loader2 className={styles.miniSpinner} size={12} />
           {stepInfo?.description || timeRemaining || 'Processing...'}
         </p>
+      </div>
+    </Card>
+  );
+}
+
+/**
+ * Content Processing Card component
+ * Shows a prominent card when content is being generated.
+ * Displays detailed progress with phase/stage info and animated visuals.
+ *
+ * @param {Object} episode - The episode being processed
+ * @param {Function} onClick - Handler for card click (navigate to processing screen)
+ */
+function ContentProcessingCard({ episode, onClick }) {
+  const title = episode.title || episode.episode_context?.title || 'Episode';
+  const isFromFeed = episode.feed_episode_id || episode.episode_context?.source === 'rss_feed';
+
+  // Calculate phase progress
+  const currentPhase = episode.current_stage !== undefined
+    ? STAGE_TO_PHASE[episode.current_stage] || 1
+    : 1;
+  const progress = Math.round((currentPhase / TOTAL_PHASES) * 100);
+
+  // Calculate time estimate
+  const startTime = episode.processing_started_at
+    ? new Date(episode.processing_started_at)
+    : new Date(episode.updated_at);
+  const elapsed = Math.floor((Date.now() - startTime.getTime()) / 1000);
+  const remaining = Math.max(0, ESTIMATED_DURATION_SECONDS - elapsed);
+
+  const getTimeEstimate = () => {
+    if (remaining > 60) return `~${Math.ceil(remaining / 60)}m remaining`;
+    if (remaining > 0) return `~${remaining}s remaining`;
+    return 'Finishing up...';
+  };
+
+  // Phase names for display
+  const phaseNames = {
+    1: 'Analyzing',
+    2: 'Extracting',
+    3: 'Planning',
+    4: 'Writing',
+    5: 'Distributing',
+  };
+
+  const currentPhaseName = phaseNames[currentPhase] || 'Processing';
+
+  return (
+    <Card
+      className={`${styles.episodeCard} ${styles.contentProcessingCard}`}
+      hoverable
+      onClick={onClick}
+      padding="md"
+    >
+      <div className={styles.cardHeader}>
+        <div className={styles.cardBadges}>
+          <Badge status="processing" dot>
+            Generating Content
+          </Badge>
+          {isFromFeed && (
+            <span className={styles.sourceIndicator} title="From RSS feed">
+              <Rss size={12} />
+            </span>
+          )}
+        </div>
+        <span className={styles.processingPhase}>
+          <Sparkles size={14} />
+          Phase {currentPhase}/{TOTAL_PHASES}
+        </span>
+      </div>
+
+      <h3 className={styles.cardTitle}>{title}</h3>
+
+      {/* Phase indicator pills */}
+      <div className={styles.phaseIndicators}>
+        {[1, 2, 3, 4, 5].map((phase) => (
+          <div
+            key={phase}
+            className={styles.phaseIndicator}
+            data-status={phase < currentPhase ? 'complete' : phase === currentPhase ? 'active' : 'pending'}
+            title={phaseNames[phase]}
+          >
+            {phase < currentPhase ? (
+              <CheckCircle2 size={12} />
+            ) : phase === currentPhase ? (
+              <Loader2 size={12} className={styles.spinning} />
+            ) : (
+              <Circle size={12} />
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className={styles.processingStatus}>
+        <div className={styles.progressWrapper}>
+          <div className={styles.progressBar}>
+            <div
+              className={styles.progressFill}
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <span className={styles.progressText}>{progress}%</span>
+        </div>
+        <p className={styles.timeEstimate}>
+          <Zap size={12} className={styles.processingIcon} />
+          <span className={styles.phaseName}>{currentPhaseName}</span>
+          <span className={styles.timeSeparator}>·</span>
+          {getTimeEstimate()}
+        </p>
+      </div>
+
+      <div className={styles.cardFooter}>
+        <div className={styles.cardAction}>
+          <span>View Progress</span>
+          <ChevronRight size={16} />
+        </div>
       </div>
     </Card>
   );

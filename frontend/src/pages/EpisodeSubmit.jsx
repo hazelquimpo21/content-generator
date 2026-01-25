@@ -12,7 +12,7 @@
  * ============================================================================
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -23,10 +23,13 @@ import {
   FileText,
   Gift,
   Megaphone,
+  Wand2,
+  Check,
 } from 'lucide-react';
 import { Button, Card, Input, useToast } from '@components/shared';
 import { useProcessing } from '@contexts/ProcessingContext';
 import { useTranscription } from '@contexts/TranscriptionContext';
+import { useTranscriptAutoPopulate } from '@hooks/useTranscriptAutoPopulate';
 import api from '@utils/api-client';
 import styles from './EpisodeSubmit.module.css';
 
@@ -57,6 +60,21 @@ function EpisodeSubmit() {
     has_promotion: false,
     promotion_details: '',
   });
+
+  // Track which fields were auto-populated (for visual feedback)
+  const [autoPopulatedFields, setAutoPopulatedFields] = useState(new Set());
+
+  // Track if user has manually edited fields (don't overwrite user edits)
+  const userEditedFieldsRef = useRef(new Set());
+
+  // Auto-populate hook
+  const {
+    analyzing,
+    metadata,
+    error: analyzeError,
+    analyze,
+    minTranscriptLength,
+  } = useTranscriptAutoPopulate();
 
   // Load episode data
   useEffect(() => {
@@ -89,9 +107,89 @@ function EpisodeSubmit() {
     }
   }, [episodeId]);
 
+  // Trigger transcript analysis when episode loads
+  useEffect(() => {
+    if (episode?.transcript && episode.transcript.length >= minTranscriptLength) {
+      // Only analyze if form fields are empty (not already populated from context)
+      const hasEmptyFields = !formData.title && !formData.guest_name;
+      if (hasEmptyFields) {
+        analyze(episode.transcript);
+      }
+    }
+  }, [episode, analyze, minTranscriptLength, formData.title, formData.guest_name]);
+
+  // Auto-populate fields when metadata is available
+  useEffect(() => {
+    if (!metadata) return;
+
+    const newAutoPopulated = new Set();
+
+    setFormData((prev) => {
+      const updates = { ...prev };
+
+      // Auto-populate title if empty and not manually edited
+      if (metadata.suggested_title && !userEditedFieldsRef.current.has('title')) {
+        if (!prev.title || prev.title === '') {
+          updates.title = metadata.suggested_title;
+          newAutoPopulated.add('title');
+        }
+      }
+
+      // Auto-populate guest name if empty and not manually edited
+      if (metadata.guest_name && !userEditedFieldsRef.current.has('guest_name')) {
+        if (!prev.guest_name || prev.guest_name === '') {
+          updates.guest_name = metadata.guest_name;
+          newAutoPopulated.add('guest_name');
+        }
+      }
+
+      // Auto-populate guest credentials if empty and not manually edited
+      if (metadata.guest_credentials && !userEditedFieldsRef.current.has('guest_credentials')) {
+        if (!prev.guest_credentials || prev.guest_credentials === '') {
+          updates.guest_credentials = metadata.guest_credentials;
+          newAutoPopulated.add('guest_credentials');
+        }
+      }
+
+      // Auto-populate notes with topics and summary if empty
+      if (!userEditedFieldsRef.current.has('notes')) {
+        if (!prev.notes || prev.notes === '') {
+          const topicsText = metadata.main_topics?.length
+            ? `Topics: ${metadata.main_topics.join(', ')}`
+            : '';
+          const summaryText = metadata.brief_summary || '';
+          const notesContent = [topicsText, summaryText].filter(Boolean).join('\n\n');
+          if (notesContent) {
+            updates.notes = notesContent;
+            newAutoPopulated.add('notes');
+          }
+        }
+      }
+
+      return updates;
+    });
+
+    // Show visual feedback for auto-populated fields
+    setAutoPopulatedFields(newAutoPopulated);
+
+    // Clear visual feedback after animation
+    if (newAutoPopulated.size > 0) {
+      setTimeout(() => {
+        setAutoPopulatedFields(new Set());
+      }, 2000);
+    }
+  }, [metadata]);
+
   // Handle form field changes
   function handleFieldChange(field, value) {
+    userEditedFieldsRef.current.add(field);
     setFormData((prev) => ({ ...prev, [field]: value }));
+    // Clear auto-populated indicator when user edits
+    setAutoPopulatedFields((prev) => {
+      const next = new Set(prev);
+      next.delete(field);
+      return next;
+    });
   }
 
   // Handle promotion toggle
@@ -235,9 +333,37 @@ function EpisodeSubmit() {
         {/* Episode Details */}
         <Card
           title="Episode Details"
-          subtitle="Basic information about this episode"
-          headerAction={<User className={styles.sectionIcon} />}
+          subtitle={
+            analyzing
+              ? 'Analyzing transcript to auto-populate fields...'
+              : metadata
+                ? 'Fields auto-populated from transcript'
+                : 'Basic information about this episode'
+          }
+          headerAction={
+            analyzing ? (
+              <Loader2 className={`${styles.sectionIcon} ${styles.spinning}`} size={20} />
+            ) : metadata ? (
+              <Wand2 className={styles.sectionIcon} />
+            ) : (
+              <User className={styles.sectionIcon} />
+            )
+          }
         >
+          {/* Analysis status indicator */}
+          {analyzing && (
+            <div className={styles.analyzingBanner}>
+              <Loader2 className={styles.spinning} size={16} />
+              <span>Analyzing transcript for title and guest information...</span>
+            </div>
+          )}
+          {metadata && !analyzing && (
+            <div className={styles.analysisCompleteBanner}>
+              <Check size={16} />
+              <span>Fields auto-populated from transcript analysis</span>
+            </div>
+          )}
+
           <div className={styles.formGrid}>
             <Input
               label="Episode Title"
@@ -245,7 +371,7 @@ function EpisodeSubmit() {
               value={formData.title}
               onChange={(e) => handleFieldChange('title', e.target.value)}
               required
-              containerClassName={styles.fullWidth}
+              containerClassName={`${styles.fullWidth} ${autoPopulatedFields.has('title') ? styles.autoPopulated : ''}`}
             />
 
             <Input
@@ -253,6 +379,7 @@ function EpisodeSubmit() {
               placeholder="Dr. Jane Smith"
               value={formData.guest_name}
               onChange={(e) => handleFieldChange('guest_name', e.target.value)}
+              containerClassName={autoPopulatedFields.has('guest_name') ? styles.autoPopulated : ''}
             />
 
             <Input
@@ -260,6 +387,7 @@ function EpisodeSubmit() {
               placeholder="PhD, Clinical Psychologist"
               value={formData.guest_credentials}
               onChange={(e) => handleFieldChange('guest_credentials', e.target.value)}
+              containerClassName={autoPopulatedFields.has('guest_credentials') ? styles.autoPopulated : ''}
             />
 
             <Input
@@ -269,7 +397,7 @@ function EpisodeSubmit() {
               rows={3}
               value={formData.notes}
               onChange={(e) => handleFieldChange('notes', e.target.value)}
-              containerClassName={styles.fullWidth}
+              containerClassName={`${styles.fullWidth} ${autoPopulatedFields.has('notes') ? styles.autoPopulated : ''}`}
             />
           </div>
         </Card>

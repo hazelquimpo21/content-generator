@@ -18,10 +18,10 @@
  * Output Structure:
  * -----------------
  * {
- *   quotes: [...],        // 8-12 verbatim quotes
- *   tips: [...],          // 3-5 actionable tips
- *   qa_pairs: [...],      // 5 "They Ask, You Answer" Q&As
- *   blog_ideas: [...]     // 6 blog post topic ideas
+ *   quotes: [...],        // exactly 5 verbatim quotes
+ *   tips: [...],          // exactly 5 actionable tips
+ *   qa_pairs: [...],      // exactly 5 "They Ask, You Answer" Q&As
+ *   blog_ideas: [...]     // exactly 6 blog post topic ideas
  * }
  *
  * Input: Original transcript + Stage 0 themes for context
@@ -41,15 +41,9 @@ import { ValidationError } from '../lib/errors.js';
 // Model for extraction - Haiku is perfect for precise extraction tasks
 const EXTRACTION_MODEL = 'claude-3-5-haiku-20241022';
 
-// Target counts
-const MIN_QUOTES = 5;
-const MAX_QUOTES = 15;
-const TARGET_QUOTES = 10;
-
-const MIN_TIPS = 3;
-const MAX_TIPS = 7;
-const TARGET_TIPS = 5;
-
+// Exact required counts (no ranges - AI must provide exactly this many)
+const REQUIRED_QUOTES = 5;
+const REQUIRED_TIPS = 5;
 const REQUIRED_QA_COUNT = 5;
 const REQUIRED_BLOG_IDEAS = 6;
 
@@ -63,7 +57,7 @@ const CONTENT_BUILDING_BLOCKS_SCHEMA = {
   properties: {
     quotes: {
       type: 'array',
-      description: `Array of ${TARGET_QUOTES} key verbatim quotes from the transcript`,
+      description: `Array of exactly ${REQUIRED_QUOTES} key verbatim quotes from the transcript`,
       items: {
         type: 'object',
         properties: {
@@ -87,12 +81,12 @@ const CONTENT_BUILDING_BLOCKS_SCHEMA = {
         },
         required: ['text', 'speaker'],
       },
-      minItems: MIN_QUOTES,
-      maxItems: MAX_QUOTES,
+      minItems: REQUIRED_QUOTES,
+      maxItems: REQUIRED_QUOTES,
     },
     tips: {
       type: 'array',
-      description: `Array of ${TARGET_TIPS} specific, actionable tips from the episode`,
+      description: `Array of exactly ${REQUIRED_TIPS} specific, actionable tips from the episode`,
       items: {
         type: 'object',
         properties: {
@@ -112,8 +106,8 @@ const CONTENT_BUILDING_BLOCKS_SCHEMA = {
         },
         required: ['tip', 'context', 'category'],
       },
-      minItems: MIN_TIPS,
-      maxItems: MAX_TIPS,
+      minItems: REQUIRED_TIPS,
+      maxItems: REQUIRED_TIPS,
     },
     qa_pairs: {
       type: 'array',
@@ -199,8 +193,8 @@ function validateOutput(data) {
     throw new ValidationError('quotes', 'Missing or invalid quotes array');
   }
 
-  if (data.quotes.length < MIN_QUOTES) {
-    throw new ValidationError('quotes', `Need at least ${MIN_QUOTES} quotes, got ${data.quotes.length}`);
+  if (data.quotes.length !== REQUIRED_QUOTES) {
+    throw new ValidationError('quotes', `Need exactly ${REQUIRED_QUOTES} quotes, got ${data.quotes.length}`);
   }
 
   // Validate each quote
@@ -230,8 +224,8 @@ function validateOutput(data) {
     throw new ValidationError('tips', 'Missing or invalid tips array');
   }
 
-  if (data.tips.length < MIN_TIPS) {
-    throw new ValidationError('tips', `Need at least ${MIN_TIPS} tips, got ${data.tips.length}`);
+  if (data.tips.length !== REQUIRED_TIPS) {
+    throw new ValidationError('tips', `Need exactly ${REQUIRED_TIPS} tips, got ${data.tips.length}`);
   }
 
   // Validate each tip
@@ -400,15 +394,17 @@ IMPORTANT: Use these exact speaker names when attributing quotes.`;
   // Build the system prompt (conversational, human tone)
   const systemPrompt = `You're a content strategist who knows how to mine a conversation for gold. You pull out the moments worth quoting, the advice worth sharing, the questions the audience is secretly asking, and the article ideas hiding in the conversation.
 
-You're extracting four types of content:
+You're extracting four types of content. You MUST provide EXACTLY the specified count for each type - no more, no less:
 
-1. QUOTES (8-12): Verbatim, word-for-word moments someone would screenshot and share. Must be exact quotes from the transcript.
+1. QUOTES (exactly 5): Verbatim, word-for-word moments someone would screenshot and share. Must be exact quotes from the transcript. Every conversation has quotable moments - look for statements that are insightful, surprising, emotionally resonant, or clearly articulate an important point.
 
-2. TIPS (3-5): Specific, actionable advice people can use TODAY. Not vague platitudes like "practice self-care" but real actions.
+2. TIPS (exactly 5): Specific, actionable advice people can use TODAY. Not vague platitudes like "practice self-care" but real actions. If explicit tips are scarce, identify implied advice from the discussion.
 
 3. "THEY ASK, YOU ANSWER" Q&As (exactly 5): Questions the target audience is already asking before they know this host exists. Things they'd type into Google or ask a friend. Each answer should be thorough (3-5 sentences) based on episode content.
 
 4. BLOG POST IDEAS (exactly 6): Standalone article topics from this episode's content. Mix of specific/narrow topics and broader explorations. At least 2 should be highly searchable.
+
+CRITICAL: You must return exactly 5 quotes, 5 tips, 5 Q&As, and 6 blog ideas. No exceptions.
 
 Write like a human. Be specific. Avoid AI clichés.`;
 

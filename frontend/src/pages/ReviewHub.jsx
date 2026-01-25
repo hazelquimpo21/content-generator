@@ -95,6 +95,31 @@ function buildTabs(isDualArticle) {
 }
 
 /**
+ * Parse output_text which may be a JSON string (TEXT column) or object
+ * Stage 6/7 output_text is stored as TEXT in the database, so when an object
+ * is saved it gets JSON-stringified. This function parses it back to an object.
+ * @param {string|Object} outputText - Raw output_text from stage
+ * @returns {string|Object} Parsed object if valid JSON, otherwise original value
+ */
+function parseOutputText(outputText) {
+  if (!outputText) return outputText;
+  if (typeof outputText === 'object') return outputText;
+  if (typeof outputText === 'string') {
+    // Check if it looks like a JSON object (starts with {)
+    const trimmed = outputText.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      try {
+        return JSON.parse(trimmed);
+      } catch {
+        // Not valid JSON, return as-is
+        return outputText;
+      }
+    }
+  }
+  return outputText;
+}
+
+/**
  * ReviewHub page component
  */
 function ReviewHub() {
@@ -481,7 +506,8 @@ function ReviewHub() {
 
       if (isDualFormat && articleType) {
         // Dual-article format: merge edited content with existing structure
-        const existingOutput = stage.output_text || {};
+        // Parse existing output_text in case it's still a JSON string from DB
+        const existingOutput = parseOutputText(stage.output_text) || {};
         newOutputText = {
           ...existingOutput,
           [articleType]: editedBlogContent,
@@ -1067,9 +1093,10 @@ function ReviewHub() {
   // DUAL-ARTICLE DETECTION
   // ============================================================================
   // Check if Stage 6 or 7 has dual-article format (object with episode_recap/topic_article)
+  // Note: output_text is stored as TEXT in DB, so parse JSON string if needed
   const stage6 = stages.find((s) => s.stage_number === 6 && !s.sub_stage);
   const stage7 = stages.find((s) => s.stage_number === 7 && !s.sub_stage);
-  const blogOutput = stage7?.output_text || stage6?.output_text;
+  const blogOutput = parseOutputText(stage7?.output_text || stage6?.output_text);
   const isDualArticleFormat = blogOutput && typeof blogOutput === 'object' &&
     (blogOutput.episode_recap || blogOutput.topic_article);
 
@@ -2351,7 +2378,8 @@ function BlogTab({
   // ============================================================================
   // DETECT OUTPUT FORMAT (dual articles vs legacy single article)
   // ============================================================================
-  const rawOutputText = editedStage?.output_text || draftStage?.output_text;
+  // Note: output_text is stored as TEXT in DB, so parse JSON string if needed
+  const rawOutputText = parseOutputText(editedStage?.output_text || draftStage?.output_text);
 
   // Check if this is the new dual-article format (object) or legacy (string)
   const isDualArticleFormat = rawOutputText && typeof rawOutputText === 'object';

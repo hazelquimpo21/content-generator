@@ -705,7 +705,7 @@ export async function processEpisode(episodeId, options = {}) {
       episodeId,
       error: error.message,
       errorType: error.name,
-      stageNumber: error.stageNumber,
+      stageNumber: error.stage,
       stageName: error.stageName,
       phasesCompletedBeforeFailure: phasesCompleted,
       costBeforeFailure: totalCost.toFixed(4),
@@ -719,10 +719,10 @@ export async function processEpisode(episodeId, options = {}) {
     });
 
     // Mark the failed stage if we know which one
-    if (error.stageNumber !== undefined && error.stageNumber >= 0) {
+    if (error.stage !== undefined && error.stage >= 0) {
       await stageRepo.markFailed(
         episodeId,
-        error.stageNumber,
+        error.stage,
         error.message,
         error.toJSON ? error.toJSON() : { message: error.message }
       );

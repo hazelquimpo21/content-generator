@@ -632,7 +632,8 @@ router.post('/:id/reprocess', requireAuth, async (req, res, next) => {
     });
 
     // Start processing in background (don't await)
-    processEpisode(id, { startFromStage: 0 })
+    // skipStageCreation: true because resetAllStages already preserved the stage records
+    processEpisode(id, { startFromStage: 0, skipStageCreation: true })
       .catch(error => {
         logger.error('Background reprocessing failed', {
           episodeId: id,

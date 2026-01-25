@@ -470,6 +470,7 @@ export async function processEpisode(episodeId, options = {}) {
     resumeFromPhase,
     startFromStage,  // Backward compatibility
     onProgress,
+    skipStageCreation,  // Set to true when reprocessing (stages already exist)
   } = options;
 
   // -------------------------------------------------------------------------
@@ -546,9 +547,9 @@ export async function processEpisode(episodeId, options = {}) {
     await episodeRepo.updateStatus(episodeId, 'processing', 0);
 
     // -----------------------------------------------------------------------
-    // Create stage records if fresh start
+    // Create stage records if fresh start (skip if reprocessing - stages exist)
     // -----------------------------------------------------------------------
-    if (!isResume) {
+    if (!isResume && !skipStageCreation) {
       logger.info('📋 Creating stage records...', { episodeId });
       await stageRepo.createAllStages(episodeId);
     }

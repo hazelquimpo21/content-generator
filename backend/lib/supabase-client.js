@@ -935,7 +935,7 @@ export const stageRepo = {
       output_data: null,
       output_text: null,
       cost_usd: null,
-      duration_ms: null,
+      duration_seconds: null,
       error_message: null,
       retry_count: 0,
       started_at: null,

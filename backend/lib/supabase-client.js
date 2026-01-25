@@ -402,6 +402,36 @@ export const stageRepo = {
     // Total records: 10 (stages 0-7, 9) + 4 (stage 8 platforms) = 13
     const totalRecords = 13;
 
+    // Check if stages already exist for this episode (idempotent operation)
+    const { data: existingStages, error: checkError } = await db
+      .from('stage_outputs')
+      .select('id, stage_number, sub_stage')
+      .eq('episode_id', episodeId)
+      .limit(1);
+
+    if (checkError) {
+      logger.dbError('select', 'stage_outputs', checkError, {
+        episodeId,
+        operation: 'checkExistingStages',
+      });
+      throw new DatabaseError('select', `Failed to check existing stages: ${checkError.message}`);
+    }
+
+    // If stages already exist, return them instead of trying to create duplicates
+    if (existingStages && existingStages.length > 0) {
+      logger.info('📋 Stages already exist, skipping creation', { episodeId });
+      const { data: allStages, error: fetchError } = await db
+        .from('stage_outputs')
+        .select('*')
+        .eq('episode_id', episodeId)
+        .order('stage_number', { ascending: true });
+
+      if (fetchError) {
+        throw new DatabaseError('select', `Failed to fetch existing stages: ${fetchError.message}`);
+      }
+      return allStages;
+    }
+
     // Log the batch insert operation with full context for debugging
     logger.dbQuery('insert', 'stage_outputs (batch)', {
       episodeId,

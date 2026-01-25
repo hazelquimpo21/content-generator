@@ -18,11 +18,31 @@ AI analyzers produce better results when they have a clear, focused task. A sing
 - Faster execution through parallelization
 - Easier testing and debugging
 
-### Stage 8: The Case Study
+### Stage 6 & Stage 8: Case Studies
 
-Stage 8 (Social Content) demonstrates this philosophy perfectly.
+**Stage 6 (Blog Drafts)** and **Stage 8 (Social Content)** both demonstrate this philosophy.
 
-**The wrong approach (avoided):**
+**Stage 6 - The wrong approach (avoided):**
+```javascript
+// BAD: One API call tries to write TWO different articles
+// - Model's attention is split between two tasks
+// - Requires complex parsing to separate the articles
+// - If one article fails validation, must regenerate both
+generateBothBlogPosts() {
+  const response = await callAI("Write BOTH articles...");
+  const { article1, article2 } = parseArticles(response); // Fragile parsing
+}
+```
+
+**Stage 6 - The right approach (implemented):**
+```javascript
+// GOOD: Two focused API calls, one article each
+const episodeRecap = await generateSingleArticle('episode_recap');  // Full attention
+const topicArticle = await generateSingleArticle('topic_article');  // Full attention
+// No parsing needed - each call returns one clean article
+```
+
+**Stage 8 - The wrong approach (avoided):**
 ```javascript
 // BAD: 400+ lines, unfocused, hard to test, sequential
 generateSocial() {
@@ -34,7 +54,7 @@ generateSocial() {
 }
 ```
 
-**The right approach (implemented):**
+**Stage 8 - The right approach (implemented):**
 ```javascript
 // GOOD: Focused, parallel, specialized
 generateInstagram()  // ~250 lines, Instagram-specific prompts & validation
@@ -43,7 +63,7 @@ generateLinkedIn()   // ~250 lines, LinkedIn-specific prompts & validation
 generateFacebook()   // ~250 lines, Facebook-specific prompts & validation
 ```
 
-Each platform analyzer:
+Each focused analyzer:
 - Has its own prompt file (`stage-08-instagram.md`, etc.)
 - Has platform-specific validation rules
 - Runs in parallel with the others
@@ -143,17 +163,25 @@ The pipeline processes podcast transcripts through **4 phases** containing **10 
                                        │
                                        ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ ✍️ PHASE 3: WRITE (2 tasks, SEQUENTIAL)                                       │
+│ ✍️ PHASE 3: WRITE (3 tasks, SEQUENTIAL)                                       │
 │ ════════════════════════════════════════════════════════════════════════════ │
-│ Must be sequential - refine needs the draft.                                  │
+│ Sequential execution - each step needs the previous output.                   │
+│ Stage 6 is split into focused analyzers (6a, 6b) following the core          │
+│ philosophy: AI works best with one clear task per API call.                  │
 │                                                                               │
 │   ┌────────────────────────────┐                                              │
-│   │ Stage 6: draftBlogPost     │                                              │
+│   │ Stage 6a: Episode Recap    │                                              │
 │   │ (GPT-5 mini)               │                                              │
-│   │                            │                                              │
-│   │ Output (BOTH types):       │                                              │
-│   │ • output_data: { word_count, structure }                                  │
-│   │ • output_text: "# Blog..." ← THE ACTUAL POST                              │
+│   │ One focused API call       │                                              │
+│   │ Output: episode_recap text │                                              │
+│   └─────────────┬──────────────┘                                              │
+│                 │                                                             │
+│                 ▼                                                             │
+│   ┌────────────────────────────┐                                              │
+│   │ Stage 6b: Topic Article    │                                              │
+│   │ (GPT-5 mini)               │                                              │
+│   │ One focused API call       │                                              │
+│   │ Output: topic_article text │                                              │
 │   └─────────────┬──────────────┘                                              │
 │                 │                                                             │
 │                 ▼                                                             │
@@ -194,9 +222,14 @@ The pipeline processes podcast transcripts through **4 phases** containing **10 
 |-------|-------|-----------|------------|
 | Phase 1 | 2 | Parallel | ~7 sec |
 | Phase 2 | 3 | 1 sequential + 2 parallel | ~5 sec |
-| Phase 3 | 2 | Sequential | 0 sec |
+| Phase 3 | 3 | Sequential (6a → 6b → 7) | 0 sec |
 | Phase 4 | 5 | Parallel | ~6 sec |
-| **Total** | **12** | | **~18 sec (~30%)** |
+| **Total** | **13** | | **~18 sec (~30%)** |
+
+**Note:** Phase 3 runs sequentially by design. While 6a and 6b could theoretically run in parallel (they're independent), we run them sequentially to:
+- Ensure consistent quality (full model attention per article)
+- Simplify debugging (clear execution order)
+- Keep API rate limits comfortable
 
 ---
 
@@ -210,7 +243,8 @@ The pipeline processes podcast transcripts through **4 phases** containing **10 
 | 3 | Blog Outline | GPT-5 mini | OpenAI | plan | `post_structure` |
 | 4 | Paragraph Details | GPT-5 mini | OpenAI | plan | `section_details[]` |
 | 5 | Headlines & Copy | GPT-5 mini | OpenAI | plan | `headlines[]`, `subheadings[]`, `taglines[]` |
-| 6 | Blog Draft | GPT-5 mini | OpenAI | write | `output_text` (blog post), `word_count` |
+| 6a | Episode Recap Draft | GPT-5 mini | OpenAI | write | `episode_recap` (blog post) |
+| 6b | Topic Article Draft | GPT-5 mini | OpenAI | write | `topic_article` (blog post) |
 | 7 | Refinement | Claude Sonnet | Anthropic | write | `output_text` (refined blog) |
 | 8a | Instagram | Claude Sonnet | Anthropic | distribute | `instagram[]` |
 | 8b | Twitter/X | Claude Sonnet | Anthropic | distribute | `twitter[]` |
@@ -353,5 +387,5 @@ Typical cost per episode (~10,000 word transcript):
 
 ---
 
-*Last updated: 2025-01-15*
-*Related: ARCHITECTURE.md, CODE-STANDARDS.md*
+*Last updated: 2026-01-25*
+*Related: ARCHITECTURE.md, CODE-STANDARDS.md, STAGE-DATA-FLOW.md*

@@ -96,6 +96,8 @@ function Dashboard() {
   // State for episode list
   const [episodes, setEpisodes] = useState([]);
   const [processingEpisodes, setProcessingEpisodes] = useState([]); // Always track processing episodes
+  const knownProcessingIdsRef = useRef(new Set()); // Track IDs we know are processing to avoid race conditions
+  const fetchRequestIdRef = useRef(0); // Counter to ignore stale fetch responses
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -184,9 +186,11 @@ function Dashboard() {
     }
   }
 
-  // Poll for updates when there are processing episodes
+  // Poll for updates when there are processing episodes or known processing IDs
   useEffect(() => {
-    if (processingEpisodes.length === 0) {
+    const hasProcessing = processingEpisodes.length > 0 || knownProcessingIdsRef.current.size > 0;
+
+    if (!hasProcessing) {
       // No processing episodes, stop polling
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
@@ -197,6 +201,9 @@ function Dashboard() {
 
     // Start polling
     pollIntervalRef.current = setInterval(async () => {
+      const pollId = Date.now();
+      console.log(`[Dashboard:poll:${pollId}] Polling, known IDs:`, [...knownProcessingIdsRef.current]);
+
       try {
         // Always fetch processing episodes to track their progress
         const [filteredData, processingData] = await Promise.all([
@@ -207,14 +214,19 @@ function Dashboard() {
         const newEpisodes = filteredData.episodes || [];
         const newProcessingEpisodes = processingData.episodes || [];
 
-        // Check for newly completed episodes and show toast
-        processingEpisodes.forEach((prevEp) => {
-          const stillProcessing = newProcessingEpisodes.find(ep => ep.id === prevEp.id);
+        console.log(`[Dashboard:poll:${pollId}] Got ${newProcessingEpisodes.length} processing episodes`);
+
+        // Check for completed episodes from our known set
+        const completedIds = [];
+        knownProcessingIdsRef.current.forEach((knownId) => {
+          const stillProcessing = newProcessingEpisodes.find(ep => ep.id === knownId);
           if (!stillProcessing) {
             // Episode is no longer processing - check if it completed
-            const completedEp = newEpisodes.find(ep => ep.id === prevEp.id && ep.status === 'completed');
+            const completedEp = newEpisodes.find(ep => ep.id === knownId && ep.status === 'completed');
             if (completedEp) {
+              completedIds.push(knownId);
               const title = completedEp.title || completedEp.episode_context?.title || 'Episode';
+              console.log(`[Dashboard:poll:${pollId}] Episode completed: ${knownId}`);
               showToast({
                 message: 'Processing complete!',
                 description: `"${title}" is ready to review.`,
@@ -223,9 +235,22 @@ function Dashboard() {
                 action: () => navigate(`/episodes/${completedEp.id}/review`),
                 actionLabel: 'View content',
               });
+            } else {
+              // Not completed but not processing - check for error or just refetch
+              const errorEp = newEpisodes.find(ep => ep.id === knownId && ep.status === 'error');
+              if (errorEp) {
+                completedIds.push(knownId);
+                console.log(`[Dashboard:poll:${pollId}] Episode errored: ${knownId}`);
+              }
             }
           }
         });
+
+        // Remove completed/errored IDs from known set
+        completedIds.forEach(id => knownProcessingIdsRef.current.delete(id));
+
+        // Add any new processing episodes to known set
+        newProcessingEpisodes.forEach(ep => knownProcessingIdsRef.current.add(ep.id));
 
         setEpisodes(newEpisodes);
         setProcessingEpisodes(newProcessingEpisodes);
@@ -244,8 +269,13 @@ function Dashboard() {
   /**
    * Fetch all episodes from the API
    * Also fetches processing episodes separately so they always show
+   * Uses request ID to prevent race conditions from stale responses
    */
   async function fetchEpisodes() {
+    // Increment request ID to track this specific request
+    const requestId = ++fetchRequestIdRef.current;
+    console.log(`[Dashboard:${requestId}] Starting fetch, known processing IDs:`, [...knownProcessingIdsRef.current]);
+
     try {
       setLoading(true);
       setError(null);
@@ -262,19 +292,61 @@ function Dashboard() {
         statusFilter !== 'processing' ? api.episodes.list({ status: 'processing' }) : null,
       ]);
 
+      // Get processing episodes from the appropriate source
+      const newProcessingEpisodes = statusFilter === 'processing'
+        ? (filteredData.episodes || [])
+        : (processingData?.episodes || []);
+
+      console.log(`[Dashboard:${requestId}] Fetched ${newProcessingEpisodes.length} processing episodes`);
+
+      // ALWAYS update known processing IDs, even from "stale" responses
+      // This ensures we don't lose track of processing episodes due to race conditions
+      newProcessingEpisodes.forEach(ep => {
+        if (!knownProcessingIdsRef.current.has(ep.id)) {
+          console.log(`[Dashboard:${requestId}] Adding new processing ID: ${ep.id}`);
+          knownProcessingIdsRef.current.add(ep.id);
+        }
+      });
+
+      // Check if this is a stale response (not the latest request)
+      const isStale = requestId !== fetchRequestIdRef.current;
+      if (isStale) {
+        console.log(`[Dashboard:${requestId}] Stale response (current: ${fetchRequestIdRef.current}), only tracking IDs`);
+        // Still trigger a re-render if we found new processing episodes
+        // by using functional update that merges with existing
+        if (newProcessingEpisodes.length > 0) {
+          setProcessingEpisodes(prev => {
+            const existingIds = new Set(prev.map(ep => ep.id));
+            const newOnes = newProcessingEpisodes.filter(ep => !existingIds.has(ep.id));
+            return newOnes.length > 0 ? [...prev, ...newOnes] : prev;
+          });
+        }
+        return;
+      }
+
       setEpisodes(filteredData.episodes || []);
 
-      // Set processing episodes (either from filter or separate fetch)
-      if (statusFilter === 'processing') {
-        setProcessingEpisodes(filteredData.episodes || []);
+      // IMPORTANT: Don't clear processing episodes if we have known IDs but got empty results
+      // This handles the race condition where a fetch returns before DB is updated
+      // Only polling will clean up completed episodes from the known set
+      if (newProcessingEpisodes.length === 0 && knownProcessingIdsRef.current.size > 0) {
+        console.log(`[Dashboard:${requestId}] Empty result but have known IDs, preserving current state`);
+        // Keep existing processing episodes, polling will update
       } else {
-        setProcessingEpisodes(processingData?.episodes || []);
+        setProcessingEpisodes(newProcessingEpisodes);
       }
     } catch (err) {
+      // Ignore errors from stale requests
+      if (requestId !== fetchRequestIdRef.current) {
+        return;
+      }
       console.error('[Dashboard] Failed to fetch episodes:', err);
       setError(err.message || 'Failed to load episodes');
     } finally {
-      setLoading(false);
+      // Only update loading state if this is still the current request
+      if (requestId === fetchRequestIdRef.current) {
+        setLoading(false);
+      }
     }
   }
 

@@ -206,6 +206,13 @@ Create headlines that:
   );
 
   const result = response.functionCall;
+  if (!result) {
+    logger.error('Episode Recap headlines: No function call returned from API', {
+      episodeId,
+      responseKeys: Object.keys(response),
+    });
+    throw new ValidationError('functionCall', 'OpenAI did not return a valid function call for Episode Recap headlines');
+  }
   validateHeadlines(result, 'Episode Recap', episodeId);
 
   logger.info('  ✓ Episode Recap headlines created', {
@@ -279,6 +286,13 @@ Create headlines that:
   );
 
   const result = response.functionCall;
+  if (!result) {
+    logger.error('Topic Article headlines: No function call returned from API', {
+      episodeId,
+      responseKeys: Object.keys(response),
+    });
+    throw new ValidationError('functionCall', 'OpenAI did not return a valid function call for Topic Article headlines');
+  }
   validateHeadlines(result, 'Topic Article', episodeId);
 
   logger.info('  ✓ Topic Article headlines created', {

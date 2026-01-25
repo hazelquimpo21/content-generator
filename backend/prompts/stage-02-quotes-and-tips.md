@@ -24,9 +24,11 @@ You're extracting four types of content from this conversation. Each one serves 
 
 ---
 
-### 1. Powerful Quotes (8-12 quotes)
+### 1. Powerful Quotes (exactly 5 quotes)
 
-Find the moments someone would screenshot and share. The lines that make people pause. Word-for-word, exactly as they were said.
+Find exactly 5 moments someone would screenshot and share. The lines that make people pause. Word-for-word, exactly as they were said.
+
+You MUST find exactly 5 quotes. Every conversation has quotable moments—look harder if needed. Consider statements that are insightful, surprising, emotionally resonant, or clearly articulate an important point.
 
 Look for quotes that are:
 - **Complete thoughts** (not fragments that need context)
@@ -38,9 +40,11 @@ For each quote, note who said it and why it matters.
 
 ---
 
-### 2. Actionable Tips (3-5 tips)
+### 2. Actionable Tips (exactly 5 tips)
 
-Find the specific, tactical advice that listeners can use TODAY. Not vague platitudes. Real actions.
+Find exactly 5 pieces of specific, tactical advice that listeners can use TODAY. Not vague platitudes. Real actions.
+
+You MUST find exactly 5 tips. Look for any advice, recommendations, or suggested approaches mentioned in the conversation. If explicit tips are scarce, identify implied advice from the discussion.
 
 **Strong tips look like:**
 - "When you catch yourself spiraling, name five things you can see, four you can hear, three you can touch"
@@ -108,7 +112,7 @@ Write your response in clear sections:
 **Why it works:** [Brief explanation]
 **Best used for:** [headline / pullquote / social / key point]
 
-[Continue for all 8-12 quotes...]
+[Continue for all 5 quotes...]
 
 ## Tips
 
@@ -116,7 +120,7 @@ Write your response in clear sections:
 **When to use it:** [Context]
 **Category:** [mindset / communication / practice / boundary / self-care]
 
-[Continue for all 3-5 tips...]
+[Continue for all 5 tips...]
 
 ## They Ask, You Answer
 

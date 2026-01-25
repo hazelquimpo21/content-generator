@@ -408,6 +408,43 @@ function Dashboard() {
         />
       )}
 
+      {/* Content Processing Banner - shows when episodes are generating content */}
+      {episodes.filter(ep => ep.status === 'processing').map((processingEpisode) => {
+        const title = processingEpisode.title || processingEpisode.episode_context?.title || 'Episode';
+        const currentPhase = processingEpisode.current_stage !== undefined
+          ? STAGE_TO_PHASE[processingEpisode.current_stage] || 1
+          : 0;
+        const progress = Math.round((currentPhase / TOTAL_PHASES) * 100);
+
+        // Calculate time estimate
+        const startTime = processingEpisode.processing_started_at
+          ? new Date(processingEpisode.processing_started_at)
+          : new Date(processingEpisode.updated_at);
+        const elapsed = Math.floor((Date.now() - startTime.getTime()) / 1000);
+        const remaining = Math.max(0, ESTIMATED_DURATION_SECONDS - elapsed);
+        const timeRemaining = remaining > 60
+          ? `~${Math.ceil(remaining / 60)}m remaining`
+          : remaining > 0
+            ? `~${remaining}s remaining`
+            : 'Finishing up...';
+
+        return (
+          <ActiveTaskBanner
+            key={processingEpisode.id}
+            taskType={TASK_TYPE.CONTENT_PROCESS}
+            status={TASK_STATUS.PROCESSING}
+            title="Generating Content"
+            description={title}
+            progress={progress}
+            timeRemaining={timeRemaining}
+            currentStep={`Phase ${currentPhase} of ${TOTAL_PHASES}`}
+            stepInfo={{ description: `Stage ${processingEpisode.current_stage || 0}` }}
+            onAction={() => navigate(`/episodes/${processingEpisode.id}/processing`)}
+            actionLabel="View Progress"
+          />
+        );
+      })}
+
       {/* From Your Podcast - Quick access to import feed episodes */}
       {!feedsLoading && podcastFeeds.length > 0 && recentFeedEpisodes.length > 0 && (
         <PodcastQuickImport

@@ -26,3 +26,4 @@ export { default as AudioUpload } from './AudioUpload';
 export { default as SpeakerLabeling } from './SpeakerLabeling';
 export { default as TranscriptPreview } from './TranscriptPreview';
 export { default as EpisodeHero } from './EpisodeHero';
+export { default as ActiveTaskBanner, TASK_TYPE, TASK_STATUS } from './ActiveTaskBanner';

@@ -122,10 +122,37 @@ useEffect(() => {
       updateEpisode(payload.new);
     })
     .subscribe();
-    
+
   return () => supabase.removeChannel(channel);
 }, []);
 ```
+
+### Active Task Banner
+
+When a transcription or content generation is in progress, the Dashboard displays an `ActiveTaskBanner` component showing:
+- Current task type (audio upload, transcription, content processing)
+- Progress percentage with visual progress bar
+- Estimated time remaining
+- Action button (e.g., "Continue" when complete)
+
+The `ActiveTaskBanner` is a unified component that replaces separate banner implementations, supporting these task types:
+- `AUDIO_UPLOAD`: Uploading audio file
+- `AUDIO_TRANSCRIBE`: Transcribing audio
+- `FEED_TRANSCRIBE`: Transcribing from RSS feed
+- `CONTENT_PROCESS`: Generating content
+
+### Podcast Quick Import
+
+When the user has connected a podcast RSS feed, the Dashboard shows a "From Your Podcast" section with recent unprocessed episodes. Each episode card shows:
+- Episode title and publish date
+- Duration
+- Status indicator (available, transcribing, transcribed, processing, completed)
+- Appropriate CTA button based on status:
+  - **Available**: "Transcribe" button
+  - **Transcribed**: "Generate Content" button (content generation not yet run)
+  - **Processing**: "Generating..." indicator
+  - **Completed**: "View Content" button
+  - **Error**: "Retry" button
 
 ---
 
@@ -665,7 +692,7 @@ Auto-navigate to Review Hub after 3 seconds (with countdown).
 
 ## 5. Review Hub
 
-**Route:** `/episode/:id`  
+**Route:** `/episode/:id`
 **Purpose:** View and edit all generated content
 
 ### Layout
@@ -687,10 +714,51 @@ Auto-navigate to Review Hub after 3 seconds (with countdown).
 │  │                                                       │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                                                              │
-│  [Export] [Mark Complete] [Delete]                          │
+│  [Export] [Regenerate Content] [Mark Complete] [Delete]     │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+### Header Actions
+
+The ReviewHub header includes the following action buttons:
+
+- **Export**: Download content in various formats
+- **Regenerate Content**: Re-run content generation using the existing transcript (opens confirmation dialog)
+- **Mark Complete**: Mark the episode as finalized
+- **Delete**: Remove the episode (with confirmation)
+
+### Regenerate Content
+
+For completed episodes, users can regenerate all content without re-transcribing:
+
+```
+┌────────────────────────────────────────┐
+│  Regenerate Content?            [X]    │
+│                                         │
+│  This will regenerate all content      │
+│  using the existing transcript.        │
+│                                         │
+│  • Blog post                           │
+│  • Social media posts                  │
+│  • Email campaign                      │
+│  • Headlines and quotes                │
+│                                         │
+│  Estimated cost: ~$1.20                │
+│  Estimated time: ~4 minutes            │
+│                                         │
+│  Your original transcript will be      │
+│  preserved.                            │
+│                                         │
+│  ────────────────────────────────────  │
+│  [Cancel]              [Regenerate]    │
+└────────────────────────────────────────┘
+```
+
+This is useful when:
+- Settings or prompts have been updated
+- You want fresh variations of content
+- The original processing had issues
 
 ### Tab: Overview
 

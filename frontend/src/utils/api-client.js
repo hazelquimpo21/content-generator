@@ -343,6 +343,14 @@ const episodes = {
   process: (id, options = {}) => post(`/episodes/${id}/process`, options),
 
   /**
+   * Reprocess an episode using its existing transcript.
+   * Resets all stages and starts the pipeline from scratch.
+   * Useful for retrying failed processing or regenerating all content.
+   * @param {string} id - Episode UUID
+   */
+  reprocess: (id) => post(`/episodes/${id}/reprocess`),
+
+  /**
    * Get processing status
    * @param {string} id - Episode UUID
    */

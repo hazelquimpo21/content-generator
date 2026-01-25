@@ -176,14 +176,29 @@ Each stage:
 - **Editing Frustration**: Allow inline editing at any stage
 - **Cost Anxiety**: Show estimated and actual costs prominently
 
-## Future Enhancements (Post-MVP)
+## Implemented Features (Post-MVP)
 
-- **Audio Upload**: Integrate OpenAI GPT-4o Mini Transcribe for audio-to-transcript conversion
-  - **Status**: Researched & Planned (see [AUDIO-TRANSCRIPTION-IMPLEMENTATION.md](./AUDIO-TRANSCRIPTION-IMPLEMENTATION.md))
-  - **Recommended API**: OpenAI GPT-4o Mini Transcribe at $0.003/minute
-  - **Cost per 45-min episode**: ~$0.14
-  - **Why OpenAI**: Single vendor (already using GPT-5 mini), competitive pricing, 99+ languages
-  - **Alternative considered**: Deepgram Nova-2 ($0.0043/min), AssemblyAI ($0.0025/min base + add-ons)
+- **Audio Upload & Transcription**: Upload audio files for automatic transcription
+  - Supports OpenAI Whisper and AssemblyAI (with speaker diarization)
+  - See [AUDIO-TRANSCRIPTION-IMPLEMENTATION.md](./AUDIO-TRANSCRIPTION-IMPLEMENTATION.md)
+
+- **RSS Podcast Integration**: Import episodes from podcast RSS feeds
+  - Connect via podcast search, Apple Podcasts URL, or direct RSS URL
+  - Transcribe episodes directly from feed audio URLs
+  - Track which episodes have been processed
+  - See [PODCAST-RSS-FEED-IMPLEMENTATION.md](./PODCAST-RSS-FEED-IMPLEMENTATION.md)
+
+- **Content Reprocessing**: Regenerate content using existing transcripts
+  - Skip re-transcription when regenerating content
+  - Useful for updating with new settings or prompts
+  - Available via "Regenerate Content" button in ReviewHub
+
+- **Unified Task Progress**: ActiveTaskBanner component for all async operations
+  - Shows progress for uploads, transcriptions, and content generation
+  - Consistent UX across all async workflows
+
+## Future Enhancements
+
 - **Templates**: Different episode types (solo, interview, Q&A)
 - **A/B Testing**: Generate multiple versions, track performance
 - **Direct Publishing**: WordPress, Substack, social platform integrations

@@ -95,7 +95,7 @@ backend/
 │   ├── cost-calculator.js                   (~250 lines)
 │   ├── logger.js                            (~200 lines)
 │   ├── prompt-loader.js                     (~200 lines)
-│   ├── supabase-client.js                   (~300 lines)
+│   ├── supabase-client.js                   (~350 lines - includes stageRepo.resetAllStages)
 │   ├── retry-logic.js                       (~200 lines)
 │   └── validators.js                        (~200 lines)
 │
@@ -150,6 +150,7 @@ frontend/
 │   │   ├── LoadingSpinner.jsx               (~80 lines)
 │   │   ├── ProgressBar.jsx                  (~100 lines)
 │   │   ├── Badge.jsx                        (~80 lines)
+│   │   ├── ActiveTaskBanner.jsx             (~260 lines - unified async task progress)
 │   │   ├── ScheduleModal.jsx                (~300 lines - content scheduling)
 │   │   └── SaveToLibraryModal.jsx           (~250 lines - save to library)
 │   │

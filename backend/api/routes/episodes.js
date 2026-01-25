@@ -570,6 +570,83 @@ router.get('/:id/status', requireAuth, async (req, res, next) => {
 });
 
 /**
+ * POST /api/episodes/:id/reprocess
+ * Reprocess an episode using its existing transcript.
+ * Resets all stages and starts the pipeline from scratch.
+ * User must own the episode to reprocess it.
+ *
+ * This is useful for:
+ * - Retrying after a failed processing run
+ * - Regenerating all content with updated settings
+ * - Testing/iterating on content quality
+ */
+router.post('/:id/reprocess', requireAuth, async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    // Fetch episode to verify it exists and has a transcript
+    const episode = await episodeRepo.findById(id);
+
+    // Check authorization (only owner can reprocess)
+    checkEpisodeAccess(episode, req.user, 'reprocess');
+
+    // Verify episode has a transcript
+    if (!episode.transcript || episode.transcript.length < 500) {
+      throw new ValidationError('transcript', 'Episode must have a valid transcript to reprocess');
+    }
+
+    // Don't allow reprocessing while already processing
+    if (episode.status === 'processing') {
+      throw new ValidationError('status', 'Cannot reprocess an episode that is currently processing');
+    }
+
+    logger.info('🔄 Starting episode reprocessing', {
+      episodeId: id,
+      userId: req.user.id,
+      previousStatus: episode.status,
+    });
+
+    // Reset all stage outputs to pending
+    await stageRepo.resetAllStages(id);
+
+    // Reset episode status to draft and clear processing metadata
+    await episodeRepo.update(id, {
+      status: 'draft',
+      current_stage: null,
+      total_cost_usd: null,
+      processing_started_at: null,
+      processing_completed_at: null,
+      error_message: null,
+    });
+
+    // Get cost estimate
+    const estimate = estimateEpisodeCost(episode.transcript);
+
+    // Return immediately - processing happens async
+    res.status(202).json({
+      episode_id: id,
+      status: 'processing',
+      message: 'Reprocessing started',
+      estimated_duration_seconds: estimate.estimatedTimeSeconds,
+      estimated_cost_usd: estimate.totalCost.toFixed(2),
+    });
+
+    // Start processing in background (don't await)
+    processEpisode(id, { startFromStage: 0 })
+      .catch(error => {
+        logger.error('Background reprocessing failed', {
+          episodeId: id,
+          userId: req.user.id,
+          error: error.message,
+        });
+      });
+
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * POST /api/episodes/:id/pause
  * Pause processing (will complete current stage).
  * User must own the episode to pause it.

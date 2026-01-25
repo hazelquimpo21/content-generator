@@ -22,6 +22,8 @@ import {
   Search,
   ExternalLink,
   Info,
+  Sparkles,
+  FileText,
 } from 'lucide-react';
 import { Button, Input, Spinner, useToast } from '@components/shared';
 import { useTranscription } from '@contexts/TranscriptionContext';
@@ -367,6 +369,14 @@ function FeedEpisodesList({ feed, onBack, onEpisodeProcessed }) {
 
 /**
  * Episode row component
+ * Shows feed episode with appropriate status and action buttons.
+ *
+ * States:
+ * - available: Not transcribed yet, show "Transcribe" button
+ * - transcribing: Currently being transcribed, show spinner
+ * - transcribed: Has transcript but content not generated, show "Generate Content" button
+ * - completed: Content generated, show "View Content" button
+ * - error: Failed, show "Retry" button
  */
 function EpisodeRow({
   episode,
@@ -374,23 +384,70 @@ function EpisodeRow({
   hasOtherTranscription,
   onTranscribe,
   onViewEpisode,
+  onGenerateContent,
 }) {
-  // Use transcribing status from context or local status
-  const effectiveStatus = isTranscribing ? 'transcribing' : episode.status;
+  const navigate = useNavigate();
 
+  // Determine the effective status
+  // 'processed' from backend means transcribed, but we need to check linked_episode.status
+  // to know if content has been generated
+  const linkedEpisodeId = episode.episode_id || episode.linked_episode?.id;
+  const linkedEpisodeStatus = episode.linked_episode?.status;
+
+  // Calculate display status
+  let displayStatus;
+  if (isTranscribing) {
+    displayStatus = 'transcribing';
+  } else if (episode.status === 'processed') {
+    // Check if the linked episode has completed content generation
+    if (linkedEpisodeStatus === 'completed') {
+      displayStatus = 'completed';
+    } else if (linkedEpisodeStatus === 'processing') {
+      displayStatus = 'processing';
+    } else {
+      // Transcribed but no content generated yet (draft status)
+      displayStatus = 'transcribed';
+    }
+  } else {
+    displayStatus = episode.status;
+  }
+
+  // Icon based on status
   const StatusIcon = {
     available: Circle,
     transcribing: Loader2,
-    processed: CheckCircle,
+    transcribed: FileText,
+    processing: Loader2,
+    completed: CheckCircle,
     error: AlertCircle,
-  }[effectiveStatus] || Circle;
+  }[displayStatus] || Circle;
 
+  // Status color
   const statusColor = {
     available: styles.statusAvailable,
     transcribing: styles.statusTranscribing,
-    processed: styles.statusProcessed,
+    transcribed: styles.statusTranscribed,
+    processing: styles.statusProcessing,
+    completed: styles.statusProcessed,
     error: styles.statusError,
-  }[effectiveStatus];
+  }[displayStatus];
+
+  // Status label for display
+  const statusLabel = {
+    available: null,
+    transcribing: null,
+    transcribed: 'Transcribed',
+    processing: 'Generating...',
+    completed: 'Complete',
+    error: null,
+  }[displayStatus];
+
+  // Handle generate content click - navigate to submit form
+  const handleGenerateContent = () => {
+    if (linkedEpisodeId) {
+      navigate(`/episodes/${linkedEpisodeId}/submit`);
+    }
+  };
 
   return (
     <div className={styles.episodeRow}>
@@ -398,7 +455,7 @@ function EpisodeRow({
       <div className={`${styles.statusIcon} ${statusColor}`}>
         <StatusIcon
           size={18}
-          className={effectiveStatus === 'transcribing' ? styles.spinning : ''}
+          className={displayStatus === 'transcribing' || displayStatus === 'processing' ? styles.spinning : ''}
         />
       </div>
 
@@ -421,6 +478,9 @@ function EpisodeRow({
           {episode.episode_number && (
             <span>Ep. {episode.episode_number}</span>
           )}
+          {statusLabel && (
+            <span className={styles.statusLabel}>{statusLabel}</span>
+          )}
         </div>
         {episode.error_message && (
           <p className={styles.errorMessage}>{episode.error_message}</p>
@@ -429,18 +489,32 @@ function EpisodeRow({
 
       {/* Actions */}
       <div className={styles.episodeActions}>
-        {effectiveStatus === 'processed' && (episode.episode_id || episode.linked_episode?.id) && (
+        {/* Completed: Show View Content button */}
+        {displayStatus === 'completed' && linkedEpisodeId && (
           <Button
             variant="ghost"
             size="sm"
             onClick={onViewEpisode}
             rightIcon={ExternalLink}
           >
-            View
+            View Content
           </Button>
         )}
 
-        {(effectiveStatus === 'available' || effectiveStatus === 'error') && (
+        {/* Transcribed but not processed: Show Generate Content button */}
+        {displayStatus === 'transcribed' && linkedEpisodeId && (
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleGenerateContent}
+            leftIcon={Sparkles}
+          >
+            Generate Content
+          </Button>
+        )}
+
+        {/* Available or Error: Show Transcribe button */}
+        {(displayStatus === 'available' || displayStatus === 'error') && (
           <Button
             variant={hasOtherTranscription ? 'ghost' : 'primary'}
             size="sm"
@@ -453,10 +527,19 @@ function EpisodeRow({
           </Button>
         )}
 
-        {effectiveStatus === 'transcribing' && (
+        {/* Transcribing: Show in progress label */}
+        {displayStatus === 'transcribing' && (
           <span className={styles.inProgressLabel}>
             <Loader2 size={14} className={styles.spinning} />
-            In Progress
+            Transcribing
+          </span>
+        )}
+
+        {/* Processing: Show in progress label */}
+        {displayStatus === 'processing' && (
+          <span className={styles.inProgressLabel}>
+            <Loader2 size={14} className={styles.spinning} />
+            Generating
           </span>
         )}
       </div>

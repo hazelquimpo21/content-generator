@@ -17,6 +17,12 @@ You are about to build a sophisticated AI-powered application that transforms po
 - ✅ **Canonical Data Sources:** Single source of truth (Stage 1 = summary, Stage 2 = quotes)
 - ✅ **Log Everything:** Structured logging for debugging and cost tracking
 
+**Key Features:**
+- ✅ **Audio Upload & Transcription:** Upload audio files or import from RSS feeds
+- ✅ **RSS Podcast Integration:** Connect your podcast and transcribe episodes directly
+- ✅ **Content Reprocessing:** Regenerate content without re-transcribing
+- ✅ **Unified Progress Tracking:** ActiveTaskBanner for all async operations
+
 ---
 
 ## 📚 Documentation Suite
@@ -470,7 +476,7 @@ A: DATABASE-SCHEMA.md has all 8 tables with field descriptions
 
 All documents in this suite are v1.0 and represent the complete specification for MVP.
 
-**Last Updated:** January 13, 2025
+**Last Updated:** January 25, 2026
 
 ---
 

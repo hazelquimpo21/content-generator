@@ -1,12 +1,27 @@
 /**
  * ============================================================================
- * STAGE 6: DUAL BLOG POST DRAFT GENERATION
+ * STAGE 6: DUAL BLOG POST DRAFT GENERATION (Sequential)
  * ============================================================================
- * Writes TWO complete ~750 word blog posts based on the Stage 3 outlines:
- *   1. Episode Recap - promotes the podcast episode
- *   2. Topic Article - standalone piece based on selected blog idea
  *
- * Input: All previous stage outputs (0-3)
+ * DESIGN PHILOSOPHY: Focused Analyzers
+ * ------------------------------------
+ * AI analyzers produce better results when they have a clear, focused task.
+ * Rather than asking one API call to write TWO different articles (which
+ * splits attention and requires complex parsing), we make two sequential
+ * calls - each focused on one article type.
+ *
+ * Benefits of this approach:
+ * - Each article gets the model's full attention
+ * - No complex parsing logic (each call returns one clean article)
+ * - Can retry individual articles if one fails validation
+ * - Cleaner, more maintainable code
+ * - Follows the same pattern as Stage 8 (social platforms)
+ *
+ * The two articles:
+ *   1. Episode Recap (6a) - promotes the podcast episode
+ *   2. Topic Article (6b) - standalone piece based on selected blog idea
+ *
+ * Input: All previous stage outputs (0-5)
  * Output: Two complete blog posts in Markdown (text)
  * Model: GPT-5 mini (OpenAI)
  * ============================================================================
@@ -14,7 +29,7 @@
 
 import { callOpenAI } from '../lib/api-client-openai.js';
 import { loadPrompt } from '../lib/prompt-loader.js';
-import { compileBlogContext, TARGET_TOTAL_WORDS } from '../lib/blog-content-compiler.js';
+import { compileBlogContext } from '../lib/blog-content-compiler.js';
 import logger from '../lib/logger.js';
 import { ValidationError } from '../lib/errors.js';
 
@@ -30,8 +45,8 @@ const MAX_WORD_COUNT = 1000;
 // Character length minimum (backup check)
 const MIN_CHAR_LENGTH = 3000; // ~600 words is roughly 3000 chars
 
-// Max retries for short content
-const MAX_SHORT_CONTENT_RETRIES = 1;
+// Max retries per article
+const MAX_RETRIES_PER_ARTICLE = 1;
 
 // ============================================================================
 // VALIDATION HELPERS
@@ -115,60 +130,6 @@ function detectAIPatterns(content) {
 }
 
 /**
- * Parses the AI response to extract both articles
- * @param {string} fullResponse - Complete response with both articles
- * @returns {Object} Object with episode_recap and topic_article
- */
-function parseArticles(fullResponse) {
-  // Look for the article separators
-  const article1Marker = /^#\s*ARTICLE\s*1[:\s]*EPISODE\s*RECAP/im;
-  const article2Marker = /^#\s*ARTICLE\s*2[:\s]*TOPIC\s*ARTICLE/im;
-
-  let episodeRecap = '';
-  let topicArticle = '';
-
-  // Find positions
-  const match1 = fullResponse.match(article1Marker);
-  const match2 = fullResponse.match(article2Marker);
-
-  if (match1 && match2) {
-    const pos1 = fullResponse.indexOf(match1[0]);
-    const pos2 = fullResponse.indexOf(match2[0]);
-
-    // Extract articles
-    if (pos1 < pos2) {
-      episodeRecap = fullResponse.substring(pos1 + match1[0].length, pos2).trim();
-      topicArticle = fullResponse.substring(pos2 + match2[0].length).trim();
-    } else {
-      topicArticle = fullResponse.substring(pos2 + match2[0].length, pos1).trim();
-      episodeRecap = fullResponse.substring(pos1 + match1[0].length).trim();
-    }
-  } else {
-    // Fallback: try to split by horizontal rule or double newlines
-    const parts = fullResponse.split(/\n---+\n|\n\n#{1,2}\s*Article\s*2/i);
-    if (parts.length >= 2) {
-      episodeRecap = parts[0].trim();
-      topicArticle = parts.slice(1).join('\n').trim();
-    } else {
-      // Last resort: treat entire response as one article
-      logger.warn('Could not parse two articles from response, treating as single article');
-      episodeRecap = fullResponse.trim();
-      topicArticle = '';
-    }
-  }
-
-  // Clean up any remaining article markers from the content
-  episodeRecap = episodeRecap.replace(/^#\s*ARTICLE\s*1[:\s]*EPISODE\s*RECAP\s*/im, '').trim();
-  topicArticle = topicArticle.replace(/^#\s*ARTICLE\s*2[:\s]*TOPIC\s*ARTICLE\s*/im, '').trim();
-
-  return { episodeRecap, topicArticle };
-}
-
-// ============================================================================
-// ARTICLE VALIDATION
-// ============================================================================
-
-/**
  * Validates a single article
  * @param {string} content - Article content
  * @param {string} articleType - 'episode_recap' or 'topic_article'
@@ -228,25 +189,145 @@ function validateArticle(content, articleType, episodeId) {
 }
 
 // ============================================================================
+// SINGLE ARTICLE GENERATOR
+// ============================================================================
+
+/**
+ * Generates a single blog article with retry logic
+ *
+ * @param {Object} options - Generation options
+ * @param {string} options.articleType - 'episode_recap' or 'topic_article'
+ * @param {string} options.promptFile - Prompt template filename (without .md)
+ * @param {string} options.compiledContext - Compiled blog context
+ * @param {string} options.episodeId - Episode ID for logging
+ * @param {Object} options.evergreen - Evergreen settings (voice, podcast info)
+ * @returns {Promise<Object>} Article content and metadata
+ */
+async function generateSingleArticle({ articleType, promptFile, compiledContext, episodeId, evergreen }) {
+  const stageLabel = articleType === 'episode_recap' ? '6a' : '6b';
+
+  logger.info(`Generating ${articleType}`, { episodeId, stage: stageLabel });
+
+  // Load the focused prompt for this article type
+  const prompt = await loadPrompt(promptFile, {
+    COMPILED_BLOG_CONTEXT: compiledContext,
+    PODCAST_NAME: evergreen.podcastName || 'the podcast',
+    THERAPIST_NAME: evergreen.therapistName || 'the host',
+    TARGET_AUDIENCE: evergreen.targetAudience || 'listeners interested in mental health',
+    VOICE_GUIDELINES: evergreen.voiceGuidelines || 'Warm, conversational, professional',
+  });
+
+  const systemPrompt = `You are an expert blog writer specializing in therapy and mental health content.
+
+Your task is to write ONE complete blog post, approximately ${IDEAL_WORD_COUNT} words.
+
+CRITICAL REQUIREMENTS:
+1. The blog post MUST be at least ${MIN_WORD_COUNT} words
+2. Include a title (H1) and at least 3 section headings (H2)
+3. Integrate 2-3 quotes as blockquotes
+4. Do NOT include meta-commentary or word counts
+5. Output ONLY the article in Markdown format
+
+Write the complete blog post now.`;
+
+  let lastResponse = null;
+  let lastValidation = null;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES_PER_ARTICLE; attempt++) {
+    logger.info(`Calling OpenAI for ${articleType}`, {
+      episodeId,
+      attempt: attempt + 1,
+      stage: stageLabel,
+    });
+
+    const response = await callOpenAI(
+      [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: prompt },
+      ],
+      {
+        episodeId,
+        stageNumber: 6,
+        temperature: 0.7,
+        maxTokens: 3000, // Enough for ~750 words + markdown
+      }
+    );
+
+    lastResponse = response;
+    const articleContent = response.content.trim();
+    const validation = validateArticle(articleContent, articleType, episodeId);
+    lastValidation = validation;
+
+    if (validation.isValid) {
+      logger.info(`${articleType} generated successfully`, {
+        episodeId,
+        wordCount: validation.wordCount,
+        attempts: attempt + 1,
+        stage: stageLabel,
+      });
+
+      return {
+        content: articleContent,
+        validation,
+        inputTokens: response.inputTokens,
+        outputTokens: response.outputTokens,
+        cost: response.cost,
+        durationMs: response.durationMs,
+      };
+    }
+
+    if (attempt < MAX_RETRIES_PER_ARTICLE) {
+      logger.warn(`${articleType} failed validation, retrying`, {
+        episodeId,
+        attempt: attempt + 1,
+        issues: validation.issues,
+        stage: stageLabel,
+      });
+    }
+  }
+
+  // Return what we have even if not perfect
+  logger.warn(`${articleType} completed with validation issues`, {
+    episodeId,
+    issues: lastValidation.issues,
+    stage: stageLabel,
+  });
+
+  return {
+    content: lastResponse.content.trim(),
+    validation: lastValidation,
+    inputTokens: lastResponse.inputTokens,
+    outputTokens: lastResponse.outputTokens,
+    cost: lastResponse.cost,
+    durationMs: lastResponse.durationMs,
+    hasIssues: true,
+  };
+}
+
+// ============================================================================
 // MAIN ANALYZER FUNCTION
 // ============================================================================
 
 /**
- * Generates two complete blog post drafts:
+ * Generates two complete blog post drafts sequentially:
  *   1. Episode Recap - promotes the podcast episode
  *   2. Topic Article - standalone piece based on selected blog idea
+ *
+ * Each article is generated in a separate, focused API call. This follows
+ * the "focused analyzer" philosophy: AI produces better results when it
+ * has one clear task rather than multiple tasks in a single prompt.
  *
  * @param {Object} context - Processing context
  * @param {string} context.episodeId - Episode UUID
  * @param {string} context.transcript - Full transcript
  * @param {Object} context.evergreen - Evergreen settings
- * @param {Object} context.previousStages - Outputs from stages 0-3
+ * @param {Object} context.previousStages - Outputs from stages 0-5
  * @returns {Promise<Object>} Result with both articles
  */
 export async function draftBlogPosts(context) {
-  const { episodeId, transcript, evergreen, previousStages } = context;
+  const { episodeId, evergreen, previousStages } = context;
 
-  logger.stageStart(6, 'Dual Blog Draft Generation', episodeId);
+  logger.stageStart(6, 'Dual Blog Draft Generation (Sequential)', episodeId);
 
   // ============================================================================
   // STEP 1: Compile context from previous stages
@@ -272,162 +353,70 @@ export async function draftBlogPosts(context) {
   });
 
   // ============================================================================
-  // STEP 2: Load prompt template with compiled context
+  // STEP 2: Generate Episode Recap (focused API call)
   // ============================================================================
-  const prompt = await loadPrompt('stage-06-draft-generation', {
-    COMPILED_BLOG_CONTEXT: compiled.fullContext,
+  const recapResult = await generateSingleArticle({
+    articleType: 'episode_recap',
+    promptFile: 'stage-06a-episode-recap',
+    compiledContext: compiled.fullContext,
+    episodeId,
+    evergreen,
   });
 
   // ============================================================================
-  // STEP 3: Call OpenAI for text generation
+  // STEP 3: Generate Topic Article (focused API call)
   // ============================================================================
-  const systemPrompt = `You are an expert blog writer specializing in therapy and mental health content.
+  const topicResult = await generateSingleArticle({
+    articleType: 'topic_article',
+    promptFile: 'stage-06b-topic-article',
+    compiledContext: compiled.fullContext,
+    episodeId,
+    evergreen,
+  });
 
-Your task is to write TWO complete blog posts, each approximately ${IDEAL_WORD_COUNT} words.
+  // ============================================================================
+  // STEP 4: Combine results and return
+  // ============================================================================
+  const totalCost = recapResult.cost + topicResult.cost;
+  const totalInputTokens = recapResult.inputTokens + topicResult.inputTokens;
+  const totalOutputTokens = recapResult.outputTokens + topicResult.outputTokens;
+  const totalDurationMs = recapResult.durationMs + topicResult.durationMs;
 
-CRITICAL REQUIREMENTS:
-1. Each blog post MUST be at least ${MIN_WORD_COUNT} words
-2. Each must include a title (H1) and at least 3 section headings (H2)
-3. Integrate 2-3 quotes as blockquotes in each article
-4. Do NOT include meta-commentary or word counts
-5. Clearly separate the two articles with headers
+  logger.info('Both blog posts generated', {
+    episodeId,
+    recapWordCount: recapResult.validation.wordCount,
+    topicWordCount: topicResult.validation.wordCount,
+    totalCost,
+  });
 
-ARTICLE 1: EPISODE RECAP
-- Promotes the podcast episode
-- Summarizes key insights
-- Ends with CTA to listen
+  logger.stageComplete(6, 'Dual Blog Draft Generation (Sequential)', episodeId, totalDurationMs, totalCost);
 
-ARTICLE 2: TOPIC ARTICLE
-- Standalone piece (doesn't mention the podcast)
-- Based on the selected blog idea from the outlines
-- Provides real value on its own
-
-Write both complete blog posts now.`;
-
-  let response;
-  let retryCount = 0;
-
-  while (retryCount <= MAX_SHORT_CONTENT_RETRIES) {
-    logger.info('Calling OpenAI for dual blog draft generation', {
-      episodeId,
-      attempt: retryCount + 1,
-    });
-
-    response = await callOpenAI(
-      [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: prompt },
-      ],
-      {
-        episodeId,
-        stageNumber: 6,
-        temperature: 0.7,
-        maxTokens: 6000, // Enough for ~1500 words total + markdown overhead
-      }
-    );
-
-    const fullOutput = response.content.trim();
-
-    // Parse the two articles from the response
-    const { episodeRecap, topicArticle } = parseArticles(fullOutput);
-
-    // Validate both articles
-    const recapValidation = validateArticle(episodeRecap, 'episode_recap', episodeId);
-    const topicValidation = validateArticle(topicArticle, 'topic_article', episodeId);
-
-    // Check if both are valid
-    const bothValid = recapValidation.isValid && topicValidation.isValid;
-
-    if (bothValid) {
-      logger.info('Both blog posts generated successfully', {
-        episodeId,
-        recapWordCount: recapValidation.wordCount,
-        topicWordCount: topicValidation.wordCount,
-        attempts: retryCount + 1,
-      });
-
-      logger.stageComplete(6, 'Dual Blog Draft Generation', episodeId, response.durationMs, response.cost);
-
-      return {
-        output_data: {
-          episode_recap: {
-            word_count: recapValidation.wordCount,
-            char_count: recapValidation.charCount,
-            structure: recapValidation.structure,
-            ai_patterns_detected: recapValidation.aiPatterns,
-          },
-          topic_article: {
-            word_count: topicValidation.wordCount,
-            char_count: topicValidation.charCount,
-            structure: topicValidation.structure,
-            ai_patterns_detected: topicValidation.aiPatterns,
-          },
-          selected_blog_idea: stage3Output.selected_blog_idea,
-        },
-        output_text: {
-          episode_recap: episodeRecap,
-          topic_article: topicArticle,
-        },
-        input_tokens: response.inputTokens,
-        output_tokens: response.outputTokens,
-        cost_usd: response.cost,
-      };
-    }
-
-    // Log validation issues
-    const allIssues = [
-      ...recapValidation.issues.map(i => `Recap: ${i}`),
-      ...topicValidation.issues.map(i => `Topic: ${i}`),
-    ];
-
-    if (retryCount >= MAX_SHORT_CONTENT_RETRIES) {
-      logger.error('Blog post generation failed after retries', {
-        episodeId,
-        totalAttempts: retryCount + 1,
-        issues: allIssues,
-      });
-
-      // Return what we have even if not perfect
-      logger.stageComplete(6, 'Dual Blog Draft Generation (with issues)', episodeId, response.durationMs, response.cost);
-
-      return {
-        output_data: {
-          episode_recap: {
-            word_count: recapValidation.wordCount,
-            char_count: recapValidation.charCount,
-            structure: recapValidation.structure,
-            ai_patterns_detected: recapValidation.aiPatterns,
-            validation_issues: recapValidation.issues,
-          },
-          topic_article: {
-            word_count: topicValidation.wordCount,
-            char_count: topicValidation.charCount,
-            structure: topicValidation.structure,
-            ai_patterns_detected: topicValidation.aiPatterns,
-            validation_issues: topicValidation.issues,
-          },
-          selected_blog_idea: stage3Output.selected_blog_idea,
-        },
-        output_text: {
-          episode_recap: episodeRecap,
-          topic_article: topicArticle,
-        },
-        input_tokens: response.inputTokens,
-        output_tokens: response.outputTokens,
-        cost_usd: response.cost,
-      };
-    }
-
-    logger.warn('Blog posts have issues, retrying', {
-      episodeId,
-      attempt: retryCount + 1,
-      issues: allIssues,
-    });
-
-    retryCount++;
-  }
-
-  throw new ValidationError('content', 'Blog post generation failed after all retries');
+  return {
+    output_data: {
+      episode_recap: {
+        word_count: recapResult.validation.wordCount,
+        char_count: recapResult.validation.charCount,
+        structure: recapResult.validation.structure,
+        ai_patterns_detected: recapResult.validation.aiPatterns,
+        ...(recapResult.hasIssues && { validation_issues: recapResult.validation.issues }),
+      },
+      topic_article: {
+        word_count: topicResult.validation.wordCount,
+        char_count: topicResult.validation.charCount,
+        structure: topicResult.validation.structure,
+        ai_patterns_detected: topicResult.validation.aiPatterns,
+        ...(topicResult.hasIssues && { validation_issues: topicResult.validation.issues }),
+      },
+      selected_blog_idea: stage3Output.selected_blog_idea,
+    },
+    output_text: {
+      episode_recap: recapResult.content,
+      topic_article: topicResult.content,
+    },
+    input_tokens: totalInputTokens,
+    output_tokens: totalOutputTokens,
+    cost_usd: totalCost,
+  };
 }
 
 // Export aliases for compatibility

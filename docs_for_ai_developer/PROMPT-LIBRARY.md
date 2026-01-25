@@ -890,16 +890,36 @@ Before returning output, verify:
 
 Due to length, here are the key specifications for the remaining stages:
 
-### Stage 6: Draft Generation
+### Stage 6: Draft Generation (Sequential Focused Calls)
 
-- Two-part process: First half, then second half
-- Each ~375 words
+Stage 6 follows the **focused analyzer philosophy**: rather than asking one API call to write two articles (which splits attention and requires complex parsing), we make two sequential API calls—each focused on one article type.
+
+**Stage 6a: Episode Recap** (`stage-06a-episode-recap.md`)
+- One focused API call for the episode recap article
+- ~750 words, promotes the podcast episode
+- Ends with CTA to listen
+- Output: Clean markdown, no parsing required
+
+**Stage 6b: Topic Article** (`stage-06b-topic-article.md`)
+- One focused API call for the standalone topic article
+- ~750 words, doesn't mention the podcast
+- Stands completely on its own
+- Output: Clean markdown, no parsing required
+
+**Shared requirements for both:**
 - Uses all previous stage outputs as context
 - Integrates voice guidelines: {{VOICE_GUIDELINES}}
 - Short paragraphs (2-4 sentences)
+- 2-3 blockquotes per article
 - Natural quote integration
 - Active voice primarily
 - Specific examples over theory
+
+**Why this approach:**
+- Each article gets the model's full attention
+- No complex parsing logic (function calling handles structure)
+- Can retry individual articles if one fails validation
+- Follows the same pattern as Stage 8 (social platforms)
 
 ### Stage 7: Refinement Pass (Claude Sonnet)
 

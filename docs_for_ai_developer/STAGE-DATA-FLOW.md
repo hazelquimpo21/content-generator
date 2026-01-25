@@ -73,18 +73,24 @@ The pipeline is organized into 4 phases with parallel execution where possible:
                                     │
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│ ✍️ PHASE 3: WRITE (Sequential)                                               │
+│ ✍️ PHASE 3: WRITE (Sequential - Focused Analyzers)                           │
 │ ═══════════════════════════════════════════════════════════════════════════ │
-│ Must be sequential - refine needs the draft                                  │
+│ Sequential execution. Stage 6 uses the focused analyzer philosophy:         │
+│ two separate API calls, one per article type.                               │
 │                                                                              │
 │   ┌─────────────────────────────┐                                           │
-│   │ Stage 6: draftBlogPost      │                                           │
+│   │ Stage 6a: Episode Recap     │                                           │
 │   │ (GPT-5 mini)                │                                           │
-│   │ Uses: BlogContentCompiler   │                                           │
-│   │                             │                                           │
-│   │ Output (BOTH types):        │                                           │
-│   │ • output_data: { word_count, structure }                                │
-│   │ • output_text: "# Blog..." ← THE ACTUAL POST                            │
+│   │ One focused API call        │                                           │
+│   │ Output: episode_recap text  │                                           │
+│   └──────────────┬──────────────┘                                           │
+│                  │                                                           │
+│                  ▼                                                           │
+│   ┌─────────────────────────────┐                                           │
+│   │ Stage 6b: Topic Article     │                                           │
+│   │ (GPT-5 mini)                │                                           │
+│   │ One focused API call        │                                           │
+│   │ Output: topic_article text  │                                           │
 │   └──────────────┬──────────────┘                                           │
 │                  │                                                           │
 │                  ▼                                                           │
@@ -136,9 +142,11 @@ The parallel execution architecture provides significant speed improvements:
 |-------|-------|-----------|-----------------|---------------|---------|
 | Phase 1 | 2 | Parallel | ~15 sec | ~8 sec | ~7 sec |
 | Phase 2 | 3 | 1 + 2 parallel | ~18 sec | ~13 sec | ~5 sec |
-| Phase 3 | 2 | Sequential | ~12 sec | ~12 sec | 0 sec |
+| Phase 3 | 3 | Sequential (6a → 6b → 7) | ~18 sec | ~18 sec | 0 sec |
 | Phase 4 | 5 | Parallel (focused analyzers) | ~15 sec | ~6 sec | ~9 sec |
-| **Total** | **12** | | **~60 sec** | **~39 sec** | **~21 sec (~35%)** |
+| **Total** | **13** | | **~66 sec** | **~45 sec** | **~21 sec (~32%)** |
+
+**Why Stage 6 is split into 2 tasks (6a, 6b):** Each article type gets the model's full attention, producing better quality output. No complex parsing is needed—each API call returns one clean article. If one article fails validation, only that article is retried.
 
 **Why Stage 8 is split into 4 tasks:** Each platform analyzer is focused on a single platform, producing better quality output. This also enables parallel execution - all 5 distribution tasks run simultaneously.
 
@@ -360,9 +368,16 @@ When a task fails in parallel execution:
 
 > **Analyzers work best when they don't have too many jobs.**
 
-Each analyzer does ONE focused thing well. When a task can be split into independent work, split it and run in parallel.
+Each analyzer does ONE focused thing well. When a task can be split into independent work, split it.
 
-**Stage 8 demonstrates this:** Instead of one "social content" analyzer handling all platforms, we have 4 platform-specific analyzers (Instagram, Twitter, LinkedIn, Facebook) that:
+**Stage 6 demonstrates this:** Instead of one API call writing TWO blog articles (which splits attention and requires complex parsing), we have 2 focused calls:
+- `stage-06a-episode-recap.md` - Focused on the episode recap article
+- `stage-06b-topic-article.md` - Focused on the standalone topic article
+- Each call gets the model's full attention
+- No parsing needed—each returns one clean article
+- Can retry individual articles if validation fails
+
+**Stage 8 also demonstrates this:** Instead of one "social content" analyzer handling all platforms, we have 4 platform-specific analyzers (Instagram, Twitter, LinkedIn, Facebook) that:
 - Have specialized prompts per platform
 - Run in parallel for faster execution
 - Can be tested independently
@@ -395,6 +410,9 @@ All downstream stages reference `previousStages[2].quotes`.
 | `/backend/orchestrator/episode-processor.js` | Main orchestrator |
 | `/backend/orchestrator/stage-runner.js` | Stage execution bridge |
 | `/backend/analyzers/*.js` | Individual stage analyzers |
+| `/backend/analyzers/stage-06-draft-blog-post.js` | Blog draft generator (sequential 6a/6b calls) |
+| `/backend/prompts/stage-06a-episode-recap.md` | Focused prompt for episode recap |
+| `/backend/prompts/stage-06b-topic-article.md` | Focused prompt for topic article |
 | `/backend/lib/blog-content-compiler.js` | Context assembly for Stage 6 |
 
 ---
@@ -403,12 +421,13 @@ All downstream stages reference `previousStages[2].quotes`.
 
 1. **4 phases** with clear boundaries and checkpoints
 2. **Parallel execution** in Phases 1, 2 (partial), and 4
-3. **~30% faster** than fully sequential execution
-4. **Atomic phases** for simpler error handling
-5. **Single canonical sources** for summary and quotes
-6. **Backward compatible** with existing database schema
+3. **Focused analyzers** - Stage 6 (blog drafts) and Stage 8 (social) demonstrate the core philosophy
+4. **~32% faster** than fully sequential execution
+5. **Atomic phases** for simpler error handling
+6. **Single canonical sources** for summary and quotes
+7. **Backward compatible** with existing database schema
 
 ---
 
-*Last updated: 2026-01-15*
-*Related: ARCHITECTURE.md, IMPLEMENTATION-GUIDE.md*
+*Last updated: 2026-01-25*
+*Related: ARCHITECTURE.md, IMPLEMENTATION-GUIDE.md, PIPELINE-REFERENCE.md*

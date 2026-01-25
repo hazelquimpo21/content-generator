@@ -95,6 +95,7 @@ function Dashboard() {
 
   // State for episode list
   const [episodes, setEpisodes] = useState([]);
+  const [processingEpisodes, setProcessingEpisodes] = useState([]); // Always track processing episodes
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -185,8 +186,6 @@ function Dashboard() {
 
   // Poll for updates when there are processing episodes
   useEffect(() => {
-    const processingEpisodes = episodes.filter((ep) => ep.status === 'processing');
-
     if (processingEpisodes.length === 0) {
       // No processing episodes, stop polling
       if (pollIntervalRef.current) {
@@ -199,35 +198,37 @@ function Dashboard() {
     // Start polling
     pollIntervalRef.current = setInterval(async () => {
       try {
-        const params = {};
-        if (statusFilter !== 'all') {
-          params.status = statusFilter;
-        }
-        const data = await api.episodes.list(params);
-        const newEpisodes = data.episodes || [];
+        // Always fetch processing episodes to track their progress
+        const [filteredData, processingData] = await Promise.all([
+          api.episodes.list(statusFilter !== 'all' ? { status: statusFilter } : {}),
+          api.episodes.list({ status: 'processing' }),
+        ]);
+
+        const newEpisodes = filteredData.episodes || [];
+        const newProcessingEpisodes = processingData.episodes || [];
 
         // Check for newly completed episodes and show toast
-        newEpisodes.forEach((newEp) => {
-          const prevStatus = previousStatusRef.current[newEp.id];
-          if (prevStatus === 'processing' && newEp.status === 'completed') {
-            const title = newEp.title || newEp.episode_context?.title || 'Episode';
-            showToast({
-              message: 'Processing complete!',
-              description: `"${title}" is ready to review.`,
-              variant: 'success',
-              duration: 6000,
-              action: () => navigate(`/episodes/${newEp.id}/review`),
-              actionLabel: 'View content',
-            });
+        processingEpisodes.forEach((prevEp) => {
+          const stillProcessing = newProcessingEpisodes.find(ep => ep.id === prevEp.id);
+          if (!stillProcessing) {
+            // Episode is no longer processing - check if it completed
+            const completedEp = newEpisodes.find(ep => ep.id === prevEp.id && ep.status === 'completed');
+            if (completedEp) {
+              const title = completedEp.title || completedEp.episode_context?.title || 'Episode';
+              showToast({
+                message: 'Processing complete!',
+                description: `"${title}" is ready to review.`,
+                variant: 'success',
+                duration: 6000,
+                action: () => navigate(`/episodes/${completedEp.id}/review`),
+                actionLabel: 'View content',
+              });
+            }
           }
         });
 
-        // Update previous status ref
-        newEpisodes.forEach((ep) => {
-          previousStatusRef.current[ep.id] = ep.status;
-        });
-
         setEpisodes(newEpisodes);
+        setProcessingEpisodes(newProcessingEpisodes);
       } catch (err) {
         console.error('[Dashboard] Failed to poll episodes:', err);
       }
@@ -238,10 +239,11 @@ function Dashboard() {
         clearInterval(pollIntervalRef.current);
       }
     };
-  }, [episodes.filter((ep) => ep.status === 'processing').length, statusFilter]);
+  }, [processingEpisodes.length, statusFilter]);
 
   /**
    * Fetch all episodes from the API
+   * Also fetches processing episodes separately so they always show
    */
   async function fetchEpisodes() {
     try {
@@ -253,8 +255,21 @@ function Dashboard() {
         params.status = statusFilter;
       }
 
-      const data = await api.episodes.list(params);
-      setEpisodes(data.episodes || []);
+      // Fetch filtered episodes and processing episodes in parallel
+      const [filteredData, processingData] = await Promise.all([
+        api.episodes.list(params),
+        // Always fetch processing episodes so they show in the card
+        statusFilter !== 'processing' ? api.episodes.list({ status: 'processing' }) : null,
+      ]);
+
+      setEpisodes(filteredData.episodes || []);
+
+      // Set processing episodes (either from filter or separate fetch)
+      if (statusFilter === 'processing') {
+        setProcessingEpisodes(filteredData.episodes || []);
+      } else {
+        setProcessingEpisodes(processingData?.episodes || []);
+      }
     } catch (err) {
       console.error('[Dashboard] Failed to fetch episodes:', err);
       setError(err.message || 'Failed to load episodes');
@@ -503,7 +518,7 @@ function Dashboard() {
       ) : (
         <div className={styles.grid}>
           {/* Content Processing Cards - prominent cards for episodes generating content */}
-          {episodes.filter(ep => ep.status === 'processing').map((processingEpisode) => (
+          {processingEpisodes.map((processingEpisode) => (
             <ContentProcessingCard
               key={`processing-${processingEpisode.id}`}
               episode={processingEpisode}

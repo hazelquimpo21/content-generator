@@ -257,6 +257,116 @@
   );
 }
 
+/* Content Processing Card - prominent card for generating content */
+.contentProcessingCard {
+  border: 2px solid var(--color-primary);
+  background: linear-gradient(
+    135deg,
+    var(--color-bg-secondary) 0%,
+    rgba(196, 142, 110, 0.12) 100%
+  );
+  position: relative;
+  overflow: hidden;
+}
+
+.contentProcessingCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(196, 142, 110, 0.15),
+    transparent
+  );
+  animation: processingShimmer 2.5s ease-in-out infinite;
+}
+
+@keyframes processingShimmer {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+
+.contentProcessingCard .progressFill {
+  background: linear-gradient(
+    90deg,
+    var(--color-primary) 0%,
+    var(--color-primary-light) 50%,
+    var(--color-primary) 100%
+  );
+  background-size: 200% 100%;
+  animation: progressGradient 2s linear infinite;
+}
+
+@keyframes progressGradient {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+/* Processing phase label in header */
+.processingPhase {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--font-semibold);
+  color: var(--color-primary);
+  padding: 2px 8px;
+  background-color: var(--color-primary-light);
+  border-radius: var(--radius-full);
+}
+
+/* Phase indicator pills */
+.phaseIndicators {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+
+.phaseIndicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  transition: all var(--transition-fast);
+}
+
+.phaseIndicator[data-status="pending"] {
+  color: var(--color-text-tertiary);
+  background-color: var(--color-bg-tertiary);
+}
+
+.phaseIndicator[data-status="active"] {
+  color: var(--color-primary);
+  background-color: var(--color-primary-light);
+  box-shadow: 0 0 0 3px rgba(196, 142, 110, 0.2);
+}
+
+.phaseIndicator[data-status="complete"] {
+  color: var(--color-success);
+  background-color: rgba(74, 222, 128, 0.2);
+}
+
+/* Processing status enhancements */
+.processingIcon {
+  color: var(--color-primary);
+}
+
+.phaseName {
+  font-weight: var(--font-semibold);
+  color: var(--color-text-primary);
+}
+
+.timeSeparator {
+  color: var(--color-text-tertiary);
+}
+
 /* Upload in progress card - distinct from episode processing */
 .uploadCard {
   border: 2px solid var(--color-primary);

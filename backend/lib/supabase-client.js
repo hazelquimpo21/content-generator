@@ -915,6 +915,55 @@ export const stageRepo = {
     logger.dbResult('select', 'stage_outputs', { episodeId, stageCount, statusSummary });
     return stages || [];
   },
+
+  /**
+   * Resets all stage outputs for an episode back to pending state.
+   * Used for reprocessing an episode with an existing transcript.
+   *
+   * This clears all output data, costs, and durations while preserving
+   * the stage records themselves.
+   *
+   * @param {string} episodeId - Episode UUID
+   * @returns {Promise<Array>} Updated stage records
+   * @throws {DatabaseError} If reset fails
+   */
+  async resetAllStages(episodeId) {
+    logger.info('🔄 Resetting all stages for reprocessing', { episodeId });
+
+    const resetData = {
+      status: 'pending',
+      output_data: null,
+      output_text: null,
+      cost_usd: null,
+      duration_ms: null,
+      error_message: null,
+      retry_count: 0,
+      started_at: null,
+      completed_at: null,
+    };
+
+    const { data: stages, error } = await db
+      .from('stage_outputs')
+      .update(resetData)
+      .eq('episode_id', episodeId)
+      .select();
+
+    if (error) {
+      logger.dbError('update', 'stage_outputs (reset)', error, {
+        episodeId,
+        errorCode: error.code,
+        errorMessage: error.message,
+      });
+      throw new DatabaseError('update', `Failed to reset stages: ${error.message}`);
+    }
+
+    logger.info('✅ All stages reset to pending', {
+      episodeId,
+      stageCount: stages?.length || 0,
+    });
+
+    return stages || [];
+  },
 };
 
 // ============================================================================

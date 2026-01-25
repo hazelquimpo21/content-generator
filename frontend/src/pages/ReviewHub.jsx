@@ -40,6 +40,7 @@ import {
   Lightbulb,
   ChevronDown,
   ChevronUp,
+  RefreshCw,
 } from 'lucide-react';
 import { Button, Card, Spinner, Badge, ConfirmDialog, EditableText, EditableCard, useToast, EpisodeHero } from '@components/shared';
 import ScheduleModal from '@components/shared/ScheduleModal';
@@ -118,6 +119,11 @@ function ReviewHub() {
   // Delete confirmation dialog
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
+
+  // Reprocess confirmation dialog
+  const [showReprocessDialog, setShowReprocessDialog] = useState(false);
+  const [reprocessing, setReprocessing] = useState(false);
+  const [reprocessError, setReprocessError] = useState(null);
 
   // Title editing state
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -297,6 +303,36 @@ function ReviewHub() {
       console.error('[ReviewHub] Failed to delete episode:', err);
       setDeleteError(err.message || 'Failed to delete episode. Please try again.');
       throw err; // Re-throw to keep dialog open
+    }
+  }
+
+  /**
+   * Handle reprocess confirmation - regenerates all content using existing transcript
+   */
+  async function handleReprocessConfirm() {
+    try {
+      setReprocessing(true);
+      setReprocessError(null);
+      console.log('[ReviewHub] Reprocessing episode:', episodeId);
+
+      await api.episodes.reprocess(episodeId);
+
+      console.log('[ReviewHub] Reprocessing started successfully');
+      setShowReprocessDialog(false);
+
+      showToast({
+        message: 'Reprocessing started',
+        description: 'Regenerating all content. This will take a few minutes.',
+        variant: 'processing',
+        duration: 6000,
+      });
+
+      // Navigate to processing screen to watch progress
+      navigate(`/episodes/${episodeId}/processing`);
+    } catch (err) {
+      console.error('[ReviewHub] Failed to reprocess episode:', err);
+      setReprocessError(err.message || 'Failed to start reprocessing. Please try again.');
+      setReprocessing(false);
     }
   }
 
@@ -1114,6 +1150,15 @@ function ReviewHub() {
         {/* Header actions */}
         <div className={styles.headerActions}>
           <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={RefreshCw}
+            onClick={() => setShowReprocessDialog(true)}
+            title="Regenerate all content using the existing transcript"
+          >
+            Regenerate Content
+          </Button>
+          <Button
             variant="danger"
             size="sm"
             leftIcon={Trash2}
@@ -1341,6 +1386,26 @@ function ReviewHub() {
         confirmLabel="Delete Episode"
         cancelLabel="Cancel"
         variant="danger"
+      />
+
+      {/* Reprocess Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showReprocessDialog}
+        onClose={() => {
+          setShowReprocessDialog(false);
+          setReprocessError(null);
+        }}
+        onConfirm={handleReprocessConfirm}
+        title="Regenerate Content"
+        message={`Regenerate all content for "${episodeTitle}"?`}
+        description={
+          reprocessError ||
+          'This will use the existing transcript to regenerate all content from scratch. Current generated content will be replaced. This typically costs ~$0.05-0.15 and takes 2-4 minutes.'
+        }
+        confirmLabel={reprocessing ? 'Starting...' : 'Regenerate All'}
+        cancelLabel="Cancel"
+        variant="primary"
+        loading={reprocessing}
       />
 
       {/* Save to Library Modal */}

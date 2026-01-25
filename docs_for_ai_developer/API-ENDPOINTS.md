@@ -525,6 +525,52 @@ Cancel processing immediately.
 
 ---
 
+### POST `/api/episodes/:id/reprocess`
+
+Reprocess an episode using its existing transcript. This allows regenerating all content without re-transcribing the audio. Useful for:
+- Updating content with new settings/prompts
+- Regenerating after making manual edits
+- Re-running when processing previously failed
+
+**Request Body:** None required
+
+**Response (202 Accepted):**
+```json
+{
+  "success": true,
+  "message": "Reprocessing started",
+  "episode_id": "uuid",
+  "estimate": {
+    "duration_minutes": 4,
+    "cost_usd": 1.20
+  }
+}
+```
+
+**Processing Flow:**
+1. Validate episode exists and has a transcript
+2. Validate episode is not currently processing
+3. Reset all stage outputs to pending state
+4. Reset episode status to "draft"
+5. Trigger async processing (same as initial process)
+6. Return 202 Accepted
+
+**Error Responses:**
+
+- **404 Not Found:** Episode doesn't exist
+- **400 Bad Request:** Episode has no transcript
+- **409 Conflict:** Episode is currently processing
+
+```json
+{
+  "success": false,
+  "error": "Episode is currently processing",
+  "status": "processing"
+}
+```
+
+---
+
 ## Stages
 
 ### GET `/api/stages/:id`

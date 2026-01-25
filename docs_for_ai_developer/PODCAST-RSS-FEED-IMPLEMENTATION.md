@@ -95,9 +95,10 @@ function MyComponent() {
 The Dashboard displays a "From Your Podcast" section showing recent unprocessed feed episodes:
 
 - Quick access to transcribe episodes without navigating to NewEpisode
-- Shows active transcription banner
+- Shows unified `ActiveTaskBanner` for transcription/processing progress
 - Disabled states when transcription is in progress
 - Source indicator (RSS icon) on episode cards imported from feeds
+- Episode cards show distinct states with appropriate CTAs (see Episode Status Indicators below)
 
 ### Source Indicators
 
@@ -510,12 +511,34 @@ Add tab alongside existing "Paste Transcript" / "Upload Audio":
 
 ### Episode Status Indicators
 
-| Status | Icon | Description |
-|--------|------|-------------|
-| Available | ⭕ | Episode in feed, not yet processed |
-| Transcribing | 🔄 | Currently transcribing audio |
-| Processed | ✅ | Transcribed and content generated |
-| Error | ⚠️ | Transcription or processing failed |
+The feed episode list displays episodes with distinct states and appropriate CTAs:
+
+| Status | Icon | Description | CTA Button |
+|--------|------|-------------|------------|
+| Available | ⭕ | Episode in feed, not yet transcribed | "Transcribe" |
+| Transcribing | 🔄 | Currently transcribing audio | (Spinner) "Transcribing" |
+| Transcribed | 📄 | Transcribed but content not generated | "Generate Content" |
+| Processing | 🔄 | Content generation in progress | (Spinner) "Generating" |
+| Completed | ✅ | Transcribed and content generated | "View Content" |
+| Error | ⚠️ | Transcription or processing failed | "Retry" |
+
+**Key Distinction:** "Transcribed" vs "Completed"
+- **Transcribed**: The audio has been transcribed, but content generation has not been run yet. This allows users to review the transcript before generating content.
+- **Completed**: Both transcription AND content generation have finished successfully.
+
+This distinction is determined by checking:
+1. `feed_episode.status === 'processed'` means transcription is done
+2. `feed_episode.linked_episode?.status === 'completed'` means content generation is done
+
+### Reprocessing Existing Transcripts
+
+Users can reprocess episodes without re-transcribing:
+- From the ReviewHub: Click "Regenerate Content" button
+- Uses the existing transcript to regenerate all content
+- Useful when prompts/settings have been updated
+- Saves transcription costs (~$0.27-0.68 per episode)
+
+See [API-ENDPOINTS.md](./API-ENDPOINTS.md) for the `POST /api/episodes/:id/reprocess` endpoint.
 
 ---
 
@@ -702,5 +725,5 @@ Your show → Settings → RSS Feed
 
 ---
 
-*Last updated: 2026-01-23*
-*Related: PROJECT-OVERVIEW.md, AUDIO-TRANSCRIPTION-IMPLEMENTATION.md, PAGE-SPECIFICATIONS.md*
+*Last updated: 2026-01-25*
+*Related: PROJECT-OVERVIEW.md, AUDIO-TRANSCRIPTION-IMPLEMENTATION.md, PAGE-SPECIFICATIONS.md, API-ENDPOINTS.md*

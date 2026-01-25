@@ -591,6 +591,81 @@ Smooth, soothing, never jarring.
 }
 ```
 
+### Active Task Banner
+
+A unified banner component for displaying progress of async tasks (transcription, content processing, uploads).
+
+```css
+.active-task-banner {
+  margin-bottom: var(--space-6);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-linen);
+  transition: all 0.2s ease;
+}
+
+/* Processing state (blue) */
+.active-task-banner[data-status="processing"] {
+  border-color: #60a5fa;
+  background: linear-gradient(
+    135deg,
+    rgba(96, 165, 250, 0.08) 0%,
+    rgba(96, 165, 250, 0.02) 100%
+  );
+}
+
+/* Ready/complete state (green) */
+.active-task-banner[data-status="ready"] {
+  border-color: var(--color-sage);
+  background: linear-gradient(
+    135deg,
+    rgba(139, 157, 124, 0.08) 0%,
+    rgba(139, 157, 124, 0.02) 100%
+  );
+}
+
+/* Error state (red) */
+.active-task-banner[data-status="error"] {
+  border-color: var(--color-rose);
+  background: linear-gradient(
+    135deg,
+    rgba(201, 124, 124, 0.08) 0%,
+    rgba(201, 124, 124, 0.02) 100%
+  );
+}
+```
+
+**Task Types:**
+- `AUDIO_UPLOAD`: Uploading audio file
+- `AUDIO_TRANSCRIBE`: Transcribing audio
+- `FEED_TRANSCRIBE`: Transcribing from RSS feed
+- `CONTENT_PROCESS`: Generating content
+
+**Task Statuses:**
+- `IDLE`: No active task (banner hidden)
+- `UPLOADING`: Upload in progress
+- `PROCESSING`: Task running
+- `COMPLETE`: Task finished successfully
+- `ERROR`: Task failed
+
+**Usage:**
+```jsx
+import { ActiveTaskBanner, TASK_TYPE, TASK_STATUS } from '@components/shared';
+
+<ActiveTaskBanner
+  taskType={TASK_TYPE.FEED_TRANSCRIBE}
+  status={TASK_STATUS.PROCESSING}
+  title="Transcribing Episode"
+  description="Understanding Anxiety in Modern Life"
+  progress={45}
+  timeRemaining="~2 min remaining"
+  onAction={() => navigate(`/episodes/${id}`)}
+  actionLabel="View Progress"
+  onDismiss={() => setShowBanner(false)}
+/>
+```
+
 ---
 
 ## Layout Patterns

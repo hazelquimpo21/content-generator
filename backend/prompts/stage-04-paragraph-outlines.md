@@ -43,6 +43,32 @@ For each paragraph, specify:
 
 {{STAGE_2_OUTPUT}}
 
-## Output Instructions
+## How to Format Your Response
 
-Return ONLY valid JSON with detailed paragraph outlines for each section. No other text.
+Write your response in clear sections:
+
+---
+
+## Section 1: [Section Title from Stage 3]
+
+### Paragraph 1
+**Main point:** [The key message of this paragraph]
+**Supporting elements:** [Which quotes, examples, or concepts to include]
+**Transition:** [How this connects to the next paragraph]
+
+### Paragraph 2
+**Main point:** [The key message]
+**Supporting elements:** [Supporting content]
+**Transition:** [Connection to next]
+
+[Continue for all paragraphs in this section...]
+
+---
+
+## Section 2: [Section Title]
+
+[Same format for each section...]
+
+---
+
+Continue this pattern for all sections from the Stage 3 outline. Be specific about what content goes where.

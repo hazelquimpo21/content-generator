@@ -88,22 +88,46 @@ Create variety:
 **Headlines Available:**
 {{STAGE_5_OUTPUT}}
 
-## Output Format
+## How to Format Your Response
 
-Return ONLY valid JSON:
+Write each post clearly:
 
-```json
-{
-  "posts": [
-    {
-      "type": "conversation|story|reflection|question|helpful",
-      "content": "post text here",
-      "hook_type": "invitation|shared_experience|curiosity|helpful|story",
-      "character_count": 450
-    }
-  ]
-}
-```
+---
+
+### Post 1: Conversation Starter
+**Hook type:** [invitation / shared_experience / curiosity / helpful / story]
+
+[The actual Facebook post text that opens genuine discussion]
+
+---
+
+### Post 2: Story Share
+**Hook type:** [type]
+
+[Brief narrative with a takeaway]
+
+---
+
+### Post 3: Reflection Post
+**Hook type:** [type]
+
+[Something you've been thinking about]
+
+---
+
+### Post 4: Community Question
+**Hook type:** [type]
+
+[Genuine curiosity about audience experience]
+
+---
+
+### Post 5: Helpful Share
+**Hook type:** [type]
+
+[Sharing something valuable with your community]
+
+---
 
 ## Self-Verification Checklist
 

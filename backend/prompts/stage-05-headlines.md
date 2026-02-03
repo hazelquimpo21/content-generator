@@ -63,6 +63,37 @@ A great headline has 2-3 of these:
 
 {{STAGE_3_OUTPUT}}
 
-## Output Instructions
+## How to Format Your Response
 
-Return ONLY valid JSON with all headline and copy options. No other text.
+Write your response in clear sections:
+
+---
+
+## Main Headlines (10-15)
+
+1. [First headline option]
+2. [Second headline option]
+3. [Third headline option]
+...
+
+## Subheadings (8-10)
+
+1. [First subheading option]
+2. [Second subheading option]
+...
+
+## Taglines (5-7)
+
+1. [First tagline option]
+2. [Second tagline option]
+...
+
+## Social Hooks (5-7)
+
+1. [First social hook]
+2. [Second social hook]
+...
+
+---
+
+List them cleanly. No explanations needed for each one—just the text itself.

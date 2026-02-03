@@ -88,22 +88,46 @@ Create variety across these lengths and approaches:
 **Headlines Available:**
 {{STAGE_5_OUTPUT}}
 
-## Output Format
+## How to Format Your Response
 
-Return ONLY valid JSON:
+Write each post clearly:
 
-```json
-{
-  "posts": [
-    {
-      "type": "personal_insight|observation|myth_bust|story|practical",
-      "content": "post text here with\n\nparagraph breaks",
-      "hook_type": "confession|pattern|counterintuitive|question_reframe|wisdom",
-      "character_count": 650
-    }
-  ]
-}
-```
+---
+
+### Post 1: Personal Insight
+**Hook type:** [confession / pattern / counterintuitive / question_reframe / wisdom]
+
+[The actual LinkedIn post text goes here, with paragraph breaks for scannability]
+
+---
+
+### Post 2: Professional Observation
+**Hook type:** [type]
+
+[Post text about a pattern you've noticed in your work]
+
+---
+
+### Post 3: Myth-Busting
+**Hook type:** [type]
+
+[Post text challenging a professional misconception]
+
+---
+
+### Post 4: Story-Driven
+**Hook type:** [type]
+
+[Brief narrative that illustrates a point]
+
+---
+
+### Post 5: Practical Wisdom
+**Hook type:** [type]
+
+[Actionable insight for professionals]
+
+---
 
 ## Self-Verification Checklist
 

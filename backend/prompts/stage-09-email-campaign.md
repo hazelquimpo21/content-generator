@@ -79,6 +79,32 @@ Create email campaign content to promote this blog post/episode.
 
 {{STAGE_5_OUTPUT}}
 
-## Output Instructions
+## How to Format Your Response
 
-Return ONLY valid JSON with all email content. No other text.
+Write your response in clear sections:
+
+---
+
+## Subject Lines (5 options)
+
+1. [First subject line]
+2. [Second subject line]
+3. [Third subject line]
+4. [Fourth subject line]
+5. [Fifth subject line]
+
+## Preview Text (3 options)
+
+1. [First preview text]
+2. [Second preview text]
+3. [Third preview text]
+
+## Main Email Body
+
+[Write the complete email here - 200-350 words, with warm opening, bridge to content, key insights, CTA, and sign-off]
+
+## Follow-up Email (Optional)
+
+[Write a shorter reminder email - 100-150 words, different angle]
+
+---

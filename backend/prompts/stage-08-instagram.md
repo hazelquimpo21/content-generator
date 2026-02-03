@@ -86,22 +86,56 @@ Create variety across these lengths:
 **Headlines Available:**
 {{STAGE_5_OUTPUT}}
 
-## Output Format
+## How to Format Your Response
 
-Return ONLY valid JSON:
+Write each post clearly with its details:
 
-```json
-{
-  "posts": [
-    {
-      "type": "short",
-      "content": "caption text here",
-      "hashtags": ["#tag1", "#tag2", "#tag3"],
-      "hook_type": "bold_claim|recognition|story|reframe|question"
-    }
-  ]
-}
-```
+---
+
+### Post 1 (Short)
+**Hook type:** [bold_claim / recognition / story / reframe / question]
+
+[The actual caption text goes here]
+
+**Hashtags:** #tag1 #tag2 #tag3
+
+---
+
+### Post 2 (Short)
+**Hook type:** [type]
+
+[Caption text]
+
+**Hashtags:** #tag1 #tag2 #tag3
+
+---
+
+### Post 3 (Medium)
+**Hook type:** [type]
+
+[Caption text - more content here]
+
+**Hashtags:** #tag1 #tag2 #tag3 #tag4
+
+---
+
+### Post 4 (Medium)
+**Hook type:** [type]
+
+[Caption text]
+
+**Hashtags:** #tag1 #tag2 #tag3
+
+---
+
+### Post 5 (Long)
+**Hook type:** [type]
+
+[Longer caption text - fuller story or explanation]
+
+**Hashtags:** #tag1 #tag2 #tag3 #tag4 #tag5
+
+---
 
 ## Self-Verification Checklist
 

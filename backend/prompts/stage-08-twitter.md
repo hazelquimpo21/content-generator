@@ -87,22 +87,46 @@ Create variety:
 **Headlines Available:**
 {{STAGE_5_OUTPUT}}
 
-## Output Format
+## How to Format Your Response
 
-Return ONLY valid JSON:
+Write each post clearly:
 
-```json
-{
-  "posts": [
-    {
-      "type": "standalone|thread_opener|hot_take|quotable|conversation",
-      "content": "tweet text here",
-      "hook_type": "contrarian|pattern_interrupt|specific|permission|framework",
-      "character_count": 180
-    }
-  ]
-}
-```
+---
+
+### Post 1: Standalone Insight
+**Hook type:** [contrarian / pattern_interrupt / specific / permission / framework]
+
+[The actual tweet text goes here]
+
+---
+
+### Post 2: Thread Opener
+**Hook type:** [type]
+
+[Tweet text that makes people want to click "Show this thread"]
+
+---
+
+### Post 3: Hot Take
+**Hook type:** [type]
+
+[Tweet text that challenges conventional wisdom]
+
+---
+
+### Post 4: Quotable Moment
+**Hook type:** [type]
+
+[Tweet text that could be screenshot and shared]
+
+---
+
+### Post 5: Conversation Starter
+**Hook type:** [type]
+
+[Tweet text that invites genuine discussion]
+
+---
 
 ## Self-Verification Checklist
 

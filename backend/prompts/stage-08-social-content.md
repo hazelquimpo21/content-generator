@@ -72,6 +72,63 @@ Create social media content to promote this blog post across multiple platforms.
 
 {{STAGE_5_OUTPUT}}
 
-## Output Instructions
+## How to Format Your Response
 
-Return ONLY valid JSON with all social content organized by platform. No other text.
+Write your response organized by platform:
+
+---
+
+## Instagram Posts
+
+### Instagram Post 1 (Short)
+[100-150 character caption]
+**Hashtags:** #tag1 #tag2 #tag3
+
+### Instagram Post 2 (Medium)
+[200-400 character caption]
+**Hashtags:** #tag1 #tag2 #tag3 #tag4
+
+### Instagram Post 3 (Long/Carousel)
+[500-800 character caption]
+**Hashtags:** #tag1 #tag2 #tag3 #tag4 #tag5
+
+---
+
+## Twitter/X Posts
+
+### Tweet 1
+[200-280 characters - hook that works standalone or as thread starter]
+
+### Tweet 2
+[200-280 characters]
+
+### Tweet 3
+[200-280 characters]
+
+### Tweet 4
+[200-280 characters]
+
+### Tweet 5
+[200-280 characters]
+
+---
+
+## LinkedIn Posts
+
+### LinkedIn Post 1
+[500-1000 characters - professional, thought leadership angle]
+
+### LinkedIn Post 2
+[500-1000 characters - different angle]
+
+---
+
+## Facebook Posts
+
+### Facebook Post 1
+[300-600 characters - conversational, community-focused]
+
+### Facebook Post 2
+[300-600 characters - encourage discussion]
+
+---

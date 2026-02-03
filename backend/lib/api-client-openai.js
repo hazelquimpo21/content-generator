@@ -83,6 +83,7 @@ const openai = new OpenAI({
  * @param {string|Array} messages - Prompt string or array of message objects
  * @param {Object} [options] - API options
  * @param {string} [options.model='gpt-5-mini'] - Model to use
+ * @param {string} [options.system] - System prompt for persona/role instructions
  * @param {number} [options.temperature=0.7] - Sampling temperature
  * @param {number} [options.maxTokens=4096] - Max output tokens
  * @param {string} [options.episodeId] - Episode ID for logging
@@ -90,13 +91,16 @@ const openai = new OpenAI({
  * @returns {Promise<Object>} Response with content and usage stats
  *
  * @example
- * const result = await callOpenAI('Summarize this text: ...');
+ * const result = await callOpenAI('Summarize this text: ...', {
+ *   system: 'You are an expert content analyst specializing in podcast transcripts.'
+ * });
  * console.log(result.content);
  * console.log(`Cost: $${result.cost}`);
  */
 export async function callOpenAI(messages, options = {}) {
   const {
     model = DEFAULT_MODEL,
+    system = null,
     temperature = DEFAULT_TEMPERATURE,
     maxTokens = DEFAULT_MAX_TOKENS,
     episodeId = null,
@@ -104,9 +108,14 @@ export async function callOpenAI(messages, options = {}) {
   } = options;
 
   // Convert string to messages array if needed
-  const messagesArray = typeof messages === 'string'
+  let messagesArray = typeof messages === 'string'
     ? [{ role: 'user', content: messages }]
-    : messages;
+    : [...messages]; // Clone to avoid mutating original
+
+  // Prepend system message if provided (best practice for persona/role instructions)
+  if (system) {
+    messagesArray = [{ role: 'system', content: system }, ...messagesArray];
+  }
 
   const startTime = Date.now();
 
@@ -290,6 +299,7 @@ export async function callOpenAI(messages, options = {}) {
  * @param {string|Array} messages - Prompt or message array
  * @param {Array} functions - Function definitions for structured output
  * @param {Object} [options] - API options (same as callOpenAI)
+ * @param {string} [options.system] - System prompt for persona/role instructions
  * @returns {Promise<Object>} Response with parsed function arguments
  *
  * @example
@@ -297,12 +307,15 @@ export async function callOpenAI(messages, options = {}) {
  *   name: 'extract_quotes',
  *   parameters: { type: 'object', properties: { quotes: { type: 'array' } } }
  * }];
- * const result = await callOpenAIWithFunctions('Extract quotes...', functions);
+ * const result = await callOpenAIWithFunctions('Extract quotes...', functions, {
+ *   system: 'You are an expert at identifying key quotes from transcripts.'
+ * });
  * console.log(result.functionCall.quotes);
  */
 export async function callOpenAIWithFunctions(messages, functions, options = {}) {
   const {
     model = DEFAULT_MODEL,
+    system = null,
     temperature = DEFAULT_TEMPERATURE,
     maxTokens = DEFAULT_MAX_TOKENS,
     episodeId = null,
@@ -311,9 +324,14 @@ export async function callOpenAIWithFunctions(messages, functions, options = {})
   } = options;
 
   // Convert string to messages array if needed
-  const messagesArray = typeof messages === 'string'
+  let messagesArray = typeof messages === 'string'
     ? [{ role: 'user', content: messages }]
-    : messages;
+    : [...messages]; // Clone to avoid mutating original
+
+  // Prepend system message if provided (best practice for persona/role instructions)
+  if (system) {
+    messagesArray = [{ role: 'system', content: system }, ...messagesArray];
+  }
 
   const startTime = Date.now();
 

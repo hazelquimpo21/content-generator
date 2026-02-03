@@ -11,9 +11,43 @@
  * ============================================================================
  */
 
-import { callClaude } from '../lib/api-client-anthropic.js';
+import { callClaudeStructured } from '../lib/api-client-anthropic.js';
+import { loadPrompt } from '../lib/prompt-loader.js';
 import logger from '../lib/logger.js';
 import { ValidationError } from '../lib/errors.js';
+
+// ============================================================================
+// FUNCTION CALLING SCHEMA
+// ============================================================================
+
+const EMAIL_SCHEMA = {
+  type: 'object',
+  properties: {
+    subject_lines: {
+      type: 'array',
+      items: { type: 'string' },
+      minItems: 5,
+      maxItems: 5,
+      description: 'Five email subject line options (under 50 characters each)',
+    },
+    preview_text: {
+      type: 'array',
+      items: { type: 'string' },
+      minItems: 3,
+      maxItems: 3,
+      description: 'Three preview text options (40-90 characters each)',
+    },
+    email_body: {
+      type: 'string',
+      description: 'Full email body in markdown format (200-350 words)',
+    },
+    followup_email: {
+      type: 'string',
+      description: 'Optional shorter follow-up email (100-150 words)',
+    },
+  },
+  required: ['subject_lines', 'preview_text', 'email_body'],
+};
 
 // ============================================================================
 // VALIDATION
@@ -38,19 +72,6 @@ function validateOutput(data) {
   return true;
 }
 
-/**
- * Parses JSON from Claude's response
- */
-function parseJsonResponse(content) {
-  const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-
-  if (jsonMatch) {
-    return JSON.parse(jsonMatch[1]);
-  }
-
-  return JSON.parse(content);
-}
-
 // ============================================================================
 // MAIN ANALYZER FUNCTION
 // ============================================================================
@@ -62,85 +83,69 @@ export async function generateEmail(context) {
 
   const refinedPost = previousStages[7]?.output_text;
   const headlines = previousStages[5];
+  const quotes = previousStages[2];
   const episodeTitle = previousStages[1]?.episode_basics?.title || 'Latest Episode';
 
   if (!refinedPost) {
     throw new ValidationError('previousStages.7', 'Missing refined post for email');
   }
 
-  // Get target audience for better email personalization
-  const targetAudience = evergreen?.podcast_info?.target_audience || 'listeners interested in mental health and personal growth';
+  // Handle dual-article format vs legacy
+  let blogContent = refinedPost;
+  if (typeof refinedPost === 'object') {
+    // For email, use Episode Recap (promotes the episode)
+    blogContent = refinedPost.episode_recap || refinedPost.topic_article || '';
+  }
 
+  // Build template variables for the prompt file
+  const templateVars = {
+    PODCAST_NAME: evergreen?.podcast_info?.name || 'The Podcast',
+    THERAPIST_NAME: evergreen?.therapist_profile?.name || 'The Host',
+    CREDENTIALS: evergreen?.therapist_profile?.credentials || '',
+    EPISODE_TITLE: episodeTitle,
+    TARGET_AUDIENCE: evergreen?.podcast_info?.target_audience || 'listeners interested in mental health',
+    STAGE_7_OUTPUT: blogContent,
+    STAGE_2_OUTPUT: JSON.stringify(quotes, null, 2),
+    STAGE_5_OUTPUT: JSON.stringify(headlines, null, 2),
+  };
+
+  // Load the prompt file
+  let promptContent;
+  try {
+    promptContent = await loadPrompt('stage-09-email-campaign', templateVars, {
+      includeNeverUse: true,
+      includeQualityFrameworks: false,
+    });
+  } catch (error) {
+    logger.error('Failed to load email campaign prompt', {
+      error: error.message,
+    });
+    throw new ValidationError('prompt', `Failed to load email prompt: ${error.message}`);
+  }
+
+  // System prompt focuses on persona - no JSON instructions
   const systemPrompt = `You are an email marketing expert specializing in therapy and mental health newsletters.
 Write emails that feel like they're from a friend who happens to be a therapist.
-Tailor your tone and content to resonate with the target audience.
-Output ONLY valid JSON with no additional text or code blocks.`;
+Tailor your tone and content to resonate with the target audience.`;
 
-  const userPrompt = `
-Create email newsletter content to promote this blog post.
-
-PODCAST: ${evergreen?.podcast_info?.name || 'The Podcast'}
-HOST: ${evergreen?.therapist_profile?.name || 'The Host'}
-CREDENTIALS: ${evergreen?.therapist_profile?.credentials || ''}
-TARGET AUDIENCE: ${targetAudience}
-EPISODE: ${episodeTitle}
-
-BLOG POST:
-${refinedPost}
-
-AVAILABLE HEADLINES:
-${JSON.stringify(headlines, null, 2)}
-
-EMAIL SIGNATURE:
-${evergreen?.seo_defaults?.email_signature || ''}
-
-Generate content in this exact JSON structure:
-{
-  "subject_lines": [
-    "Subject line 1 (<50 chars)",
-    "Subject line 2",
-    "Subject line 3",
-    "Subject line 4",
-    "Subject line 5"
-  ],
-  "preview_text": [
-    "Preview text 1 (40-90 chars)",
-    "Preview text 2",
-    "Preview text 3"
-  ],
-  "email_body": "Full email body in markdown format (200-350 words)...",
-  "followup_email": "Optional shorter follow-up email (100-150 words)..."
-}
-
-REQUIREMENTS:
-- Subject lines under 50 characters
-- Varied approaches: question, statement, teaser, personal
-- Preview text complements subject line
-- Email body: warm opening, key insights, clear CTA
-- Sound like a friend, not a corporation
-- One clear call-to-action
-- No "Hope this finds you well"
-- No excessive exclamation marks
-- IMPORTANT: Write as if speaking directly to the target audience (${targetAudience}). Use their language and address their specific interests and pain points.`;
-
-  const response = await callClaude(userPrompt, {
+  // Use function calling to get structured output
+  const response = await callClaudeStructured(promptContent, {
     system: systemPrompt,
+    toolName: 'generate_email_campaign',
+    toolDescription: 'Generate email newsletter content with subject lines, preview text, and body',
+    inputSchema: EMAIL_SCHEMA,
     episodeId,
     stageNumber: 9,
     temperature: 0.7,
     maxTokens: 2000,
   });
 
-  // Parse the JSON response
-  let outputData;
-  try {
-    outputData = parseJsonResponse(response.content);
-  } catch (error) {
-    logger.error('Failed to parse email content JSON', {
-      error: error.message,
-      content: response.content.substring(0, 500),
-    });
-    throw new ValidationError('response', 'Failed to parse email content JSON');
+  // Function calling returns structured data directly in toolInput
+  const outputData = response.toolInput;
+
+  if (!outputData) {
+    logger.error('No structured output from email generation', { episodeId });
+    throw new ValidationError('response', 'Failed to generate email content');
   }
 
   validateOutput(outputData);

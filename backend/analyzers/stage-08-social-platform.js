@@ -18,7 +18,7 @@
  * ============================================================================
  */
 
-import { callClaude } from '../lib/api-client-anthropic.js';
+import { callClaudeStructured } from '../lib/api-client-anthropic.js';
 import { loadPrompt } from '../lib/prompt-loader.js';
 import logger from '../lib/logger.js';
 import { ValidationError } from '../lib/errors.js';
@@ -30,27 +30,65 @@ import { ValidationError } from '../lib/errors.js';
 const PLATFORMS = {
   instagram: {
     name: 'Instagram',
-    promptFile: 'stage-08-instagram',  // Without .md extension
+    promptFile: 'stage-08-instagram',
     minPosts: 5,
     maxPosts: 5,
+    // Instagram posts require hashtags
+    postSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', description: 'Post length type: short, medium, or long' },
+        content: { type: 'string', description: 'The caption text' },
+        hook_type: { type: 'string', description: 'Hook type used: bold_claim, recognition, story, reframe, or question' },
+        hashtags: { type: 'array', items: { type: 'string' }, description: '3-5 relevant hashtags' },
+      },
+      required: ['type', 'content', 'hook_type', 'hashtags'],
+    },
   },
   twitter: {
     name: 'Twitter/X',
     promptFile: 'stage-08-twitter',
     minPosts: 5,
     maxPosts: 5,
+    postSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', description: 'Post type: standalone, thread_opener, hot_take, quotable, or conversation' },
+        content: { type: 'string', description: 'The tweet text (under 280 characters)' },
+        hook_type: { type: 'string', description: 'Hook type: contrarian, pattern_interrupt, specific, permission, or framework' },
+      },
+      required: ['type', 'content', 'hook_type'],
+    },
   },
   linkedin: {
     name: 'LinkedIn',
     promptFile: 'stage-08-linkedin',
     minPosts: 5,
     maxPosts: 5,
+    postSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', description: 'Post type: personal_insight, observation, myth_bust, story, or practical' },
+        content: { type: 'string', description: 'The post text (500-1000 characters)' },
+        hook_type: { type: 'string', description: 'Hook type: confession, pattern, counterintuitive, question_reframe, or wisdom' },
+      },
+      required: ['type', 'content', 'hook_type'],
+    },
   },
   facebook: {
     name: 'Facebook',
     promptFile: 'stage-08-facebook',
     minPosts: 5,
     maxPosts: 5,
+    postSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', description: 'Post type: conversation, story, reflection, question, or helpful' },
+        content: { type: 'string', description: 'The post text (300-600 characters)' },
+        hook_type: { type: 'string', description: 'Hook type: invitation, shared_experience, curiosity, helpful, or story' },
+      },
+      required: ['type', 'content', 'hook_type'],
+    },
   },
 };
 
@@ -93,18 +131,26 @@ function validateOutput(data, platform) {
 }
 
 /**
- * Parses JSON from Claude's response (handles markdown code blocks)
+ * Builds the tool schema for a platform's social posts
+ * @param {string} platform - Platform identifier
+ * @returns {Object} Tool schema for callClaudeStructured
  */
-function parseJsonResponse(content) {
-  // Try to extract JSON from code block
-  const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+function buildToolSchema(platform) {
+  const config = PLATFORMS[platform];
 
-  if (jsonMatch) {
-    return JSON.parse(jsonMatch[1]);
-  }
-
-  // Try parsing the whole content
-  return JSON.parse(content);
+  return {
+    type: 'object',
+    properties: {
+      posts: {
+        type: 'array',
+        items: config.postSchema,
+        minItems: config.minPosts,
+        maxItems: config.maxPosts,
+        description: `Array of ${config.minPosts} ${config.name} posts`,
+      },
+    },
+    required: ['posts'],
+  };
 }
 
 // ============================================================================
@@ -215,30 +261,33 @@ export async function generateSocialForPlatform(context, platform) {
     throw new ValidationError('prompt', `Failed to load ${config.name} prompt: ${error.message}`);
   }
 
+  // System prompt focuses on persona/role - no JSON instructions needed
+  // Function calling schema handles the structured output
   const systemPrompt = `You are a ${config.name} content expert specializing in therapy and mental health content.
-Create authentic, engaging content that avoids engagement bait and sounds human.
-Output ONLY valid JSON with no additional text or code blocks.`;
+Create authentic, engaging content that avoids engagement bait and sounds like a real person.
+Follow the platform-specific guidelines in the prompt carefully.`;
 
-  const response = await callClaude(promptContent, {
+  // Use function calling to get structured output
+  const response = await callClaudeStructured(promptContent, {
     system: systemPrompt,
+    toolName: `generate_${platform}_posts`,
+    toolDescription: `Generate ${config.minPosts} engaging ${config.name} posts based on the blog content`,
+    inputSchema: buildToolSchema(platform),
     episodeId,
     stageNumber: 8,
-    subStage: platform,
     temperature: 0.8,
     maxTokens: 2000,
   });
 
-  // Parse the JSON response
-  let outputData;
-  try {
-    outputData = parseJsonResponse(response.content);
-  } catch (error) {
-    logger.error(`Failed to parse ${config.name} content JSON`, {
+  // Function calling returns structured data directly in toolInput
+  const outputData = response.toolInput;
+
+  if (!outputData) {
+    logger.error(`No structured output from ${config.name} content generation`, {
       platform,
-      error: error.message,
-      content: response.content.substring(0, 500),
+      episodeId,
     });
-    throw new ValidationError('response', `Failed to parse ${config.name} content JSON`);
+    throw new ValidationError('response', `Failed to generate ${config.name} content`);
   }
 
   // Validate output
